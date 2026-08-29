@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # --- Configuration (override any of these with Cloud Run environment variables) ---
 ROBOFLOW_API_URL = os.environ.get("ROBOFLOW_API_URL", "https://serverless.roboflow.com")
-ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "NCNpAQIIlDLACsMT4uvj")
+ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "")
 ROBOFLOW_WORKSPACE = os.environ.get("ROBOFLOW_WORKSPACE", "chads-workspace-t3qcz")
 ROBOFLOW_WORKFLOW_ID = os.environ.get(
     "ROBOFLOW_WORKFLOW_ID",
