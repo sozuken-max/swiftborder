@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+**/*.csv
+Causeway/data/
+**/*.log
