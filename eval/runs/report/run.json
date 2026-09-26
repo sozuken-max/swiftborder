@@ -1,0 +1,133 @@
+{
+  "components": [
+    "offline",
+    "bqml"
+  ],
+  "offline": {
+    "dataset": {
+      "source": "swiftborder.causeway.travel_times",
+      "cache_path": "D:/Git Repositories/swiftborder/eval/data/causeway_gdata.csv",
+      "refreshed_from_bq": false,
+      "canonical_rows": 11842,
+      "route_id": "jb_to_woodlands",
+      "route_rows": 5921
+    },
+    "models": [
+      "sklearn.XGBRegressor (eval/timeseries_xgb.train_xgb)"
+    ],
+    "horizon_minutes": 60,
+    "train_fraction": 0.8,
+    "backtest_days": [
+      "2026-09-22",
+      "2026-09-23",
+      "2026-09-24"
+    ],
+    "holdout_rmse_min": 3.2401327867494683,
+    "significance_vs_persistence": {
+      "label_challenger": "XGB (sklearn)",
+      "label_reference": "Persistence T-60",
+      "n": 1138,
+      "mean_ae_diff_min": -3.66915527722538,
+      "paired_t_pvalue": 1.0527776333387216e-120,
+      "bootstrap_ci_low_min": -4.451767595958209,
+      "bootstrap_ci_high_min": -2.9404833542790856,
+      "challenger_better_at_alpha": true
+    },
+    "artifacts": [
+      "offline/backtest-mae.png",
+      "offline/holdout-sample.png",
+      "offline/holdout-mae-diff.png"
+    ]
+  },
+  "bqml": {
+    "dataset": {
+      "project": "swiftborder",
+      "view": "traffic_prediction.v_training_set",
+      "holdout_days": 3,
+      "window_start": "2026-09-23 07:00:00+00:00",
+      "window_end": "2026-09-26 07:00:00+00:00",
+      "holdout_rows": 866
+    },
+    "models": [
+      "Persistence (y_persistence)",
+      "lin_h30",
+      "xgb_h30"
+    ],
+    "horizon_minutes": 30,
+    "significance_block_size": 6,
+    "significance_alpha": 0.05,
+    "significance_comparisons": [
+      {
+        "label_challenger": "lin_h30 (both)",
+        "label_reference": "Persistence",
+        "n": 866,
+        "mean_ae_diff_min": 0.26694557163215155,
+        "paired_t_pvalue": 6.251999442367e-05,
+        "bootstrap_ci_low_min": 0.023857509815021702,
+        "bootstrap_ci_high_min": 0.5196032701593918,
+        "challenger_better_at_alpha": false
+      },
+      {
+        "label_challenger": "lin_h30 (SG_TO_MY)",
+        "label_reference": "Persistence",
+        "n": 433,
+        "mean_ae_diff_min": -0.38047367092685397,
+        "paired_t_pvalue": 5.429737246536345e-07,
+        "bootstrap_ci_low_min": -0.5946408319348937,
+        "bootstrap_ci_high_min": -0.17160741235134844,
+        "challenger_better_at_alpha": true
+      },
+      {
+        "label_challenger": "lin_h30 (MY_TO_SG)",
+        "label_reference": "Persistence",
+        "n": 433,
+        "mean_ae_diff_min": 0.9143648141911567,
+        "paired_t_pvalue": 3.3800319670021478e-18,
+        "bootstrap_ci_low_min": 0.5057193406733775,
+        "bootstrap_ci_high_min": 1.3037484077424675,
+        "challenger_better_at_alpha": false
+      },
+      {
+        "label_challenger": "xgb_h30 (both)",
+        "label_reference": "Persistence",
+        "n": 866,
+        "mean_ae_diff_min": -0.10673825746320409,
+        "paired_t_pvalue": 0.12333146307822578,
+        "bootstrap_ci_low_min": -0.304828195373676,
+        "bootstrap_ci_high_min": 0.10650841475817845,
+        "challenger_better_at_alpha": false
+      },
+      {
+        "label_challenger": "xgb_h30 (SG_TO_MY)",
+        "label_reference": "Persistence",
+        "n": 433,
+        "mean_ae_diff_min": -0.011707600159678104,
+        "paired_t_pvalue": 0.9261686409236007,
+        "bootstrap_ci_low_min": -0.4116476154400815,
+        "bootstrap_ci_high_min": 0.3940167207549038,
+        "challenger_better_at_alpha": false
+      },
+      {
+        "label_challenger": "xgb_h30 (MY_TO_SG)",
+        "label_reference": "Persistence",
+        "n": 433,
+        "mean_ae_diff_min": -0.20176891476673037,
+        "paired_t_pvalue": 0.00039500717769395613,
+        "bootstrap_ci_low_min": -0.35170775392222536,
+        "bootstrap_ci_high_min": -0.056571386335812046,
+        "challenger_better_at_alpha": true
+      }
+    ],
+    "mae_min_both_all": {
+      "Persistence": 2.6214203233256352,
+      "lin_h30": 2.8883658949577886,
+      "xgb_h30": 2.5146820658624316
+    },
+    "artifacts": [
+      "bqml/mae-by-direction.png",
+      "bqml/mae-diff-ci.png"
+    ]
+  },
+  "run_id": "20260926T073406Z_offline-bqml",
+  "created_at_utc": "2026-09-26T07:34:27Z"
+}

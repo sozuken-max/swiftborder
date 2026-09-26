@@ -11,7 +11,7 @@ Two layers:
 
 **Principal risk:** queue counts are not the same as crossing duration. The label series is Maps' current duration estimate. The baseline is persistence of that series. The project has no independent wait-time measurement.
 
-**Success target (final report):** <= 15 min MAE -- a **target**, not a measured result until evaluation lands.
+**Success target (final report):** <= 15 min MAE on an independent wait-time study remains a **product target**; scored Maps-series metrics and figures are in [docs/evaluation.md](docs/evaluation.md) and [`eval/runs/report/`](eval/runs/report/).
 
 ## Repository layout
 
@@ -19,7 +19,7 @@ Two layers:
 | --- | --- |
 | [`camdetect/`](camdetect/) | Camera detection spike (2701 directional detect via Roboflow) |
 | [`Causeway/`](Causeway/) | Weather / rainfall fetch and filter scripts |
-| [`eval/`](eval/) | Read-only Layer B harness (does not deploy `swiftbackend`) |
+| [`eval/`](eval/) | Layer B harness (`layer_b.py`), offline XGB/LSTM helpers, significance and comparison plots; committed report snapshot under `eval/runs/report/` |
 | [`sql/`](sql/) | BigQuery view and BQML definitions exported from project `swiftborder` |
 | [`docs/`](docs/) | Final-report drafts: design, evaluation and reasoning, findings; GCP inventory is the evidence appendix |
 
@@ -40,11 +40,11 @@ Drafted against the Practice Module report sections:
 
 ## Current status
 
-Live resources and row counts come from GCP project `swiftborder`. Refresh [docs/inventory.md](docs/inventory.md) after you query the project. The served forecast is 30 minutes on Maps lags (`lin_h30` or persistence). A 24-hour horizon and <= 15 min MAE are targets until the harness fills [docs/evaluation.md](docs/evaluation.md). Claims and reasoning: [docs/findings.md](docs/findings.md).
+Live resources and row counts come from GCP project `swiftborder`. Refresh [docs/inventory.md](docs/inventory.md) after you query the project. The served forecast is 30 minutes on Maps lags (`lin_h30` or persistence). Layer B **methods, numbers, significance, and figures** are documented in [docs/evaluation.md](docs/evaluation.md) (citation bundle: [`eval/runs/report/`](eval/runs/report/)). A 24-hour horizon remains a product target. Claims register: [docs/findings.md](docs/findings.md).
 
 ## Contributing
 
-Prefer small, reviewable PRs. Evaluation and Risk ownership (metrics harness, protocol docs, honest proposal framing) is a natural first footprint in this repo. Do not claim measured MAE or "we beat Google" until the harness produces numbers for the final report.
+Prefer small, reviewable PRs. Evaluation and Risk ownership (metrics harness, protocol docs, honest proposal framing) is a natural first footprint in this repo. Cite [`eval/runs/report/run.json`](eval/runs/report/run.json) for dataset and model provenance. Report skill on the Maps series vs persistence; do not claim "we beat Google" without an independent wait-time label.
 
 ## Agents and grading
 

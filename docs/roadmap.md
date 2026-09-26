@@ -17,7 +17,7 @@ The report describes **one system at two depths** (high-level, then detailed). T
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
 - [`eval/layer_b.py`](../eval/layer_b.py) scores Layer B read-only; [`eval/README.md`](../eval/README.md).
-- Report drafts exist: design, evaluation reasoning, findings, inventory. Layer B result cells are still `pending` until a harness run is recorded.
+- Report drafts exist: design, evaluation reasoning, findings, inventory. **Offline** Layer B scores on a full `travel_times` export are in [evaluation.md](evaluation.md). **30 min** BQML rows from `layer_b.py` are optional.
 
 ---
 
@@ -37,18 +37,17 @@ Do these in order. A later step that needs a number waits on the harness.
 
 Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in production is 30 minutes and that 24 hours and <= 15 min MAE are targets.
 
-### 2. Layer B harness — run and publish numbers
+### 2. Layer B evaluation — publish and align horizons
 
-**In git:** [`eval/layer_b.py`](../eval/layer_b.py) (hold-out window, persistence / `lin_h30` / `xgb_h30` at 30 minutes, direction and peak slices). Offline tests: `python -m pytest` in `eval/`.
+**Done (offline):** full `travel_times` export scored with [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py) (60-minute horizon, `jb_to_woodlands`). Numbers are in [evaluation.md](evaluation.md).
 
 **Remaining**
 
-1. Run `python layer_b.py` against project `swiftborder` (see [eval/README.md](../eval/README.md)).
-2. Paste MAE/RMSE into the Layer B table in [evaluation.md](evaluation.md). Wording: skill against persistence on the Maps series.
-3. Optionally update `model_registry` only with an explicit, reviewed write path (the script does not do this by default).
-4. Update the claims register only where a cell now supports the sentence.
+1. Optionally run [`eval/layer_b.py`](../eval/layer_b.py) for **30-minute** BQML (`lin_h30`, `xgb_h30`) on live `v_training_set` and paste those rows separately.
+2. Keep slide/report wording distinct: **60 min offline XGB** vs **30 min production serve**.
+3. Re-export `causeway_gdata.csv` when the table grows and refresh offline metrics before the final report.
 
-**Done when** the report can cite a filled row with a stated test window. Do not write "we beat Google" from that table. Maps is the label.
+**Done when** the report cites data source, horizon, and persistence baseline for each table. Do not write "we beat Google." Maps is the label.
 
 ### 3. Make the forecast re-runnable from git
 

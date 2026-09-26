@@ -75,9 +75,9 @@ Cloud region layout / multi-region consolidation is **not** what this module sco
 | Graded surface | Where the draft lives |
 | --- | --- |
 | Final report: tools, design, models | [architecture.md](../architecture.md) |
-| Final report: performance | [evaluation.md](../evaluation.md) (methods and empty result tables) |
+| Final report: performance | [evaluation.md](../evaluation.md) (methods; offline export scored; BQML 30 min optional) |
 | Final report: findings and discussion | [findings.md](../findings.md) |
 | Evidence appendix | [inventory.md](../inventory.md), a dated copy of project `swiftborder` |
 | Sequence of remaining work | [roadmap.md](../roadmap.md) |
-| Final system | Runnable detection (`camdetect`) plus a forecast path that can be re-run; harness still missing |
+| Final system | Runnable detection (`camdetect`) plus forecast path; offline Layer B eval on full `travel_times` export |
 | Peer review | Visible git footprint on the owned report sections |

@@ -41,6 +41,20 @@ A strong detector can still leave Layer B wrong, because a queue visible in one 
 
 `v_weather_features_10min` and `cam2701.v_congestion_index_10min` exist. `v_training_set` does not reference them. The protocol includes them because the proposal's claim is a multi-source forecast. Until they are joined, a results table that credits rain or queue depth is unsupported. The honest current feature set is Maps lags, rolling means, and time-of-day.
 
+### Significance (paired error differences)
+
+Point forecasts are **paired** on the same `(direction, time)` rows. For each observation, compute
+`d_i = |y_i - ŷ_i^A| - |y_i - ŷ_i^B|` in minutes (negative means A has lower absolute error than B).
+
+| Method | Role |
+| --- | --- |
+| **Block bootstrap CI** on `mean(d)` | Primary test when bins are serially correlated (default block **6** × 10 min = 1 h for BQML; **12** × 5 min = 1 h for offline XGB). |
+| **Paired t-test** on `d_i` | Supplementary; treat as approximate when autocorrelation is strong. |
+
+**Interpretation (α = 0.05):** call challenger **better** than reference when the bootstrap CI for `mean(d)` lies entirely below 0 (one-sided improvement on MAE). A lower aggregate MAE with a CI that crosses 0 is **not** significant.
+
+**Code:** [`eval/significance.py`](../eval/significance.py). BQML harness: `python layer_b.py --significance`. Offline XGB: `holdout_significance_vs_persistence()` in [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py).
+
 ### Why these baselines
 
 | Comparison | Why it is in the protocol |
@@ -48,6 +62,7 @@ A strong detector can still leave Layer B wrong, because a queue visible in one 
 | Persistence (`y_t` predicts `y_{t+h}`) | Naive forecast. Required in every Layer B table. |
 | `lin_h30` (linear regression) | The model `v_forecast_recent` actually calls. |
 | `xgb_h30` (boosted tree) | Trained on 12 Sep and not called by the serve view. The harness decides whether it earns the registry row. |
+| sklearn XGB (`eval/timeseries_xgb.py`) | Exploratory **60-minute** horizon on raw 5-minute series (`jb_to_woodlands` only). Not production; optional notebook backtests in [eval/notebooks/](../eval/notebooks/). |
 | Day / night, direction, time-of-day | The border is not one regime. A single MAE can hide a peak-hour failure. |
 
 `model_registry` has two rows (see [model_registry_reference.sql](../sql/bigquery/traffic_prediction/model_registry_reference.sql)). Training features and OPTIONS for `lin_h30` / `xgb_h30` are in [sql/bigquery/traffic_prediction/](../sql/bigquery/traffic_prediction/). The report should fill registry rows from harness scores (direction, serving model, reason, test window, date), not from preference alone.
@@ -106,25 +121,97 @@ The module asks for at least three of the categories below. Hybrid or ensemble i
 4. Write the chosen serving model to `model_registry` with reason, test window, and date.
 5. Leave <= 15 min MAE as a target until a cell in the table supports it.
 
-**Status:** see [inventory.md](inventory.md) for live row counts and serve path. Features in `v_training_set` are Maps-only. `v_forecast_recent` serves 30 minutes (`lin_h30` or persistence). `y_60` is computed and not served. `xgb_h30` is not called by that view. A read-only harness lives in [`eval/layer_b.py`](../eval/layer_b.py); the table below stays `pending` until you run it and paste numbers in a follow-up commit.
+**Status:** see [inventory.md](inventory.md) for live row counts and serve path. Production serve is **30 minutes** (`v_forecast_recent`: `lin_h30` or persistence). **Recorded runs (2026-09-26 SGT):** offline sklearn XGB on a cached full export of `causeway.travel_times`; BQML candidates via read-only `layer_b.py` on `v_training_set` (trailing 3-day hold-out).
 
 ![Layer B evaluation](images/eval-layer-b.png)
 
-### How to run the Layer B harness
+### Offline evaluation (full `travel_times` export)
 
-From [`eval/README.md`](../eval/README.md): install `eval/requirements.txt`, run `python layer_b.py` from `eval/` (read-only BigQuery). Run `python -m pytest` in `eval/` first for offline checks. Do not write `model_registry` unless a future flag implements it. Wording for the report: **skill against persistence on the Maps series.**
+**Data:** canonical table `swiftborder.causeway.travel_times` — BigQuery download with CSV cache ([`eval/data/README.md`](../eval/data/README.md)). **Export size (this run):** 11,842 rows canonical; 5,921 rows after `jb_to_woodlands` filter. **Route:** `jb_to_woodlands` (`SG_TO_MY`). **Code:** [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py), [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py) (LSTM optional; not scored here), [`eval/notebooks/causeway_xgb_timeseries.ipynb`](../eval/notebooks/causeway_xgb_timeseries.ipynb).
 
-### Results table (fill from the harness)
+**Chronological 80/20 hold-out** on the 5-minute series (sklearn XGB, 60-minute horizon `H=12`):
+
+| Metric | Value | Notes |
+| --- | --- | --- |
+| Test RMSE | **3.24 min** | Same-scale naive persistence not in this row; see day backtest |
+| Dominant feature | `target_lag_1` (~70% importance) | Maps duration is highly persistent at 5-minute cadence |
+
+**Fixed-day backtest** (60 min ahead; mean RMSE/MAE in minutes over 22–24 Sep 2026):
+
+| Method | RMSE (min) mean | MAE (min) mean | vs persistence MAE (3.60) |
+| --- | --- | --- | --- |
+| Persistence T-60 | 5.35 | 3.60 | — |
+| Naive D-1/D-7 blend | 4.30 | 2.72 | Better |
+| **XGB (actual lag window)** | **3.57** | **2.18** | **Better** |
+| XGB (blend window) | 4.46 | 2.81 | Better |
+| XGB average of windows | 3.84 | 2.39 | Better |
+
+This path is **not** the live serve model (`v_forecast_recent` is 30-minute BQML). It shows that a richer lag + calendar model on the **same Maps series** can beat persistence at **60 minutes** on this export.
+
+### BQML serve-path harness (30 minutes; optional)
+
+[`eval/layer_b.py`](../eval/layer_b.py) scores **persistence**, `lin_h30`, and `xgb_h30` on a trailing hold-out of `traffic_prediction.v_training_set` via **read-only BigQuery** (both directions, peak slices). Use this to audit **production** models; it does not re-read the offline CSV.
+
+```bash
+cd eval && pip install -r requirements.txt && python layer_b.py --project swiftborder --holdout-days 3
+```
+
+### Results table (production models at 30 min)
+
+Headline rows use `layer_b.py --holdout-days 3` (n=866 per direction slice at `both` / `all`). Full peak and direction breakdown is in the harness stdout.
 
 | Candidate | Horizon | Test window | MAE (min) | RMSE (min) | Persistence MAE | Direction | Time of day |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Persistence | 30 min | pending | pending | pending | — | both | all |
-| `lin_h30` | 30 min | pending | pending | pending | pending | both | all |
-| `xgb_h30` | 30 min | pending | pending | pending | pending | both | all |
+| Persistence | 30 min | 2026-09-23 06:50 UTC .. 2026-09-26 06:50 UTC | 2.62 | 3.86 | — | both | all |
+| `lin_h30` | 30 min | same | 2.89 | 3.83 | 2.62 | both | all |
+| `xgb_h30` | 30 min | same | **2.51** | **3.76** | 2.62 | both | all |
 | Joined model (weather + congestion) | 30 min | pending | pending | pending | pending | both | all |
-| Any 60 min or 24 h model | 60 min / 24 h | pending | pending | pending | pending | both | all |
+| sklearn XGB (offline export) | **60 min** | full export; 80/20 + 22–24 Sep | **2.18** (XGB actual-window MAE mean) | **3.57** (RMSE mean) | 3.60 | `jb_to_woodlands` | all |
+| Any 24 h model | 24 h | pending | pending | pending | pending | both | all |
 
-Slice rows (direction, morning peak, evening peak, night) are added beside the aggregate row. A model is not "the" model until the registry row cites this table.
+On this 3-day window, **`xgb_h30` beats persistence on combined MAE**; **`lin_h30` does not** (worse than persistence overall, though better on `SG_TO_MY` alone). Serve view still selects `lin_h30` or persistence — registry promotion should cite this window if `xgb_h30` is claimed. Do not mix **60 min** offline XGB and **30 min** BQML in one headline MAE.
+
+### Comparison plots (per run)
+
+Regenerate after a new harness run:
+
+```bash
+cd eval
+pip install -r requirements-dev.txt
+python generate_comparison_plots.py --bqml
+# or: python layer_b.py --holdout-days 3 --significance --plots
+```
+
+**Report citation target (committed):** [`eval/runs/report/`](../eval/runs/report/) — promote with `python eval/promote_report_run.py` when tables and prose match a harness run. Ephemeral runs live under **`eval/runs/<run_id>/`** (gitignored). Each run includes:
+
+- **`run.json`** — datasets, models, horizons, significance summaries, artifact paths
+- **`README.md`** — human-readable copy of the same metadata
+- **`offline/`** — 60 min sklearn figures (when generated)
+- **`bqml/`** — 30 min BQML figures (when generated)
+
+The latest local run id is in [`eval/runs/LATEST.json`](../eval/runs/LATEST.json). Layout and gitignore rules: [`eval/runs/README.md`](../eval/runs/README.md).
+
+| Path (under `eval/runs/report/`) | What it shows |
+| --- | --- |
+| `offline/backtest-mae.png` | Mean MAE by method across 22–24 Sep backtest days |
+| `offline/holdout-sample.png` | Tail of chronological hold-out: actual vs XGB vs persistence T-60 |
+| `offline/holdout-mae-diff.png` | Bootstrap CI for mean paired AE difference (offline hold-out) |
+| `bqml/mae-by-direction.png` | BQML candidates vs persistence MAE by direction |
+| `bqml/mae-diff-ci.png` | Paired MAE difference vs persistence for `lin_h30` / `xgb_h30` by direction |
+
+Dataset and model details for the committed snapshot: [`eval/runs/report/run.json`](../eval/runs/report/run.json).
+
+Protocol diagrams for methods (not scored runs) remain [`images/eval-layer-a.png`](images/eval-layer-a.png) and [`images/eval-layer-b.png`](images/eval-layer-b.png).
+
+**How to read the forest plots:** each point is `mean(|err_ch| - |err_ref|)` in minutes; error bars are block-bootstrap 95% CIs. Intervals entirely left of zero mean the challenger has **significantly** lower MAE than persistence at alpha = 0.05 (see [Significance](#significance-paired-error-differences)).
+
+### Plot analysis (2026-09-26 run)
+
+**Offline 60 minutes (`jb_to_woodlands`).** The backtest bar chart ranks methods the same way as the table: **XGB (actual lag window)** has the lowest mean MAE (~2.2 min), ahead of naive D-1/D-7 blend and well ahead of persistence T-60 (~3.6 min). The hold-out time-series panel shows XGB tracking sharp moves in the Maps duration series more closely than persistence; gaps widen when the series turns after a plateau. On the full chronological hold-out (n = 1,138 supervised rows), the paired MAE-difference forest plot sits **far left of zero** (mean improvement ~3.7 min vs persistence T-60; bootstrap CI excludes zero). That is a much stronger separation than the 3-day BQML window — different horizon, route filter, and model — but it supports the same story: **rich lags beat naive carry-forward on this label**.
+
+**BQML 30 minutes (both directions, trailing 3 days).** The direction bar chart shows **regime split**: persistence MAE is lower on `MY_TO_SG` than on `SG_TO_MY`, and both learned models struggle most on **morning peak** rows (see harness tables). `xgb_h30` has the lowest combined MAE, but the forest plot shows the **combined** (`both`) CI for `xgb_h30` **crosses zero** — the headline MAE gain (~0.1 min) is not significant under block bootstrap. `lin_h30` is **significantly worse than persistence combined** (CI entirely right of zero) while **significantly better on `SG_TO_MY` alone** — a pattern visible in the per-direction bars and worth stating explicitly in the report (do not quote a single "both" MAE without the direction plot). `xgb_h30` is **significantly better than persistence on `MY_TO_SG`** in this window; on `SG_TO_MY` the point estimate favors `xgb_h30` but the CI still overlaps zero.
+
+**Reporting takeaway:** use the **bar charts** for magnitude and direction splits; use **forest plots** before claiming "model A beats persistence." The offline 60 min path can support a strong supervised-learning slide; the live 30 min BQML path supports **auditing serve candidates** with honest significance qualifiers.
 
 ---
 

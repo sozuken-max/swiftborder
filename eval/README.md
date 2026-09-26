@@ -2,28 +2,51 @@
 
 Read-only evaluation helpers outside `camdetect/` so changes here do not redeploy `swiftbackend`.
 
-## Layer B (`layer_b.py`)
+## Layer B — two evaluation paths
 
-Scores **persistence**, `lin_h30`, and `xgb_h30` on a trailing hold-out window of
-`traffic_prediction.v_training_set` at the **30-minute** horizon (`y_30`). Slices
-are by direction (`SG_TO_MY`, `MY_TO_SG`) and by time of day (morning peak,
-evening peak, other), using the peak flags already in the view.
+| Path | Data | Horizon | Models | Status in report |
+| --- | --- | --- | --- | --- |
+| **Offline (canonical BQ table)** | Live `sync_canonical_travel_times` + CSV cache [`data/causeway_gdata.csv`](data/README.md) | **60 min** (`H=12` × 5 min) | sklearn XGB; **LSTM** hook in [`timeseries_lstm.py`](timeseries_lstm.py) | **Scored** (XGB) — see [evaluation.md](../docs/evaluation.md) |
+| **BQML harness** | Live read-only `traffic_prediction.v_training_set` | **30 min** (`y_30`) | persistence, `lin_h30`, `xgb_h30` | Optional cross-check of **serve** models; not the same split as the CSV run |
 
-**What a number means:** error on the Google Maps `duration_in_traffic` series.
-This is skill against persistence on that series, not an independent wait-time
-measurement and not "we beat Google."
+**What numbers mean:** error on the Google Maps `duration_in_traffic` series (skill vs persistence on that series), not independent wait time and not "we beat Google."
 
-### Run (live BigQuery, read-only)
+### Offline (full `travel_times` export)
+
+```bash
+cd eval
+pip install -r requirements-dev.txt
+jupyter notebook notebooks/causeway_xgb_timeseries.ipynb
+```
+
+Open the notebook; set `REFRESH_FROM_BQ = True` to pull canonical `travel_times`, or use the cache ([data/README.md](data/README.md)). For LSTM: `pip install -r requirements-notebook.txt`, then `RUN_LSTM = True` in the notebook.
+
+### BQML serve-path harness (optional)
 
 ```bash
 cd eval
 pip install -r requirements.txt
 python layer_b.py --project swiftborder --holdout-days 3
+python layer_b.py --significance   # paired MAE vs persistence (block bootstrap + t-test)
 ```
 
-`model_registry` is **not** updated unless you pass `--write-registry` (reserved;
-not implemented). Paste results into [docs/evaluation.md](../docs/evaluation.md)
-only after a successful run, in a separate commit.
+`model_registry` is **not** updated unless `--write-registry` is implemented.
+
+Paired significance helpers live in [`significance.py`](significance.py); protocol in [evaluation.md](../docs/evaluation.md#significance-paired-error-differences).
+
+### Comparison plots (per-run folders)
+
+Each harness run writes **`eval/runs/<run_id>/`** (gitignored). For the **final report**, promote one run to **`eval/runs/report/`** (committed): `python promote_report_run.py`. See [`runs/README.md`](runs/README.md).
+
+```bash
+pip install -r requirements-dev.txt
+python generate_comparison_plots.py              # offline only
+python generate_comparison_plots.py --bqml       # offline + BQML
+python generate_comparison_plots.py --bqml-only  # BQML only
+python layer_b.py --holdout-days 3 --plots     # BQML plots into a new run folder
+```
+
+Narrative in [evaluation.md](../docs/evaluation.md#comparison-plots-per-run). Implementation: [`plots.py`](plots.py), [`run_artifacts.py`](run_artifacts.py).
 
 ### Offline tests
 

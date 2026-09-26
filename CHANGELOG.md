@@ -4,6 +4,23 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-09-26
 
+### Added (Layer B evaluation)
+
+- Offline path: `eval/timeseries_xgb.py`, `eval/timeseries_lstm.py`, notebook, canonical `travel_times` sync and cache docs under `eval/data/`.
+- Paired significance: `eval/significance.py`; comparison plots `eval/plots.py`, `eval/generate_comparison_plots.py`.
+- Per-run output under `eval/runs/<run_id>/`; **committed report snapshot** `eval/runs/report/` (promote via `eval/promote_report_run.py`).
+- Tests for metrics, XGB/LSTM helpers, significance, plots, and run artifacts.
+
+### Changed
+
+- `eval/layer_b.py`: `bin_ts` alignment, `--significance`, `--plots`, run-folder output.
+- Evaluation and findings: Layer B tables, significance protocol, plot analysis; offline 60 min vs BQML 30 min kept separate.
+- Root README, `docs/README.md`, `eval/README.md`: point at `eval/runs/report/` for final-report figures and `run.json`.
+
+### Added (notebook integration)
+
+- `eval/notebooks/causeway_xgb_timeseries.ipynb` (sklearn XGB, 60-minute horizon, `jb_to_woodlands`).
+
 ### Documentation
 
 - Comprehensive doc pass: align findings, roadmap, agent-deploy, and architecture with `eval/`, pytest-on-deploy, and inventory/CHANGELOG split. Refresh `travel_times` count (~11,830 rows) in inventory.

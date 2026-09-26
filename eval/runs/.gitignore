@@ -1,0 +1,6 @@
+*
+!.gitignore
+!README.md
+!LATEST.json
+!report/
+!report/**

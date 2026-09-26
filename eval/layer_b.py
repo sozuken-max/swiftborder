@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from google.cloud import bigquery
 
 from metrics import score_slices
+from significance import compare_scored_rows, format_comparison_table
 
 DEFAULT_PROJECT = "swiftborder"
 DATASET = "traffic_prediction"
@@ -64,6 +66,7 @@ holdout AS (
 )
 SELECT
   direction,
+  bin_ts,
   is_morning_peak,
   is_evening_peak,
   y_30,
@@ -88,6 +91,7 @@ def _fetch_persistence(client: bigquery.Client, project: str, holdout_days: int)
             "direction": r["direction"],
             "is_morning_peak": r["is_morning_peak"],
             "is_evening_peak": r["is_evening_peak"],
+            "bin_ts": r["bin_ts"],
             "y_30": r["y_30"],
             "predicted": r["y_persistence"],
         }
@@ -106,6 +110,7 @@ def _fetch_model(client: bigquery.Client, project: str, model: str, holdout_days
     return [
         {
             "direction": r["direction"],
+            "bin_ts": r["bin_ts"],
             "is_morning_peak": r["is_morning_peak"],
             "is_evening_peak": r["is_evening_peak"],
             "y_30": r["y_30"],
@@ -153,6 +158,31 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Write model_registry (not implemented; flag reserved)",
     )
+    parser.add_argument(
+        "--significance",
+        action="store_true",
+        help="Print paired MAE significance vs persistence (block bootstrap + paired t-test)",
+    )
+    parser.add_argument(
+        "--significance-block-size",
+        type=int,
+        default=6,
+        help="Block length for bootstrap (6 bins = 60 min at 10-minute cadence)",
+    )
+    parser.add_argument(
+        "--significance-alpha",
+        type=float,
+        default=0.05,
+        help="Alpha for bootstrap confidence interval",
+    )
+    parser.add_argument(
+        "--plots",
+        action="store_true",
+        help="Write BQML comparison PNGs under eval/runs/<run_id>/bqml/ (requires matplotlib)",
+    )
+    parser.add_argument("--run-id", default=None, help="Run folder name under eval/runs (default: auto)")
+    parser.add_argument("--run-dir", type=Path, default=None, help="Explicit run directory (overrides --run-id)")
+    parser.add_argument("--reuse-run", action="store_true", help="Write into an existing run directory")
     args = parser.parse_args(argv)
 
     if args.write_registry:
@@ -169,10 +199,68 @@ def main(argv: Optional[List[str]] = None) -> int:
     print("Layer B hold-out scores (skill on the Maps duration series; label y_30).")
     _print_table("Persistence", window, persist_slices, persist_mae)
 
+    model_row_sets: Dict[str, List[dict]] = {}
     for model in MODELS:
         model_rows = _fetch_model(client, args.project, model, args.holdout_days)
+        model_row_sets[model] = model_rows
         model_slices = score_slices(model_rows, "y_30", "predicted")
         _print_table(model, window, model_slices, persist_mae)
+
+    comparisons = []
+    for model in MODELS:
+        for direction in ("both", "SG_TO_MY", "MY_TO_SG"):
+            comparisons.append(
+                compare_scored_rows(
+                    persist_rows,
+                    model_row_sets[model],
+                    direction=direction,
+                    time_of_day="all",
+                    label_challenger=f"{model} ({direction})",
+                    label_reference="Persistence",
+                    block_size=args.significance_block_size,
+                    alpha=args.significance_alpha,
+                )
+            )
+
+    if args.significance:
+        print("\n## Significance vs persistence (paired absolute error; minutes)")
+        print(
+            "Block bootstrap mean AE difference (challenger - reference); "
+            f"block_size={args.significance_block_size}, alpha={args.significance_alpha}. "
+            "'Better at alpha' uses one-sided interpretation: CI entirely below 0 => challenger."
+        )
+        print(format_comparison_table(comparisons))
+
+    if args.plots:
+        from generate_comparison_plots import _bqml_plots
+        from run_artifacts import (
+            create_run_dir,
+            update_latest_pointer,
+            write_manifest,
+            write_run_readme,
+        )
+
+        if args.run_dir is not None:
+            run_dir = args.run_dir
+            run_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            run_dir = create_run_dir(
+                components=["bqml"],
+                run_id=args.run_id,
+                exist_ok=args.reuse_run,
+            )
+        _paths, bqml_meta = _bqml_plots(
+            run_dir,
+            args.project,
+            args.holdout_days,
+            args.significance_block_size,
+            args.significance_alpha,
+        )
+        manifest = {"components": ["bqml"], "bqml": bqml_meta}
+        write_manifest(run_dir, manifest)
+        write_run_readme(run_dir, manifest)
+        update_latest_pointer(run_dir, manifest)
+        print(f"Wrote BQML comparison plots under {run_dir / 'bqml'}")
 
     return 0
 
