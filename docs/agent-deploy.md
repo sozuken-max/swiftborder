@@ -29,7 +29,7 @@ Queried 26 Sep 2026. Re-query before you edit a service.
 
 | Live resource | Region | In git? |
 | --- | --- | --- |
-| Cloud Run `swiftbackend` | `europe-west1` | Source is `camdetect/` on `main`. Deploy is an **inline** Cloud Build trigger (`76bbca35-c1b4-4836-9f34-d7adda53ea17`), push to `^main$`, buildpacks, function target `detect`. No test step. No `cloudbuild.yaml` in the repo. |
+| Cloud Run `swiftbackend` | `europe-west1` | Source is `camdetect/` on `main`. Deploy is an **inline** Cloud Build trigger (`76bbca35-c1b4-4836-9f34-d7adda53ea17`), push to `^main$`, buildpacks, function target `detect`. No test step. No `cloudbuild.yaml` in the repo. **Included files** are code and config under `camdetect/` only (`*.py`, requirements, `pytest.ini`, Dockerfile, Cloud Build and data files). `README.md` and the rest of the repo do not start this build. |
 | Cloud Run `gmap-woodlands-fetcher` | `asia-southeast1` | No |
 | Cloud Scheduler `Gmap-Woodlands` | `asia-southeast1` | No. It calls the fetcher every 5 minutes. |
 | Cloud Run job `traffic-backfill` | `asia-southeast1` | No |

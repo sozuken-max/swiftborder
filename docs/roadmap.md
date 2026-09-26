@@ -101,7 +101,7 @@ Reviewed against `camdetect/` and `Causeway/` on 26 Sep 2026. The eval sequence 
 
 | Gap | Why it matters | What to do |
 | --- | --- | --- |
-| No `cloudbuild.yaml`, no tests | Push to `main` deploys `swiftbackend` from an inline trigger with no test step. The fetcher and backfill job are not in that trigger or in git. | A teammate's agent follows [agent-deploy.md](agent-deploy.md): export the running service, commit the source they actually deployed, add a build file with a failing test before deploy, and write `docs/deploy/SERVICE.md`. |
+| No `cloudbuild.yaml` in git | The `swiftbackend` trigger is inline in Cloud Build. On 26 Sep 2026 its `includedFiles` was set with `gcloud` so only `camdetect/` code and config start a build. There is still no test step. | Treat the live trigger as the source of truth (`gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder`). The filter is recorded in [camdetect/README.md](../camdetect/README.md). A checked-in `cloudbuild.yaml` is optional later; do not add a second trigger. |
 | `Causeway/` writes CSV only | It does not load `rainfall` or `weatherforecast`. The BigQuery weather pipeline is still outside the repo. | Do not wire these scripts up as if they were that pipeline. Recover the loader with the same export procedure. |
 | Direction names differ | `camdetect` emits `SG-MY` / `MY-SG`. The congestion view expects `to_JB` / `to_Woodlands` and emits `SG_TO_MY` / `MY_TO_SG`. | Map them in the join (step 5). Do not treat the strings as already aligned. |
 | Camera 2701 line only | 2702 detections become `Unknown`. | Add a line only after it is calibrated on a real frame. |

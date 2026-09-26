@@ -66,7 +66,9 @@ Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, and `weatherforec
 
 ### Cloud Build
 
-- Trigger `76bbca35-c1b4-4836-9f34-d7adda53ea17`, created **2026-08-29**. GitHub `sozuken-max/swiftborder`, push to `^main$`. Builds `camdetect` with Cloud Native Buildpacks and deploys `swiftbackend` in `europe-west1`. No test step. The Maps fetcher, backfill job, views, and BQML models are not in this trigger. No GitHub Actions workflows are in the repo.
+- Trigger `76bbca35-c1b4-4836-9f34-d7adda53ea17` (`rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc`), created **2026-08-29**. GitHub `sozuken-max/swiftborder`, push to `^main$`. The build config is **inline on the trigger**, not a file in git. It builds `camdetect` with Cloud Native Buildpacks and deploys `swiftbackend` in `europe-west1`. No test step.
+- **Path filter (set 2026-09-26 via `gcloud builds triggers import`):** `includedFiles` is code and config under `camdetect/` only (`*.py`, `requirements.txt`, `requirements-dev.txt`, `pytest.ini`, `Dockerfile`, `cloudbuild.yaml`, `*.yaml`, `*.yml`, `*.json`, `*.toml`). `README.md` and paths outside `camdetect/` do not start this build.
+- The Maps fetcher, backfill job, views, and BQML models are not in this trigger. No GitHub Actions workflows are in the repo.
 
 ### Cloud Scheduler
 

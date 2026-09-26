@@ -31,6 +31,12 @@ per-camera polyline separating the two carriageways:
 
 `sg_my + my_sg + unknown` always equals `vehicle_count`.
 
+These labels are **not** the BigQuery congestion-view names. This service emits
+`SG-MY` and `MY-SG`. `cam2701.v_congestion_index_10min` maps stored values
+`to_JB` / `to_Woodlands` onto `SG_TO_MY` / `MY_TO_SG`. A join has to translate
+them. Camera **2702** has no dividing line here, so every detection on that
+camera is `Unknown`.
+
 These are **occupancy** counts — vehicles currently visible in each
 carriageway, i.e. queue depth. They are not flow counts: data.gov.sg refreshes
 each camera only every minute or so, far too sparse to track a vehicle across
@@ -123,3 +129,51 @@ ignored and every detection falls back to `Unknown`.
   }
 }
 ```
+
+## Cloud Build
+
+There is no `cloudbuild.yaml` in this repo. The deploy is an inline trigger in
+project `swiftborder`, updated with `gcloud` on 26 Sep 2026 (not by a file in
+git).
+
+| | |
+| --- | --- |
+| Trigger | `76bbca35-c1b4-4836-9f34-d7adda53ea17` |
+| Name | `rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc` |
+| Event | push to `^main$` on `sozuken-max/swiftborder` |
+| Deploy | Cloud Run `swiftbackend`, `europe-west1`, function target `detect`, buildpacks, path `camdetect` |
+
+`includedFiles` limits the trigger to code and config under `camdetect/`:
+
+- `camdetect/*.py`, `camdetect/**/*.py`
+- `camdetect/requirements.txt`, `camdetect/requirements-dev.txt`
+- `camdetect/pytest.ini`, `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`
+- `camdetect/*.yaml`, `camdetect/**/*.yaml`, `camdetect/*.yml`, `camdetect/**/*.yml`
+- `camdetect/*.json`, `camdetect/**/*.json`, `camdetect/*.toml`
+
+A commit that only changes `camdetect/README.md`, or only files outside this
+folder, does not start the build. The build still has no test step.
+
+Re-check or re-apply from an exported trigger JSON (add `includedFiles`, then
+import). Do not create a second trigger for `swiftbackend`.
+
+```bash
+gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder
+gcloud builds triggers import --source=trigger.json --project=swiftborder
+```
+
+## Tests
+
+Direction, congestion, and payload parsing are covered without calling
+data.gov.sg or Roboflow.
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+Run that from this directory. `requirements.txt` stays the Cloud Run set.
+`pytest` is only in `requirements-dev.txt`.
+
+Not covered here: the HTTP handler, image download, and the Roboflow call.
+Those need network and `ROBOFLOW_API_KEY`.

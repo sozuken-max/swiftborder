@@ -3,7 +3,11 @@ import datetime
 import io
 import json
 import os
-from zoneinfo import ZoneInfo
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # Python 3.8
+    from backports.zoneinfo import ZoneInfo
 
 import functions_framework
 import requests

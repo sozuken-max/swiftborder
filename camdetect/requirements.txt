@@ -2,3 +2,4 @@ functions-framework
 requests
 Pillow
 google-cloud-storage
+backports.zoneinfo; python_version < "3.9"
