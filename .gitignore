@@ -1,5 +1,29 @@
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Local data extracts and logs
 **/*.csv
-Causeway/data/
 **/*.log
+Causeway/data/
+
+# Secrets (Roboflow and Maps keys stay in the environment)
+.env
+.env.*
+!.env.example
+
+# Kilo Code agent worktrees and local setup (also listed in .git/info/exclude)
+.kilo/worktrees/
+.kilo/agent-manager.json
+.kilo/setup-script
+.kilo/setup-script.*
+.kilocode/worktrees/
+.kilocode/agent-manager.json
+.kilocode/setup-script
+.kilocode/setup-script.*
+
+# Cursor local state. Project skills under .cursor/skills/ stay tracked.
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
