@@ -19,19 +19,23 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 2. **Source of truth is GCP project `swiftborder`.** Query it with `bq` / `gcloud` (or Console) before writing row counts, joins, serve horizon, or deploy path. `docs/inventory.md` is only the last dated copy.
 3. When the query and the docs disagree, rewrite the docs to match the project.
 4. Diff existing `docs/` — update rather than fork dated copies when content supersedes.
-5. Record the query in `docs/inventory.md` and the README status snapshot, with the observation time. Do not copy volatile GCP facts into `AGENTS.md`.
+5. Record the query in `docs/inventory.md` with an observation time. Point the root README at inventory for dated GCP facts. Do not copy volatile GCP facts into `AGENTS.md`.
+6. Put dated **repo or deploy** changes in `CHANGELOG.md`. Keep READMEs and report docs long-lived (current behavior, not "what we changed on date X").
 
 ## Document map
 
 | Path | Purpose |
 | --- | --- |
-| `README.md` | Short pitch, Layer A/B, status snapshot, links into docs |
+| `README.md` | Short pitch, Layer A/B, links into docs and inventory |
+| `CHANGELOG.md` | Dated repo and deploy history |
 | `docs/architecture.md` | Report: tools, techniques, system design |
 | `docs/evaluation.md` | Report: performance methods, reasoning, empty result tables |
 | `docs/findings.md` | Report: findings, discussion, claims register |
 | `docs/roadmap.md` | Ordered remaining work. Not a second architecture. |
 | `docs/agent-deploy.md` | How to export a teammate's live deploy into git and Cloud Build. |
 | `docs/inventory.md` | Evidence appendix. Dated copy of project `swiftborder`. Not the source of truth. |
+| `eval/README.md` | How to run Layer B harness; does not deploy `swiftbackend` |
+| `sql/README.md` | BigQuery view / BQML apply order and re-export notes |
 | `docs/grading/nus-iss-practice-module.md` | Rubric. Report prose should be able to land in its four sections |
 | `docs/images/` | Deck PNGs (polished GCP-icon style) |
 
@@ -56,7 +60,7 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 ## Output checklist
 
 - [ ] Facts dated; no invented resources
-- [ ] Status box matches the GCP query it cites, and `docs/inventory.md` was refreshed from that same query
+- [ ] `docs/inventory.md` matches the GCP query it cites; root README points at inventory for dated facts
 - [ ] Images referenced with relative paths and present on disk
 - [ ] ASCII-safe punctuation in markdown if Windows checkouts mangle Unicode
 - [ ] Grading weights / deliverables not contradicted

@@ -37,7 +37,7 @@ Catch inventiveness, proposal overclaim, and missing evaluation story. Reviews a
 ### C. Code and deploy
 
 - What does Cloud Build / CI actually deploy? (Historically: `camdetect` -> `swiftbackend` only.)
-- Are Maps fetcher, BQ SQL, BQML, or eval scripts still outside git?
+- Are Maps fetcher and ingest loaders still outside git? View/BQML SQL should live under `sql/`; eval under `eval/`.
 - Secrets: never commit Maps keys or tokens; flag leaked credentials.
 
 ### D. Practice Module fit

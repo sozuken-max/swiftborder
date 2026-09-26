@@ -2,8 +2,7 @@
 
 **Report section:** findings and discussion  
 **Source of truth:** GCP project `swiftborder`  
-**As of:** 26 September 2026, ~13:40 SGT  
-**Evidence:** [inventory.md](inventory.md). Methods: [evaluation.md](evaluation.md). Design: [architecture.md](architecture.md).
+**GCP facts:** [inventory.md](inventory.md) (dated snapshot). **Methods:** [evaluation.md](evaluation.md). **Design:** [architecture.md](architecture.md).
 
 These are findings the query supports. They are not performance results. Performance cells stay in the evaluation tables until a harness fills them.
 
@@ -11,11 +10,11 @@ These are findings the query supports. They are not performance results. Perform
 
 ## Findings the query supports
 
-1. **A duration label is accumulating.** `causeway.travel_times` is written every five minutes for both directions (11,790 rows through 13:35 SGT). That is enough history to start a 30-minute hold-out. It is not yet a long seasonal record.
+1. **A duration label is accumulating.** `causeway.travel_times` is written every five minutes for both directions (see [inventory.md](inventory.md) for row counts and latest `observed_at`). That is enough history to start a 30-minute hold-out. It is not yet a long seasonal record.
 2. **The live forecast is 30 minutes of the Maps series, from Maps lags.** `v_training_set` does not join weather or camera congestion. `v_forecast_recent` publishes `forecast_30min_min` using persistence or `lin_h30`. `xgb_h30` is trained and unused by that view. `y_60` is computed and unused.
 3. **Vision and weather are historical side stores.** Camera detection tables last changed on 18 Jul. Weather and rainfall last changed on 3 Sep. Image metadata last changed on 13 Sep (368,905 rows). `traffic_images.labels` is empty; labelling is in Roboflow.
 4. **Detection in git and detection in BigQuery are different clocks.** `camdetect` on `main` is what Cloud Build deploys to `swiftbackend`. The BigQuery camera tables are not receiving those calls. Directional geometry in the repo covers camera 2701 only.
-5. **Nothing in the repo scores a model.** `model_registry` has two rows from 12 Sep. No evaluation script is checked in.
+5. **Layer B can be scored from git; the report tables are still empty.** [`eval/layer_b.py`](../eval/layer_b.py) holds out a trailing window of `v_training_set` and scores persistence, `lin_h30`, and `xgb_h30` at 30 minutes (read-only BigQuery). It does not update `model_registry` by default. Layer A has no checked-in scoring script. Registry rows from 12 Sep are not yet tied to a harness run in this repo.
 
 ---
 
@@ -31,13 +30,13 @@ Use this when drafting the proposal, the first presentation (30 Sep 2026), or th
 | `lin_h30` or persistence is what the serve view can emit | `xgb_h30` is the production model, or we beat Google | The harness fills MAE/RMSE against persistence and a registry row cites that window |
 | Weather and congestion views exist | They feed the model | `v_training_set` references them |
 | Roboflow Public can export a dataset version; weight download is Core | Empty `traffic_images.labels` means export is impossible | — |
-| Cloud Build deploys `camdetect` to `swiftbackend` on push to `main` | The project has test CI, or the forecast is deployed from git | A pipeline runs tests and deploys the forecast |
+| Changes to `camdetect` runtime files on `main` run pytest then deploy `swiftbackend` | The whole repo has CI, or the forecast SQL/models deploy from git | Forecast views and BQML are committed and a separate pipeline exists |
 | Firebase Hosting is planned | The UI is live | Hosting exists in the project |
 | <= 15 min MAE is the target | <= 15 min MAE was achieved | A results cell shows it |
 
-Paste-ready status for a slide, tied to this query:
+Paste-ready status for a slide (refresh counts from [inventory.md](inventory.md) before the deck):
 
-> **Progress (26 Sep 2026, ~13:40 SGT):** Maps durations log into BigQuery every 5 minutes (11,790 rows, both directions, through 13:35 SGT). The served forecast is 30 minutes ahead (`v_forecast_recent`: persistence or `lin_h30`). Training features are Maps lags and time-of-day. Weather and camera-2701 congestion views exist and are not joined. Camera tables last moved 18 Jul; weather tables 3 Sep. Layer A labels are in Roboflow. Push to `main` redeploys `camdetect` only. A 24-hour forecast and <= 15 min MAE remain targets.
+> Maps durations log into BigQuery every five minutes (both directions). The served forecast is **30 minutes** ahead (`v_forecast_recent`: persistence or `lin_h30`). Training features are Maps lags and time-of-day only. Weather and camera-2701 congestion views exist and are **not** joined. Layer A labels are in Roboflow; Layer B harness is in `eval/`. Result cells in [evaluation.md](evaluation.md) stay `pending` until a harness run is pasted. A **24-hour** forecast and **<= 15 min MAE** remain targets.
 
 ---
 
@@ -49,6 +48,6 @@ Paste-ready status for a slide, tied to this query:
 
 **Two clocks for vision.** A demo of `swiftbackend` shows a live frame. A chart of `Cam2701` shows history that stopped on 18 Jul. The report should say which one the figure is.
 
-**Git is behind the project.** The fetcher, the views, and both BigQuery ML models are not in the tree. Reproducing the forecast from the repo alone is not possible today. Checking those definitions in is part of making the MVP runnable for grading, separate from the metric.
+**Git is still behind ingest.** Maps fetcher, `causeway.travel_times` loader, and camera/weather table writers are not in the tree. **Views, BQML, and serve SQL are in** [sql/](../sql/) (exported 2026-09-26). You can recreate Layer B logic in a project that already has `travel_times`, but you cannot replay ingest from this repo alone.
 
 **What to defer.** ResNet, Firebase, and holiday calendars can wait. A region-consolidation story does not move the grade. The order of work is in [roadmap.md](roadmap.md).

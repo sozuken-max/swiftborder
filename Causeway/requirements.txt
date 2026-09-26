@@ -1,4 +1,2 @@
-functions-framework
 requests
-Pillow
 backports.zoneinfo; python_version < "3.9"

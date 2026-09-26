@@ -132,9 +132,9 @@ ignored and every detection falls back to `Unknown`.
 
 ## Cloud Build
 
-There is no `cloudbuild.yaml` in this repo. The deploy is an inline trigger in
-project `swiftborder`, updated with `gcloud` on 26 Sep 2026 (not by a file in
-git).
+There is no `cloudbuild.yaml` in this repo. Deploy uses an inline Cloud Build
+trigger in project `swiftborder` (config is not stored in git). Repo changes to
+that trigger are recorded in [CHANGELOG.md](../CHANGELOG.md).
 
 | | |
 | --- | --- |
@@ -143,16 +143,19 @@ git).
 | Event | push to `^main$` on `sozuken-max/swiftborder` |
 | Deploy | Cloud Run `swiftbackend`, `europe-west1`, function target `detect`, buildpacks, path `camdetect` |
 
-`includedFiles` limits the trigger to code and config under `camdetect/`:
+Step `Test` runs `pip install -r camdetect/requirements-dev.txt` and
+`python -m pytest` in `camdetect/` before the buildpack step. A failing test
+stops the deploy.
 
-- `camdetect/*.py`, `camdetect/**/*.py`
-- `camdetect/requirements.txt`, `camdetect/requirements-dev.txt`
-- `camdetect/pytest.ini`, `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`
-- `camdetect/*.yaml`, `camdetect/**/*.yaml`, `camdetect/*.yml`, `camdetect/**/*.yml`
-- `camdetect/*.json`, `camdetect/**/*.json`, `camdetect/*.toml`
+`includedFiles` starts a build only when these change:
 
-A commit that only changes `camdetect/README.md`, or only files outside this
-folder, does not start the build. The build still has no test step.
+- `camdetect/main.py`, `camdetect/requirements.txt`
+- `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`
+- `camdetect/*.yaml`, `camdetect/*.yml`, `camdetect/*.json`, `camdetect/*.toml`
+
+Test-only files (`camdetect/tests/**`, `pytest.ini`, `requirements-dev.txt`) and
+`camdetect/README.md` do **not** start a deploy. Run pytest locally or rely on
+the next `main.py` / `requirements.txt` push to exercise CI tests.
 
 Re-check or re-apply from an exported trigger JSON (add `includedFiles`, then
 import). Do not create a second trigger for `swiftbackend`.
@@ -172,8 +175,8 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Run that from this directory. `requirements.txt` stays the Cloud Run set.
-`pytest` is only in `requirements-dev.txt`.
+Run that from this directory. `requirements.txt` is the Cloud Run dependency
+set; `pytest` is only in `requirements-dev.txt`.
 
 Not covered here: the HTTP handler, image download, and the Roboflow call.
 Those need network and `ROBOFLOW_API_KEY`.

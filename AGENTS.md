@@ -20,7 +20,7 @@ MAE are **targets** until a harness measures them.
 | Question | Authority |
 | --- | --- |
 | What is deployed, joined, served, or stored | GCP project `swiftborder` |
-| What code and docs are checked in | This repo (`camdetect/`, `Causeway/`, `docs/`) |
+| What code and docs are checked in | This repo (`camdetect/`, `Causeway/`, `eval/`, `sql/`, `docs/`); repo history in `CHANGELOG.md` |
 | What the proposal may claim | Plan + status until a harness measures it |
 
 Never collapse Git, the GCP project, and the proposal into one "done" story.

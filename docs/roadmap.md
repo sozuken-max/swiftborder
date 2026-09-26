@@ -1,7 +1,7 @@
 # Roadmap
 
 **Source of truth:** GCP project `swiftborder`. Re-query it before starting a step that depends on row counts, joins, or what is served.  
-**As of:** 26 September 2026, ~13:40 SGT  
+**GCP snapshot:** [inventory.md](inventory.md)  
 **Dates (briefing; confirm on Canvas):** first presentation **30 Sep 2026, 18:30–22:30**; final deliverables **31 Oct 2026**.  
 **Rubric:** [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md). Methods, a runnable system, and an honest report are the graded work. Region layout is not.
 
@@ -11,12 +11,13 @@ The report describes **one system at two depths** (high-level, then detailed). T
 
 ## Already true
 
-- Maps durations log every 5 minutes into `causeway.travel_times` (both directions, live through 13:35 SGT on 26 Sep).
+- Maps durations log every 5 minutes into `causeway.travel_times` (both directions; counts in [inventory.md](inventory.md)).
 - `v_forecast_recent` serves a 30-minute forecast: persistence or `lin_h30`. `xgb_h30` is trained and not called. `y_60` is computed and not served.
 - Weather and camera-2701 congestion views exist and are not joined.
-- `camdetect` on `main` deploys to `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
+- `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
-- Report drafts exist: design, evaluation reasoning, findings, inventory. Result cells are `pending`.
+- [`eval/layer_b.py`](../eval/layer_b.py) scores Layer B read-only; [`eval/README.md`](../eval/README.md).
+- Report drafts exist: design, evaluation reasoning, findings, inventory. Layer B result cells are still `pending` until a harness run is recorded.
 
 ---
 
@@ -34,29 +35,28 @@ Do these in order. A later step that needs a number waits on the harness.
 | What the metrics will be, and why persistence is the baseline | [evaluation.md](evaluation.md) |
 | What may be said aloud | Claims register in [findings.md](findings.md) |
 
-Leave `architecture-proposal.png` and `dataflow-target.png` out of the deck. Say the horizon in production is 30 minutes and that 24 hours and <= 15 min MAE are targets.
+Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in production is 30 minutes and that 24 hours and <= 15 min MAE are targets.
 
-### 2. Layer B harness (first build after the presentation)
+### 2. Layer B harness — run and publish numbers
 
-The label series is the only stream that is current, so this is the first measurement.
+**In git:** [`eval/layer_b.py`](../eval/layer_b.py) (hold-out window, persistence / `lin_h30` / `xgb_h30` at 30 minutes, direction and peak slices). Offline tests: `python -m pytest` in `eval/`.
 
-**How**
+**Remaining**
 
-1. Check a script or notebook into the repo. It reads `v_training_set` (or the views it is built on) from project `swiftborder`.
-2. Hold out a later time window. Fit nothing on that window.
-3. Score persistence, `lin_h30`, and `xgb_h30` at 30 minutes. Report MAE and RMSE for both directions and for morning peak, evening peak, and other.
-4. Write the chosen row into `model_registry` with reason, test window, and date.
-5. Replace the `pending` cells in the Layer B table in [evaluation.md](evaluation.md). Update the claims register only where a cell now supports the sentence.
+1. Run `python layer_b.py` against project `swiftborder` (see [eval/README.md](../eval/README.md)).
+2. Paste MAE/RMSE into the Layer B table in [evaluation.md](evaluation.md). Wording: skill against persistence on the Maps series.
+3. Optionally update `model_registry` only with an explicit, reviewed write path (the script does not do this by default).
+4. Update the claims register only where a cell now supports the sentence.
 
-**Done when** the report can show skill against persistence on the Maps series. Do not write "we beat Google" from that table. Maps is the label.
+**Done when** the report can cite a filled row with a stated test window. Do not write "we beat Google" from that table. Maps is the label.
 
 ### 3. Make the forecast re-runnable from git
 
-Cloud Build deploys `camdetect` only. The fetcher, the views, and both BigQuery ML models are outside the tree, so a marker cannot rebuild Layer B from the repo.
+**In git (2026-09-26):** view DDL and BQML scripts under [sql/](../sql/). See [sql/README.md](../sql/README.md) for apply order.
 
-**How:** commit the SQL for `v_bins_10min`, `v_training_set`, `v_forecast_recent`, `v_weather_features_10min`, and `v_congestion_index_10min`, plus the `CREATE MODEL` statements for `lin_h30` and `xgb_h30`. Keep secrets in the environment.
+**Remaining:** Maps ingest and any training refresh automation. BQML files reconstruct training from `bq show --model`; confirm with a dry run in a dev dataset before overwriting production models.
 
-**Done when** a teammate can recreate the views and models from the repo against project `swiftborder`.
+**Done when** a teammate can apply `sql/` against a project that already has `causeway.travel_times` and get the same views, models, and serve path as inventory describes.
 
 ### 4. Layer A harness
 
@@ -97,15 +97,14 @@ Camera 2702 has detections and no congestion view. Add that view before claiming
 
 ## From the codebase (in parallel with steps 2–3)
 
-Reviewed against `camdetect/` and `Causeway/` on 26 Sep 2026. The eval sequence above does not by itself put the deployed fetcher or the forecast SQL into git.
+The eval sequence above does not by itself put the deployed fetcher or the forecast SQL into git.
 
 | Gap | Why it matters | What to do |
 | --- | --- | --- |
-| No `cloudbuild.yaml` in git | The `swiftbackend` trigger is inline in Cloud Build. On 26 Sep 2026 its `includedFiles` was set with `gcloud` so only `camdetect/` code and config start a build. There is still no test step. | Treat the live trigger as the source of truth (`gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder`). The filter is recorded in [camdetect/README.md](../camdetect/README.md). A checked-in `cloudbuild.yaml` is optional later; do not add a second trigger. |
+| No `cloudbuild.yaml` in git | The `swiftbackend` trigger is inline in Cloud Build. It runs **pytest** before deploy; `includedFiles` is runtime paths only (not test-only files). | Treat the live trigger as the source of truth (`gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder`). Behavior is documented in [camdetect/README.md](../camdetect/README.md). History: [CHANGELOG.md](../CHANGELOG.md). Do not add a second trigger. |
 | `Causeway/` writes CSV only | It does not load `rainfall` or `weatherforecast`. The BigQuery weather pipeline is still outside the repo. | Do not wire these scripts up as if they were that pipeline. Recover the loader with the same export procedure. |
 | Direction names differ | `camdetect` emits `SG-MY` / `MY-SG`. The congestion view expects `to_JB` / `to_Woodlands` and emits `SG_TO_MY` / `MY_TO_SG`. | Map them in the join (step 5). Do not treat the strings as already aligned. |
 | Camera 2701 line only | 2702 detections become `Unknown`. | Add a line only after it is calibrated on a real frame. |
-| `google-cloud-storage` is unused | It is on `camdetect/requirements.txt` and not imported. | Remove it when touching that service, unless a recovered deploy really uses it. |
 
 ## Leave until the tables exist
 

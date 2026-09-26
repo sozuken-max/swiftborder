@@ -1,0 +1,4 @@
+-- Exported from project swiftborder (traffic_prediction.v_bins_10min) on 2026-09-26 via INFORMATION_SCHEMA.TABLES.
+
+CREATE OR REPLACE VIEW `swiftborder.traffic_prediction.v_bins_10min`
+AS WITH obs AS (SELECT route_id, direction, TIMESTAMP_SECONDS(DIV(UNIX_SECONDS(observed_at), 600) * 600) AS bin_ts, duration_in_traffic_sec / 60.0 AS dur_min, congestion_ratio, speed_kmh FROM `swiftborder.causeway.travel_times` WHERE status = 'OK' AND duration_in_traffic_sec IS NOT NULL), binned AS (SELECT route_id, direction, bin_ts, AVG(dur_min) AS dur_min, AVG(congestion_ratio) AS congestion_ratio, AVG(speed_kmh) AS speed_kmh, COUNT(*) AS n_obs FROM obs GROUP BY 1,2,3) SELECT route_id, direction, bin_ts, DATETIME(bin_ts, 'Asia/Singapore') AS bin_sgt, dur_min, congestion_ratio, speed_kmh, n_obs, TIMESTAMP_DIFF(bin_ts, LAG(bin_ts) OVER w, MINUTE) AS gap_min FROM binned WINDOW w AS (PARTITION BY route_id ORDER BY bin_ts);

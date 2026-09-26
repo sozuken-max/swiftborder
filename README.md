@@ -7,7 +7,7 @@ Two layers:
 | Layer | Job |
 | --- | --- |
 | **A - Vision** | LTA camera frames -> Roboflow YOLO (label / train / serve) -> per-direction counts and congestion features |
-| **B - Forecasting** | Join vision + NEA weather (+ holidays when ready) + Google Maps Distance Matrix labels -> models -> registry -> forecast |
+| **B - Forecasting** | Maps Distance Matrix labels in BigQuery; live serve is **30 minutes** on Maps lags and time-of-day (`lin_h30` or persistence). Vision, weather, and holidays are planned joins, not in the current training view. |
 
 **Principal risk:** queue counts are not the same as crossing duration. The label series is Maps' current duration estimate. The baseline is persistence of that series. The project has no independent wait-time measurement.
 
@@ -19,6 +19,8 @@ Two layers:
 | --- | --- |
 | [`camdetect/`](camdetect/) | Camera detection spike (2701 directional detect via Roboflow) |
 | [`Causeway/`](Causeway/) | Weather / rainfall fetch and filter scripts |
+| [`eval/`](eval/) | Read-only Layer B harness (does not deploy `swiftbackend`) |
+| [`sql/`](sql/) | BigQuery view and BQML definitions exported from project `swiftborder` |
 | [`docs/`](docs/) | Final-report drafts: design, evaluation and reasoning, findings; GCP inventory is the evidence appendix |
 
 GCP project `swiftborder` is the source of truth for what is deployed. This repo is behind that project. Re-query the project before treating the docs as current.
@@ -33,11 +35,12 @@ Drafted against the Practice Module report sections:
 - [Findings and claims](docs/findings.md)
 - [Roadmap](docs/roadmap.md)
 - [Agent instructions: local deploy to CI](docs/agent-deploy.md)
-- [GCP evidence snapshot (~2026-09-26)](docs/inventory.md)
+- [GCP evidence snapshot](docs/inventory.md) (dated copy of project `swiftborder`)
+- [Changelog](CHANGELOG.md) (repo and deploy history)
 
-## Status snapshot (~26 Sep 2026, 13:40 SGT)
+## Current status
 
-Copied from project `swiftborder`. The served forecast is 30 minutes ahead on Maps lags (`lin_h30` or persistence). A 24-hour horizon and <= 15 min MAE are targets. The claims register and the reasoning are in [docs/findings.md](docs/findings.md) and [docs/evaluation.md](docs/evaluation.md).
+Live resources and row counts come from GCP project `swiftborder`. Refresh [docs/inventory.md](docs/inventory.md) after you query the project. The served forecast is 30 minutes on Maps lags (`lin_h30` or persistence). A 24-hour horizon and <= 15 min MAE are targets until the harness fills [docs/evaluation.md](docs/evaluation.md). Claims and reasoning: [docs/findings.md](docs/findings.md).
 
 ## Contributing
 

@@ -12,6 +12,17 @@ import glob
 import os
 
 
+def rows_for_station(day_files, station_id):
+    """Return (timestamp, station_id, value_mm) rows for one station from day CSVs."""
+    matched = []
+    for path in day_files:
+        with open(path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row["station_id"] == station_id:
+                    matched.append((row["timestamp"], row["station_id"], row["value_mm"]))
+    return matched
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--station-id", type=str, default="S210")
@@ -33,12 +44,7 @@ def main():
         print(f"No day files found matching {pattern}")
         return
 
-    matched_rows = []
-    for path in day_files:
-        with open(path, newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                if row["station_id"] == args.station_id:
-                    matched_rows.append((row["timestamp"], row["station_id"], row["value_mm"]))
+    matched_rows = rows_for_station(day_files, args.station_id)
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)

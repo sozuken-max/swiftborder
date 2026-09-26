@@ -2,8 +2,7 @@
 
 **Report section:** performance (methods now; numbers when a harness writes them)  
 **Source of truth for live resources:** GCP project `swiftborder`  
-**As of:** 26 September 2026, ~13:40 SGT (copy of that project)  
-**Rubric:** methods and metrics are graded. This file is the methods chapter. The results tables stay empty until the harness fills them. Claims that depend on those cells belong in the final report, not in the proposal.
+**Live resources:** [inventory.md](inventory.md). **Rubric:** methods and metrics are graded. This file is the methods chapter. Result cells stay `pending` until a harness run is recorded here. Claims that depend on those cells belong in the final report, not in the proposal.
 
 Diagrams: [images/eval-layer-a.png](images/eval-layer-a.png), [images/eval-layer-b.png](images/eval-layer-b.png).
 
@@ -13,7 +12,7 @@ Diagrams: [images/eval-layer-a.png](images/eval-layer-a.png), [images/eval-layer
 
 The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes.
 
-The system queried on 26 Sep does something narrower. `v_forecast_recent` emits a **30-minute** forecast of Google Maps `duration_in_traffic`. Training features are lags and time-of-day from that same series. Layer A counts vehicles in a camera frame. Those counts are occupancy, not crossing time.
+The live serve path is narrower than the product sentence. `v_forecast_recent` emits a **30-minute** forecast of Google Maps `duration_in_traffic`. Training features are lags and time-of-day from that same series. Layer A counts vehicles in a camera frame. Those counts are occupancy, not crossing time.
 
 <= 15 min MAE and the 24-hour horizon stay **targets**.
 
@@ -51,7 +50,7 @@ A strong detector can still leave Layer B wrong, because a queue visible in one 
 | `xgb_h30` (boosted tree) | Trained on 12 Sep and not called by the serve view. The harness decides whether it earns the registry row. |
 | Day / night, direction, time-of-day | The border is not one regime. A single MAE can hide a peak-hour failure. |
 
-`model_registry` has two rows and was last written on 12 Sep. The report should fill it from harness scores (direction, serving model, reason, test window, date), not from preference.
+`model_registry` has two rows (see [model_registry_reference.sql](../sql/bigquery/traffic_prediction/model_registry_reference.sql)). Training features and OPTIONS for `lin_h30` / `xgb_h30` are in [sql/bigquery/traffic_prediction/](../sql/bigquery/traffic_prediction/). The report should fill registry rows from harness scores (direction, serving model, reason, test window, date), not from preference alone.
 
 ---
 
@@ -81,7 +80,7 @@ The module asks for at least three of the categories below. Hybrid or ensemble i
 3. Report the metrics below, split by day and night.
 4. Record scores before promoting a serving checkpoint. Roboflow remains the serve path. Public plan: dataset export after a version is allowed; manual weight download is Core.
 
-**Status (13:40 SGT query):** labels are in Roboflow. `traffic_images.labels` has 0 rows. `traffic_images.metadata` has 368,905 rows and is not a label table. No checked-in Layer A harness.
+**Status:** labels are in Roboflow. `traffic_images.labels` has 0 rows. `traffic_images.metadata` is populated and is not a label table. There is **no** checked-in Layer A scoring script; only the protocol and table below.
 
 ![Layer A evaluation](images/eval-layer-a.png)
 
@@ -107,9 +106,13 @@ The module asks for at least three of the categories below. Hybrid or ensemble i
 4. Write the chosen serving model to `model_registry` with reason, test window, and date.
 5. Leave <= 15 min MAE as a target until a cell in the table supports it.
 
-**Status (13:40 SGT query):** the label series is live (Scheduler `Gmap-Woodlands` every 5 minutes; 11,790 rows through 13:35 SGT; both directions). Features in `v_training_set` are Maps-only. `v_forecast_recent` serves 30 minutes (`lin_h30` or persistence). `y_60` is computed and not served. `xgb_h30` is not called. No checked-in harness.
+**Status:** see [inventory.md](inventory.md) for live row counts and serve path. Features in `v_training_set` are Maps-only. `v_forecast_recent` serves 30 minutes (`lin_h30` or persistence). `y_60` is computed and not served. `xgb_h30` is not called by that view. A read-only harness lives in [`eval/layer_b.py`](../eval/layer_b.py); the table below stays `pending` until you run it and paste numbers in a follow-up commit.
 
 ![Layer B evaluation](images/eval-layer-b.png)
+
+### How to run the Layer B harness
+
+From [`eval/README.md`](../eval/README.md): install `eval/requirements.txt`, run `python layer_b.py` from `eval/` (read-only BigQuery). Run `python -m pytest` in `eval/` first for offline checks. Do not write `model_registry` unless a future flag implements it. Wording for the report: **skill against persistence on the Maps series.**
 
 ### Results table (fill from the harness)
 

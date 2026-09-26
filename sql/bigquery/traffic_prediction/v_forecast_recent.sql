@@ -1,0 +1,4 @@
+-- Exported from project swiftborder (traffic_prediction.v_forecast_recent) on 2026-09-26 via INFORMATION_SCHEMA.TABLES.
+
+CREATE OR REPLACE VIEW `swiftborder.traffic_prediction.v_forecast_recent`
+AS WITH base AS (SELECT * FROM `swiftborder.traffic_prediction.v_training_set` WHERE lag_60 IS NOT NULL AND bin_ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)), lin AS (SELECT direction, bin_ts, predicted_y_30 AS y_lin FROM ML.PREDICT(MODEL `swiftborder.traffic_prediction.lin_h30`, TABLE base)) SELECT b.direction, b.bin_ts, b.bin_sgt, b.y_persistence AS observed_now_min, r.serving_model, ROUND(CASE r.serving_model WHEN 'lin_h30' THEN l.y_lin ELSE b.y_persistence END, 1) AS forecast_30min_min, TIMESTAMP_ADD(b.bin_ts, INTERVAL 30 MINUTE) AS forecast_for_ts FROM base b JOIN lin l USING (direction, bin_ts) JOIN `swiftborder.traffic_prediction.model_registry` r USING (direction);
