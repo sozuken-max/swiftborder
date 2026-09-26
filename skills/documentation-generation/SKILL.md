@@ -1,8 +1,8 @@
----
+﻿---
 name: documentation-generation
 description: >-
   Use when writing or revising SwiftBorder README, docs/, architecture or evaluation
-  diagrams, findings, or inventory snapshots — keep plan+status honesty and
+  diagrams, findings, or inventory snapshots â€” keep plan+status honesty and
   grading-aware framing.
 ---
 
@@ -18,7 +18,7 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 1. Read root [AGENTS.md](../../AGENTS.md) and [docs/grading/nus-iss-practice-module.md](../../docs/grading/nus-iss-practice-module.md).
 2. **Source of truth is GCP project `swiftborder`.** Query it with `bq` / `gcloud` (or Console) before writing row counts, joins, serve horizon, or deploy path. `docs/inventory.md` is only the last dated copy.
 3. When the query and the docs disagree, rewrite the docs to match the project.
-4. Diff existing `docs/` — update rather than fork dated copies when content supersedes.
+4. Diff existing `docs/` â€” update rather than fork dated copies when content supersedes.
 5. Record the query in `docs/inventory.md` with an observation time. Point the root README at inventory for dated GCP facts. Do not copy volatile GCP facts into `AGENTS.md`.
 6. Put dated **repo or deploy** changes in `CHANGELOG.md`. Keep READMEs and report docs long-lived (current behavior, not "what we changed on date X").
 
@@ -41,15 +41,18 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 
 ## Diagram rules
 
-- **Style:** polished GCP-icon architecture (Cloud Run, BigQuery, Scheduler, Storage icons; Layer A/B bands). Prefer this over Mermaid screenshots for slide assets.
+For any PNG under `docs/images/`, **read [../diagram-image-generation/SKILL.md](../diagram-image-generation/SKILL.md) first** and follow it.
+That skill owns style lock, edit strategy, bucket strip, and acceptance checks.
+
+Prose / Mermaid only (still apply here):
+
 - **One system, two depths.** High-level and detailed diagrams describe the same queried system. Do not add an as-is / to-be or proposal-target pair. Unfinished scope is prose in `docs/findings.md` and the order of work is `docs/roadmap.md`.
 - Do not invent joins. If training is Maps-only, do not draw weather or camera congestion into `traffic_prediction`.
-- Show present-but-unused sources as dashed callouts in deck PNGs and as `-.->` edges in the detailed Mermaid. Do not draw them as inputs to training.
+- Show present-but-unused sources as `-.->` edges in detailed Mermaid. Do not draw them as inputs to training.
 - `traffic_images.labels` is the empty table. `traffic_images.metadata` is populated. Do not swap them.
 - `traffic-backfill` is a Cloud Run Job that rebuilds metadata and `backfill_checkpoint`.
 - Label serve horizon from a fresh query of project `swiftborder` (live horizon vs 24h intent). Do not hard-code that result into `AGENTS.md`.
-- Include risks that matter for grading (missing harness, honesty on targets), not region-consolidation theatre.
-- Layer A and Layer B each need an evaluation diagram under `docs/images/eval-layer-a.png` and `eval-layer-b.png`.
+
 
 ## Proposal language
 
@@ -66,3 +69,4 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 - [ ] Grading weights / deliverables not contradicted
 - [ ] At least three module technique categories are nameable for the system (see grading lens)
 - [ ] This file's body copied to `.cursor/skills/documentation-generation/SKILL.md` with `../../` rewritten to `../../../`
+

@@ -62,7 +62,7 @@ Point forecasts are **paired** on the same `(direction, time)` rows. For each ob
 | Persistence (`y_t` predicts `y_{t+h}`) | Naive forecast. Required in every Layer B table. |
 | `lin_h30` (linear regression) | The model `v_forecast_recent` actually calls. |
 | `xgb_h30` (boosted tree) | Trained on 12 Sep and not called by the serve view. The harness decides whether it earns the registry row. |
-| sklearn XGB (`eval/timeseries_xgb.py`) | Exploratory **60-minute** horizon on raw 5-minute series (`jb_to_woodlands` only). Not production; optional notebook backtests in [eval/notebooks/](../eval/notebooks/). |
+| sklearn XGB (`eval/timeseries_xgb.py`) | Exploratory **60-minute** horizon on **one route**: `jb_to_woodlands` (**JB → SG only**; SG → JB not in the notebook). Not production; see [eval/notebooks/](../eval/notebooks/). |
 | Day / night, direction, time-of-day | The border is not one regime. A single MAE can hide a peak-hour failure. |
 
 `model_registry` has two rows (see [model_registry_reference.sql](../sql/bigquery/traffic_prediction/model_registry_reference.sql)). Training features and OPTIONS for `lin_h30` / `xgb_h30` are in [sql/bigquery/traffic_prediction/](../sql/bigquery/traffic_prediction/). The report should fill registry rows from harness scores (direction, serving model, reason, test window, date), not from preference alone.
@@ -78,6 +78,7 @@ The module asks for at least three of the categories below. Hybrid or ensemble i
 | Supervised learning | Roboflow labels; regression of future Maps duration | Hold-out detection metrics; time-based hold-out for `y_30` / `y_60` |
 | Machine learning / deep learning | YOLO via Roboflow; BigQuery ML `lin_h30` and `xgb_h30` | Same hold-outs, one row per candidate |
 | Intelligent sensing | LTA frames to directional occupancy (camera 2701 geometry in `camdetect`) | Count-error and day/night, not crossing time |
+| Deep learning (LSTM) | [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py) — 60 min **JB→SG** only; `train_lstm.py` (`train` / `compare` / `tune`). Windows GPU: [`requirements-tf-gpu-windows.txt`](../eval/requirements-tf-gpu-windows.txt) + `check_tf_gpu.py` | Hold-out RMSE/MAE vs persistence; not in `report/` until promoted |
 | Hybrid / ensemble | Not in the serve path | Only if a blend is scored against the single models |
 
 ---
@@ -127,7 +128,7 @@ The module asks for at least three of the categories below. Hybrid or ensemble i
 
 ### Offline evaluation (full `travel_times` export)
 
-**Data:** canonical table `swiftborder.causeway.travel_times` — BigQuery download with CSV cache ([`eval/data/README.md`](../eval/data/README.md)). **Export size (this run):** 11,842 rows canonical; 5,921 rows after `jb_to_woodlands` filter. **Route:** `jb_to_woodlands` (`SG_TO_MY`). **Code:** [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py), [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py) (LSTM optional; not scored here), [`eval/notebooks/causeway_xgb_timeseries.ipynb`](../eval/notebooks/causeway_xgb_timeseries.ipynb).
+**Data:** canonical table `swiftborder.causeway.travel_times` — BigQuery download with CSV cache ([`eval/data/README.md`](../eval/data/README.md)). **Export size (this run):** 11,842 rows canonical; 5,921 rows after `jb_to_woodlands` filter. **Route scope:** **`jb_to_woodlands` only (JB → SG / inbound to Woodlands).** The teammate notebook does **not** train or backtest the **SG → JB** reverse route; do not quote offline XGB numbers as bidirectional. For **both** directions at **30 minutes**, use [`eval/layer_b.py`](../eval/layer_b.py) on `v_training_set`. **Code:** [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py), [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py), [`eval/notebooks/causeway_xgb_timeseries.ipynb`](../eval/notebooks/causeway_xgb_timeseries.ipynb).
 
 **Chronological 80/20 hold-out** on the 5-minute series (sklearn XGB, 60-minute horizon `H=12`):
 
@@ -207,7 +208,7 @@ Protocol diagrams for methods (not scored runs) remain [`images/eval-layer-a.png
 
 ### Plot analysis (2026-09-26 run)
 
-**Offline 60 minutes (`jb_to_woodlands`).** The backtest bar chart ranks methods the same way as the table: **XGB (actual lag window)** has the lowest mean MAE (~2.2 min), ahead of naive D-1/D-7 blend and well ahead of persistence T-60 (~3.6 min). The hold-out time-series panel shows XGB tracking sharp moves in the Maps duration series more closely than persistence; gaps widen when the series turns after a plateau. On the full chronological hold-out (n = 1,138 supervised rows), the paired MAE-difference forest plot sits **far left of zero** (mean improvement ~3.7 min vs persistence T-60; bootstrap CI excludes zero). That is a much stronger separation than the 3-day BQML window — different horizon, route filter, and model — but it supports the same story: **rich lags beat naive carry-forward on this label**.
+**Offline 60 minutes (JB → SG, `jb_to_woodlands` only).** The backtest bar chart ranks methods the same way as the table: **XGB (actual lag window)** has the lowest mean MAE (~2.2 min), ahead of naive D-1/D-7 blend and well ahead of persistence T-60 (~3.6 min). The hold-out time-series panel shows XGB tracking sharp moves in the Maps duration series more closely than persistence; gaps widen when the series turns after a plateau. On the full chronological hold-out (n = 1,138 supervised rows), the paired MAE-difference forest plot sits **far left of zero** (mean improvement ~3.7 min vs persistence T-60; bootstrap CI excludes zero). That is a much stronger separation than the 3-day BQML window — different horizon, route filter, and model — but it supports the same story: **rich lags beat naive carry-forward on this label**.
 
 **BQML 30 minutes (both directions, trailing 3 days).** The direction bar chart shows **regime split**: persistence MAE is lower on `MY_TO_SG` than on `SG_TO_MY`, and both learned models struggle most on **morning peak** rows (see harness tables). `xgb_h30` has the lowest combined MAE, but the forest plot shows the **combined** (`both`) CI for `xgb_h30` **crosses zero** — the headline MAE gain (~0.1 min) is not significant under block bootstrap. `lin_h30` is **significantly worse than persistence combined** (CI entirely right of zero) while **significantly better on `SG_TO_MY` alone** — a pattern visible in the per-direction bars and worth stating explicitly in the report (do not quote a single "both" MAE without the direction plot). `xgb_h30` is **significantly better than persistence on `MY_TO_SG`** in this window; on `SG_TO_MY` the point estimate favors `xgb_h30` but the CI still overlaps zero.
 

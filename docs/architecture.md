@@ -63,7 +63,7 @@ flowchart LR
     TT["causeway.travel_times LIVE<br/>see inventory.md"]
     RF2["rainfall.rainfall<br/>frozen 3 Sep"]
     WX["weatherforecast<br/>frozen 3 Sep<br/>+ v_weather_features_10min"]
-    TI["traffic_images.metadata<br/>frozen 13 Sep<br/>labels = 0 rows"]
+    TI["traffic_images<br/>metadata 368905 (13 Sep)<br/>labels = 0 rows"]
     TP["traffic_prediction US<br/>Maps-only v_training_set<br/>lin_h30 + xgb_h30<br/>v_forecast_recent = 30 min"]
   end
 
@@ -107,6 +107,4 @@ What those facts allow the report to claim is in [findings.md](findings.md). Met
 
 ![Detailed dataflow](images/dataflow-as-is.png)
 
-The dataflow PNG's warning that `traffic_images.metadata` has 0 rows is wrong. Metadata has **368,905 rows** (last write 13 Sep 2026). The empty table is `traffic_images.labels`.
-
-Legacy proposal/target PNGs are not in the repo. Unfinished scope (joined features, a longer horizon, published Layer B numbers, 2702 geometry, Firebase) is in [findings.md](findings.md) and [roadmap.md](roadmap.md).
+Legacy proposal/target PNGs are not in the repo. Unfinished scope (joined features, a longer horizon, Layer A scoring, 2702 geometry, Firebase) is in [findings.md](findings.md) and [roadmap.md](roadmap.md).

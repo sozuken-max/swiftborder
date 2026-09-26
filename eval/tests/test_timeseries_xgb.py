@@ -3,6 +3,8 @@ import pandas as pd
 
 from timeseries_xgb import (
     TimeSeriesConfig,
+    XGBTrainConfig,
+    apply_slew_rate_limit,
     build_supervised_matrices,
     engineer_features,
     rmse_seconds,
@@ -38,3 +40,17 @@ def test_engineer_and_matrix_shapes():
 
 def test_rmse_seconds():
     assert rmse_seconds([100, 200], [110, 190]) == 10.0
+
+
+def test_slew_rate_limit_caps_steps():
+    raw = np.array([0.0, 500.0, 0.0])
+    capped = apply_slew_rate_limit(raw, 300.0)
+    assert capped[1] == 300.0
+    assert capped[2] == 0.0
+
+
+def test_default_xgb_train_config_matches_teammate():
+    cfg = TimeSeriesConfig().xgb
+    assert cfg.n_estimators == 200
+    assert cfg.max_depth == 4
+    assert cfg.min_child_weight == 50

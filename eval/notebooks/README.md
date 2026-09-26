@@ -4,7 +4,7 @@ Exploratory analysis that does **not** deploy `swiftbackend` or change BigQuery 
 
 | Notebook | Purpose |
 | --- | --- |
-| [causeway_xgb_timeseries.ipynb](causeway_xgb_timeseries.ipynb) | sklearn **XGBoost** on 5-minute Maps durations (`jb_to_woodlands` / `SG_TO_MY`). **60-minute** horizon (`H=12` steps). Compare to persistence and naive D-1/D-7 blend. Logic lives in [`../timeseries_xgb.py`](../timeseries_xgb.py). |
+| [causeway_xgb_timeseries.ipynb](causeway_xgb_timeseries.ipynb) | sklearn **XGBoost** on 5-minute Maps durations — **`jb_to_woodlands` only (JB → SG)**. **SG → JB is not implemented.** **60-minute** horizon (`H=12`). Logic in [`../timeseries_xgb.py`](../timeseries_xgb.py). Both directions at 30 min: [`../layer_b.py`](../layer_b.py). |
 
 **Not the live serve path:** production uses `v_forecast_recent` (30 minutes, BQML `lin_h30` or persistence). Score production candidates with [`../layer_b.py`](../layer_b.py).
 

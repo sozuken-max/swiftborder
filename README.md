@@ -19,7 +19,7 @@ Two layers:
 | --- | --- |
 | [`camdetect/`](camdetect/) | Camera detection spike (2701 directional detect via Roboflow) |
 | [`Causeway/`](Causeway/) | Weather / rainfall fetch and filter scripts |
-| [`eval/`](eval/) | Layer B harness (`layer_b.py`), offline XGB/LSTM helpers, significance and comparison plots; committed report snapshot under `eval/runs/report/` |
+| [`eval/`](eval/) | Layer B harness (`layer_b.py`), offline **JB→SG** XGB/LSTM (`train_lstm.py`), significance/plots; report snapshot `eval/runs/report/`; Windows GPU: `eval/requirements-tf-gpu-windows.txt` |
 | [`sql/`](sql/) | BigQuery view and BQML definitions exported from project `swiftborder` |
 | [`docs/`](docs/) | Final-report drafts: design, evaluation and reasoning, findings; GCP inventory is the evidence appendix |
 

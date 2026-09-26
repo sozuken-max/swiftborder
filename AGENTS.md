@@ -1,4 +1,4 @@
-# AGENTS.md — SwiftBorder
+# AGENTS.md â€” SwiftBorder
 
 Harness-agnostic guidance for coding agents (Cursor, Claude Code, Copilot, Codex, etc.).
 Read this before changing docs, diagrams, architecture notes, or reviewing code.
@@ -29,7 +29,8 @@ Never collapse Git, the GCP project, and the proposal into one "done" story.
 
 | Skill | When |
 | --- | --- |
-| [documentation-generation](skills/documentation-generation/SKILL.md) | Writing or revising README, report drafts under `docs/`, diagrams |
+| [documentation-generation](skills/documentation-generation/SKILL.md) | Writing or revising README, report drafts under `docs/`, Mermaid in markdown |
+| [diagram-image-generation](skills/diagram-image-generation/SKILL.md) | Creating, updating, or **reviewing** `docs/images/` deck PNGs (visual lock + inventory gates + overlap QA); regen via Implementer/CloudAgent |
 | [architecture-code-review](skills/architecture-code-review/SKILL.md) | Reviewing code, PRs, architecture, GCP vs git drift |
 | [Local deploy to CI](docs/agent-deploy.md) | A teammate's agent is capturing a Cloud Run / Scheduler / BigQuery deploy into this repo |
 
@@ -60,3 +61,4 @@ supports.
 
 Evaluation & Risk owns [docs/evaluation.md](docs/evaluation.md), [docs/findings.md](docs/findings.md), and the harness that fills the result tables.
 Prefer small PRs that add docs/eval before claiming model wins.
+

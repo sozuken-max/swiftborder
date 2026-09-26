@@ -34,10 +34,11 @@ Use this when drafting the proposal, the first presentation (30 Sep 2026), or th
 | Firebase Hosting is planned | The UI is live | Hosting exists in the project |
 | <= 15 min MAE is the product target | <= 15 min MAE is proven on an independent wait-time study | Offline Maps-series MAE ~2–4 min on some slices (see evaluation) |
 | Offline eval used a full `travel_times` CSV export | Layer B numbers came from live BigQuery at slide time | Methods section names data source (export vs `layer_b.py`) |
+| Offline sklearn XGB is **JB → SG** (`jb_to_woodlands`) only | Offline XGB covers **SG → JB** or both causeway directions | A second `route_id` is scored in [evaluation.md](evaluation.md) |
 
 Paste-ready status for a slide (refresh counts from [inventory.md](inventory.md) before the deck):
 
-> Maps durations log every five minutes (both directions). **Serve:** 30 minutes (`v_forecast_recent`: persistence or `lin_h30`). **30 min harness (26 Sep):** `xgb_h30` MAE **2.51** vs persistence **2.62** (both directions; `lin_h30` **2.89**). **Offline 60 min** on full export — XGB MAE **~2.2 min** vs persistence **~3.6 min** (22–24 Sep slice); not the serve path. Weather/congestion **not** joined. Layer A in Roboflow; no Layer A metric table. **24-hour** forecast remains a target.
+> Maps durations log every five minutes (both directions in BQ). **Serve:** 30 minutes (`v_forecast_recent`: persistence or `lin_h30`). **30 min harness (26 Sep):** both `SG_TO_MY` / `MY_TO_SG` via `layer_b.py`. **Offline 60 min** — **JB → SG only** (`jb_to_woodlands`); SG → JB **not** in the notebook; XGB MAE **~2.2 min** vs persistence **~3.6 min** (22–24 Sep slice). Weather/congestion **not** joined. Layer A in Roboflow; no Layer A metric table. **24-hour** forecast remains a target.
 
 ---
 

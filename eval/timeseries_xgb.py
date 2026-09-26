@@ -1,8 +1,12 @@
-"""Exploratory sklearn XGBoost on causeway Maps durations (not the BQML serve path)."""
+"""Exploratory sklearn XGBoost on causeway Maps durations (not the BQML serve path).
+
+Scope: **one Maps route only** — ``route_id = jb_to_woodlands`` (JB → Woodlands / inbound to SG).
+The reverse leg (SG → JB) is **not** implemented here; score both directions with ``layer_b.py`` (BQML).
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
@@ -10,11 +14,65 @@ import numpy as np
 import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 
-# `jb_to_woodlands` ~= direction `SG_TO_MY` in `traffic_prediction` views.
+# JB → Woodlands (one row in causeway.travel_times). Not the SG → JB route.
 DEFAULT_ROUTE_ID = "jb_to_woodlands"
+OFFLINE_ROUTE_LABEL = "JB → SG (jb_to_woodlands only)"
 TARGET_COL = "duration_in_traffic_sec"
 STEP_MINUTES = 5
 CANONICAL_TABLE = "causeway.travel_times"
+DEFAULT_MAX_SLEW_STEP_SEC = 300
+DWT_WAVELET = "db2"
+DWT_LEVEL = 3
+
+
+@dataclass(frozen=True)
+class XGBTrainConfig:
+    """Defaults match teammate notebook (2026-09-26); DWT off in production path."""
+
+    n_estimators: int = 200
+    learning_rate: float = 0.03
+    max_depth: int = 4
+    min_child_weight: int = 50
+    subsample: float = 0.6
+    colsample_bytree: float = 1.0
+    reg_lambda: float = 1.0
+
+
+def apply_slew_rate_limit(values: np.ndarray, max_step: float) -> np.ndarray:
+    """Cap step-to-step change in the target series (notebook: 300 s per 5-min bin)."""
+    if max_step <= 0:
+        return np.asarray(values, dtype=float).copy()
+    vals = np.asarray(values, dtype=float)
+    filtered = np.empty_like(vals)
+    filtered[0] = vals[0]
+    for i in range(1, len(vals)):
+        step = np.clip(vals[i] - filtered[i - 1], -max_step, max_step)
+        filtered[i] = filtered[i - 1] + step
+    return filtered
+
+
+def dwt_features_from_windows(
+    windows: np.ndarray,
+    *,
+    wavelet: str = DWT_WAVELET,
+    level: int = DWT_LEVEL,
+) -> pd.DataFrame:
+    """Optional wavelet features per lag window (requires PyWavelets)."""
+    import pywt
+
+    scale = 2 ** (level / 2)
+    rows: List[Dict[str, float]] = []
+    for w in windows:
+        c_a, *c_ds = pywt.wavedec(w, wavelet, level=level, mode="periodization")
+        trend = c_a / scale
+        row: Dict[str, float] = {
+            "dwt_trend_last": float(trend[-1]),
+            "dwt_trend_slope": float(trend[-1] - trend[-2]),
+        }
+        for lvl, c_d in zip(range(level, 0, -1), c_ds):
+            row[f"dwt_noise_L{lvl}"] = float(np.std(c_d))
+        rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def ensure_observed_at_sgt(frame: pd.DataFrame) -> pd.DataFrame:
@@ -72,6 +130,9 @@ class TimeSeriesConfig:
     train_fraction: float = 0.8
     route_id: str = DEFAULT_ROUTE_ID
     target_col: str = TARGET_COL
+    max_slew_step_sec: int = DEFAULT_MAX_SLEW_STEP_SEC
+    use_dwt: bool = False
+    xgb: XGBTrainConfig = field(default_factory=XGBTrainConfig)
 
     @property
     def horizon_minutes(self) -> int:
@@ -145,7 +206,10 @@ def _filter_route(frame: pd.DataFrame, config: TimeSeriesConfig) -> pd.DataFrame
     out = out.drop(columns=["error_message", "status"])
     out = out.sort_values("observed_at_sgt")
     target = pd.to_numeric(out[config.target_col], errors="coerce").astype(float)
-    out[config.target_col] = target.interpolate(method="linear").bfill().ffill()
+    target = target.interpolate(method="linear").bfill().ffill()
+    if config.max_slew_step_sec > 0:
+        target = apply_slew_rate_limit(target.to_numpy(), float(config.max_slew_step_sec))
+    out[config.target_col] = target
     return out.reset_index(drop=True)
 
 
@@ -202,8 +266,13 @@ def build_supervised_matrices(
     test_feats = test_data.drop(columns=drop_cols).iloc[offset:].reset_index(drop=True)
 
     keep = [f"target_lag_{i}" for i in range(config.keep_lags, 0, -1)]
-    x_train = pd.concat([train_feats, train_lags[keep]], axis=1)
-    x_test = pd.concat([test_feats, test_lags[keep]], axis=1)
+    train_parts: List[pd.DataFrame] = [train_feats, train_lags[keep]]
+    test_parts: List[pd.DataFrame] = [test_feats, test_lags[keep]]
+    if config.use_dwt:
+        train_parts.append(dwt_features_from_windows(train_target_windows))
+        test_parts.append(dwt_features_from_windows(test_target_windows))
+    x_train = pd.concat(train_parts, axis=1)
+    x_test = pd.concat(test_parts, axis=1)
     y_train = train_target[offset:]
     y_test = test_target[offset:]
     return x_train, x_test, y_train, y_test
@@ -213,14 +282,20 @@ def train_xgb(
     x_train: pd.DataFrame,
     y_train: np.ndarray,
     *,
+    config: Optional[TimeSeriesConfig] = None,
     random_state: int = 42,
 ):
     from xgboost import XGBRegressor
 
+    xgb_cfg = (config or TimeSeriesConfig()).xgb
     model = XGBRegressor(
-        n_estimators=500,
-        learning_rate=0.03,
-        max_depth=6,
+        n_estimators=xgb_cfg.n_estimators,
+        learning_rate=xgb_cfg.learning_rate,
+        max_depth=xgb_cfg.max_depth,
+        min_child_weight=xgb_cfg.min_child_weight,
+        subsample=xgb_cfg.subsample,
+        colsample_bytree=xgb_cfg.colsample_bytree,
+        reg_lambda=xgb_cfg.reg_lambda,
         random_state=random_state,
     )
     model.fit(x_train, y_train)

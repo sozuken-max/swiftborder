@@ -26,9 +26,30 @@ def _features(n: int = 100) -> pd.DataFrame:
 def test_lstm_sequence_shapes():
     features, config = _features(60)
     cols = sequence_feature_columns(features, config)
-    x_train, x_test, y_train, y_test = build_lstm_sequences(features, config, sequence_cols=cols)
+    x_train, x_test, y_train, y_test, cols_out = build_lstm_sequences(features, config, sequence_cols=cols)
+    assert cols_out == cols
     assert x_train.ndim == 3
     assert x_train.shape[1] == config.window_size
     assert x_train.shape[2] == len(cols)
     assert len(x_train) == len(y_train)
     assert len(x_test) == len(y_test)
+
+
+def test_persistence_from_sequences():
+    features, config = _features(60)
+    cols = sequence_feature_columns(features, config)
+    x_train, x_test, y_train, y_test, _ = build_lstm_sequences(features, config, sequence_cols=cols)
+    from timeseries_lstm import persistence_predictions_from_sequences
+
+    persist = persistence_predictions_from_sequences(x_test, cols, config)
+    assert persist.shape == y_test.shape
+
+
+def test_build_recurrent_model_smoke():
+    pytest = __import__("pytest")
+    pytest.importorskip("tensorflow")
+    from timeseries_lstm import LSTMTrainConfig, build_recurrent_model
+
+    for arch in ("lstm", "gru", "bilstm_attention", "residual_gated"):
+        model = build_recurrent_model((12, 5), LSTMTrainConfig(architecture=arch, lstm_units=16))
+        assert model.output_shape[-1] == 1

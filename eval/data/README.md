@@ -23,7 +23,7 @@ t.sync_canonical_travel_times('data/causeway_gdata.csv', refresh=True)
 
 Requires Application Default Credentials and `pip install -r requirements-dev.txt` (`db-dtypes`, `pyarrow`).
 
-Route-level frames use `prepare_route_frame(export, config)` (default `jb_to_woodlands`).
+Route-level frames use `prepare_route_frame(export, config)` (default **`jb_to_woodlands` — JB → SG only**; reverse route not in the offline notebook).
 
 ## Other eval paths
 

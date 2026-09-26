@@ -47,7 +47,7 @@ def _offline_plots(run_dir: Path, refresh_bq: bool) -> Tuple[List[Path], Dict[st
     raw = tsx.prepare_route_frame(export, config)
     features = tsx.engineer_features(raw, config)
     x_train, x_test, y_train, y_test = tsx.build_supervised_matrices(features, config)
-    model = tsx.train_xgb(x_train, y_train)
+    model = tsx.train_xgb(x_train, y_train, config=config)
     pred = model.predict(x_test)
     persist = tsx.holdout_persistence_predictions(x_test, config)
 
@@ -106,9 +106,17 @@ def _offline_plots(run_dir: Path, refresh_bq: bool) -> Tuple[List[Path], Dict[st
             "refreshed_from_bq": refresh_bq,
             "canonical_rows": len(export),
             "route_id": config.route_id,
+            "route_scope": tsx.OFFLINE_ROUTE_LABEL,
             "route_rows": len(raw),
         },
-        "models": ["sklearn.XGBRegressor (eval/timeseries_xgb.train_xgb)"],
+        "models": [
+            "sklearn.XGBRegressor (timeseries_xgb.train_xgb; teammate hyperparams 2026-09-26)",
+        ],
+        "preprocessing": {
+            "max_slew_step_sec": config.max_slew_step_sec,
+            "use_dwt": config.use_dwt,
+        },
+        "xgb_hyperparameters": dict(config.xgb.__dict__),
         "horizon_minutes": config.horizon_minutes,
         "train_fraction": config.train_fraction,
         "backtest_days": list(BACKTEST_DAYS),
