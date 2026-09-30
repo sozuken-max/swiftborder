@@ -10,6 +10,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | Performance: methods, reasoning, result tables | [evaluation.md](evaluation.md) |
 | Findings and what may be claimed | [findings.md](findings.md) |
 | What remains, and the order to do it | [roadmap.md](roadmap.md) |
+| Should we use LSTM or Transformer forecasters? (deferred, with reasons) | [deep-learning-assessment.md](deep-learning-assessment.md) |
 | Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
 | Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |
@@ -23,7 +24,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 
 **Mermaid source of truth:** [diagrams/](diagrams/) (`*.mmd`). [architecture.md](architecture.md) and [evaluation.md](evaluation.md) embed synced copies; run `python docs/diagrams/sync_mermaid.py` after editing a `.mmd` file. **Deck PNGs** under `images/` are exports for slides—refresh them when Mermaid topology changes ([diagrams/README.md](diagrams/README.md), [diagram-image-generation](../skills/diagram-image-generation/SKILL.md)).
 
-Design figures are **high-level** and **detailed** views of one system, not an as-is / to-be pair. Training is Maps-only; weather and camera-2701 congestion are present and not joined. `traffic_images.metadata` is populated; `traffic_images.labels` is empty. See [architecture.md](architecture.md) and [inventory.md](inventory.md) for counts.
+Design figures are **high-level** and **detailed** views of one system, not an as-is / to-be pair. Live training (`v_training_set`) is Maps-only; the weather and camera-2701 congestion views exist and are not joined. Weather is joined only in the offline experiment (`eval/joined.py`), where it gave no gain. `traffic_images.metadata` is populated; `traffic_images.labels` is empty. See [architecture.md](architecture.md) and [inventory.md](inventory.md) for counts.
 
 | Mermaid (edit first) | PNG export | Report use |
 | --- | --- | --- |

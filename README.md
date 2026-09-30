@@ -11,14 +11,14 @@ Woodlands-only causeway crossing-time forecasting (NUS-ISS Practice Module, Grou
 
 ## Results (13–30 Sep 2026, out-of-sample)
 
-30-minute MAE on the Maps series, both directions: persistence 2.64 min, `lin_h30` 2.78, `xgb_h30` 2.49, ensemble 2.46. `xgb_h30` and the ensemble are significantly better than persistence (Diebold–Mariano with Holm correction, day-block bootstrap). Weather features gave no significant gain. Camera features and Layer A metrics are pending. Details, slices and caveats: [docs/evaluation.md](docs/evaluation.md); evidence bundle: [`eval/runs/report/`](eval/runs/report/).
+30-minute MAE on the Maps series, both directions: persistence 2.64 min, `lin_h30` 2.78, `xgb_h30` 2.49, ensemble 2.46. `xgb_h30` and the ensemble are significantly better than persistence; `lin_h30` (the model currently served for some directions) is not significantly different from persistence across both directions. "Significant" means a Diebold–Mariano test (do two forecasts' errors differ more than chance?) with a Holm correction for testing several models at once, and confidence intervals from a bootstrap that resamples whole days so that correlated 5-minute errors are not counted as independent. Weather features gave no significant gain. Camera features and Layer A metrics are pending. Details, slices and caveats: [docs/evaluation.md](docs/evaluation.md); evidence bundle: [`eval/runs/report/`](eval/runs/report/).
 
 ## Techniques (Practice Module)
 
 | Category | Where |
 | --- | --- |
 | Supervised learning | Roboflow-labelled YOLO; regression of future Maps duration (BQML, XGBoost, ridge) |
-| Machine learning / deep learning | YOLO; `lin_h30`, `xgb_h30`; offline XGBoost; LSTM code (unscored) |
+| Machine learning / deep learning | YOLO; `lin_h30`, `xgb_h30`; offline XGBoost; LSTM code (unscored, see [deep-learning assessment](docs/deep-learning-assessment.md)) |
 | Intelligent sensing | LTA frames -> directional occupancy with the camera 2701 dividing line |
 | Hybrid / ensemble | Mean of `lin_h30` + `xgb_h30`, ridge + XGBoost, scored against the single models |
 
@@ -35,14 +35,20 @@ Woodlands-only causeway crossing-time forecasting (NUS-ISS Practice Module, Grou
      'SELECT direction, bin_sgt, observed_now_min, serving_model, forecast_30min_min
       FROM `swiftborder.traffic_prediction.v_forecast_recent` ORDER BY bin_ts DESC LIMIT 4'
    ```
-3. **Evaluation:** `cd eval && pip install -r requirements-dev.txt && python layer_b.py` (read-only), or the full report run in [eval/README.md](eval/README.md).
+3. **Evaluation (read-only BigQuery queries):**
+   ```bash
+   cd eval
+   pip install -r requirements-dev.txt
+   python layer_b.py --window-end "2026-09-30 23:50"
+   ```
+   Pinning `--window-end` reproduces the report window; the full report run is in [eval/README.md](eval/README.md).
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
 | [`camdetect/`](camdetect/) | `swiftbackend` source: Roboflow detection + directional counts (deployed by Cloud Build on push to `main`) |
-| [`Causeway/`](Causeway/) | data.gov.sg rainfall / 2-hour forecast history fetchers (CSV) |
+| [`Causeway/`](Causeway/) | data.gov.sg rainfall / 2-hour forecast history fetchers (CSV) and `load_bigquery.py` (manual append to the weather tables) |
 | [`eval/`](eval/) | Layer A and B harnesses, significance, feature builder, camera backfill; report snapshot `eval/runs/report/` |
 | [`sql/`](sql/) | BigQuery view and BQML definitions exported from project `swiftborder` |
 | [`docs/`](docs/) | Report drafts (design, evaluation, findings), GCP inventory, roadmap, work plan |
@@ -67,7 +73,7 @@ On Linux/macOS use `scripts/run_tests.sh [--slow] [--coverage]`. GitHub Actions 
 ## Documentation
 
 - [Docs index](docs/README.md) · [Design](docs/architecture.md) · [Evaluation](docs/evaluation.md) · [Findings and claims register](docs/findings.md)
-- [Roadmap](docs/roadmap.md) · [Active work plan](docs/plan-eval-integrity.md) · [Agent deploy instructions](docs/agent-deploy.md)
+- [Roadmap](docs/roadmap.md) · [Deep-learning assessment](docs/deep-learning-assessment.md) · [Active work plan](docs/plan-eval-integrity.md) · [Agent deploy instructions](docs/agent-deploy.md)
 - [GCP inventory](docs/inventory.md) · [Changelog](CHANGELOG.md)
 
 ## Agents and grading

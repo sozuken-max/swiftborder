@@ -161,7 +161,7 @@ These do not require the missing fetcher source.
 
 ## Code that is still missing after a successful export
 
-- Maps ingest and table loaders. View and BQML SQL lives in [sql/](../sql/); re-export with [sql/bigquery/EXPORT.md](../sql/bigquery/EXPORT.md).
+- Maps ingest, the `travel_times` loader and the camera table writers. Weather has a manual loader in git ([`Causeway/load_bigquery.py`](../Causeway/load_bigquery.py)) but no schedule; capturing a scheduled weather job is a deploy like any other. View and BQML SQL lives in [sql/](../sql/); re-export with [sql/bigquery/EXPORT.md](../sql/bigquery/EXPORT.md).
 - Layer B numbers are published in [evaluation.md](evaluation.md) from [`eval/runs/report/`](../eval/runs/report/). The scorers run manually; CI (GitHub Actions) runs tests only and never queries BigQuery.
 
 ## gcloud on a Windows dev box

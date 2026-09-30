@@ -1,6 +1,6 @@
 # Work plan: evaluation integrity, hardening, and joined-feature experiment
 
-**Status:** active. **Owner:** Evaluation & Risk. **Target:** final report, 31 Oct 2026.
+**Status:** complete except Task 9 (camera backfill, handed off) and regeneration of the deck PNGs. Delivered in PR #2 (`eval-integrity-overhaul`). **Owner:** Evaluation & Risk. **Target:** final report, 31 Oct 2026.
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md) is the dated copy).
 
 This plan comes from a full-repo review against a read-only query of `swiftborder` on **2026-09-30 ~21:35 SGT**. It corrects evaluation bugs, hardens ingest and detection code, upgrades significance testing, and adds the experiments the report needs. The Status column is updated as work lands. Results enter [evaluation.md](evaluation.md) only from a promoted [`eval/runs/report/run.json`](../eval/runs/report/run.json).
@@ -34,25 +34,20 @@ This plan comes from a full-repo review against a read-only query of `swiftborde
 
 ## Verified background (2026-09-30 ~21:35 SGT, read-only)
 
+Dated facts that shaped the plan. Current counts are in [inventory.md](inventory.md).
+
 - `lin_h30` (created 2026-09-12 06:15 UTC) and `xgb_h30` (06:19 UTC) were never retrained. Both use a CUSTOM split on `is_val` (11–12 Sep). BQML internal eval MAE 3.04 / 2.87 is not harness output. **Every date from 13 Sep is out-of-sample.**
 - `v_training_set`: `LEAD(bin_ts, 3)` is exactly 30 min on every row (0 exceptions of 3,572 per direction). `route_id` to `direction` is 1:1. 7,144 labelled rows, 2026-09-05 17:50 to 2026-09-30 13:00 UTC. Live `v_training_set` and `v_forecast_recent` match [sql/](../sql/).
 - `causeway.travel_times`: 14,296 rows (7,148 per direction), 2026-09-05 17:53 to 2026-09-30 13:35 UTC.
-- Frozen stores: `Cam2701` / `Cam2702` last modified 18 Jul; `rainfall` / `weatherforecast` 3 Sep. None overlaps `travel_times`, so the join needs a backfill. Those datasets are in `asia-southeast1`; `causeway` and `traffic_prediction` are in `US`, so a BigQuery join is not possible without copying data.
+- Frozen stores: `Cam2701` / `Cam2702` last modified 18 Jul; `rainfall` / `weatherforecast` last modified 3 Sep with data to 31 Aug SGT. None overlaps `travel_times`, so the join needs a backfill. (Weather superseded on 1 Oct: Woodlands rows for 1–30 Sep appended with `Causeway/load_bigquery.py`.) Those datasets are in `asia-southeast1`; `causeway` and `traffic_prediction` are in `US`, so a BigQuery join is not possible without copying data.
 - `swiftbackend` (`europe-west1`, revision `swiftbackend-00023-f8g`, commit e49b232): IAM invoker check disabled, ingress `all`, `ALLOWED_ORIGIN` unset (CORS `*`), `ROBOFLOW_API_KEY` a plain env var, `CACHE_BUCKET` set but not read by `camdetect`. Any caller can trigger billed inference.
 - Bucket names are exact in [inventory.md](inventory.md); the Cloud Build bucket is `swiftborder_cloudbuild`.
 - Roboflow free tier has no overage billing. When included credits run out, calls fail until the monthly reset. The per-image hosted-inference credit cost is ambiguous in Roboflow's docs, so it is measured with a pilot. Weight download (self-hosting) is Core-only.
 
 ## Method choices
 
-| Choice | Detail |
-| --- | --- |
-| Primary test | Diebold–Mariano on the absolute-error loss differential, Newey–West (Bartlett) variance, Harvey–Leybourne–Newbold small-sample correction, Student-t(n−1). HAC lag = max(h−1, ⌊4(n/100)^(2/9)⌋): h−1 covers overlapping h-step errors (2 for 30 min on 10-min bins; 11 for 60 min on 5-min bins), and the Newey–West (1994) rule covers longer dependence in traffic loss differentials. Autocovariances stay within a direction. |
-| Interval | Overlapping moving-block bootstrap, default one-day blocks, never crossing a direction group. Fewer than 10 blocks per resample → decision "insufficient data". |
-| Multiplicity | Holm correction of two-sided DM p-values, one family per harness family (family-wise error of directional claims ≤ α = 0.05). |
-| Decision | "Better" only when the Holm-adjusted two-sided DM p < α, the mean difference has the right sign, **and** the bootstrap CI excludes 0. Paired t-test kept as a supplementary column. |
-| Features | Causal only: every input is observed at or before the forecast origin. |
-
-References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybourne & Newbold (1997), *Int. J. Forecasting* 13(2); Künsch (1989), *Ann. Statist.* 17(3); Holm (1979), *Scand. J. Statist.* 6(2); Newey & West (1987), *Econometrica* 55(3).
+- **Significance:** Diebold–Mariano with Newey–West variance and the Harvey–Leybourne–Newbold correction, a day-block bootstrap within direction, Holm correction, and an "insufficient data" rule below 10 day-blocks. The single description (with references) is [evaluation.md → Significance](evaluation.md#significance); the review on 2026-10-01 tightened it (two-sided Holm, HAC lag of at least one day).
+- **Features:** causal only; every input is available at or before the forecast origin.
 
 ## Design
 
@@ -95,13 +90,13 @@ One significance module and one manifest schema serve every harness. Doc result 
 | # | Task | Done when | Status |
 | --- | --- | --- | --- |
 | 0 | Write this plan; link from the doc map and roadmap | Plan renders and is linked | done |
-| 1 | Pin dependencies; `slow` pytest marker; `scripts/run_tests.*`; GitHub Actions workflow | All suites pass on Python 3.11 locally | done (workflow unverified until a branch push is approved) |
+| 1 | Pin dependencies; `slow` pytest marker; `scripts/run_tests.*`; GitHub Actions workflow | All suites pass on Python 3.11 locally | done (GitHub Actions green on PR #2) |
 | 2 | Offline persistence = `target_lag_1`; remove target-time `duration_sec`; backtest uses the same features (TDD) | Tests prove persistence = y[t−h] and no target-time feature | done |
 | 3 | Backtest days after the split; causal input filter; score raw labels; shared XGB/LSTM split | Tests prove no overlap and raw-label scoring | done |
 | 4 | Significance: DM-HAC-HLN, moving/day blocks per group, Holm, decision rule | Known-answer, coverage and Holm tests pass | done |
 | 5 | Run manifest v2: git SHA, data hash, windows, model metadata, per-slice results; promote validates | Invalid or dirty runs are refused | done (`--allow-dirty` override is recorded) |
 | 6 | `layer_b.py` fixed window from 13 Sep; `after_gap = 0`; +30 min check; model-time assertion; slices; ensemble | Fake-client tests pass; v2 BQML run produced | done |
-| 7 | Causeway fetcher hardening; weather/rainfall backfill 5–30 Sep | Mocked-session tests pass; per-day completeness report | done (5–29 Sep complete; 30 Sep fetched after it ends) |
+| 7 | Causeway fetcher hardening; weather/rainfall backfill | Mocked-session tests pass; per-day completeness report | done (1–30 Sep complete; 30 Sep fetched on 1 Oct once the day had closed; Woodlands rows appended to BigQuery) |
 | 8 | `camdetect` hardening; `detect_frame()` core | Handler tests pass | done (not deployed; a push to `main` would redeploy) |
 | 9 | Camera 2701 count backfill (dry run, 50-call pilot, budgeted run) | Coverage report by day | script and tests done; **pilot handed off** to the Roboflow key holder: [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | 10 | Causal feature builder (`eval/features.py`) | Causality and parity tests pass | done (parity with live `v_training_set` on 7,172 rows, recorded in `run.json`; camera 0% until Task 9 runs) |

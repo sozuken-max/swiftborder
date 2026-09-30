@@ -75,9 +75,9 @@ Cloud region layout / multi-region consolidation is **not** what this module sco
 | Graded surface | Where the draft lives |
 | --- | --- |
 | Final report: tools, design, models | [architecture.md](../architecture.md) |
-| Final report: performance | [evaluation.md](../evaluation.md) (30-min production models, joined weather experiment, offline 60-min XGB, all scored with DM/Holm; Layer A pending) |
+| Final report: performance | [evaluation.md](../evaluation.md) (30-min production models, joined weather experiment, offline 60-min XGB, all scored with Diebold–Mariano tests and Holm correction; Layer A pending) |
 | Final report: findings and discussion | [findings.md](../findings.md) |
 | Evidence appendix | [inventory.md](../inventory.md), a dated copy of project `swiftborder` |
 | Sequence of remaining work | [roadmap.md](../roadmap.md) |
-| Final system | Runnable detection (`camdetect`) plus forecast path; offline Layer B eval on full `travel_times` export |
+| Final system | Runnable detection (`camdetect`) plus the served 30-min forecast (`v_forecast_recent`); evaluation harnesses in `eval/` (BQML fixed window on both directions; offline 60-min XGB on one route, `jb_to_woodlands`) |
 | Peer review | Visible git footprint on the owned report sections |

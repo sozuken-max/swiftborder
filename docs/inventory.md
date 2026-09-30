@@ -70,7 +70,7 @@ Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 20
 - Trigger `76bbca35-c1b4-4836-9f34-d7adda53ea17` (`rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc`). GitHub `sozuken-max/swiftborder`, push to `^main$`. Config is **inline on the trigger**. Step `Test` (`python:3.11`) runs `pytest` in `camdetect/` before buildpacks deploy `swiftbackend`.
 - `includedFiles`: `camdetect/main.py`, `camdetect/requirements.txt`, `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`, `camdetect/*.{yaml,yml,json,toml}`. Tests, `pytest.ini`, `requirements-dev.txt` and `README.md` do not start a build.
 - Latest builds: `33a6d0e5` (2026-09-26 07:07 UTC, SUCCESS, `e49b232`), `8ca80327` (06:31 UTC, SUCCESS, `cf1c228`).
-- The Maps fetcher, backfill job, views and models are not in this trigger. A GitHub Actions test workflow exists in the repo working tree ([.github/workflows/tests.yml](../.github/workflows/tests.yml)); it runs tests only and deploys nothing.
+- The Maps fetcher, backfill job, views and models are not in this trigger. A GitHub Actions test workflow ([.github/workflows/tests.yml](../.github/workflows/tests.yml)) is committed on branch `eval-integrity-overhaul` (PR #2), not yet on `main`; it runs tests only and deploys nothing.
 
 ### Cloud Scheduler
 

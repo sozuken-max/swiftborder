@@ -59,7 +59,7 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 | Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
 | Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`) | Layer A scorer ready; results pending |
 | Hybrid / ensemble | `ensemble_mean` of `lin_h30` + `xgb_h30`; ridge + XGBoost in the joined experiment | Layer B tables below |
-| Deep learning (LSTM) | [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py), same rows as offline XGB | Code and tests only; **not scored** in `report/` |
+| Deep learning (LSTM, Transformer) | [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py), same rows as offline XGB | Not scored in `report/`; assessed and not recommended at this data size ([deep-learning-assessment.md](deep-learning-assessment.md)) |
 
 ---
 
@@ -163,7 +163,7 @@ flowchart LR
 | Ensemble | `lin_h30` | both | −0.318 | [−0.378, −0.255] | challenger |
 | Ensemble | `xgb_h30` | both | −0.034 | [−0.109, +0.049] | not significant |
 
-**Slices** (a second Holm family of 63 comparisons, exploratory): `lin_h30` is significantly worse than persistence on `MY_TO_SG` in morning peak (+0.93), evening peak (+0.79), on weekdays and in daytime; `xgb_h30` is significantly better there in morning peak (−0.29), off-peak and on weekdays. On `SG_TO_MY`, `lin_h30` is significantly better in morning peak (−0.38), on weekdays and at night. Weekend slices have only 5 day-blocks per direction and are "insufficient data". The full table is in `run.json` (`bqml.significance`, `family = slices`).
+**Slices** (a second Holm family of 63 comparisons, exploratory): `lin_h30` is significantly worse than persistence on `MY_TO_SG` in morning peak (+0.93), evening peak (+0.79), on weekdays and in daytime; `xgb_h30` is significantly better there in morning peak (−0.29), off-peak and on weekdays. On `SG_TO_MY`, `lin_h30` is significantly better in morning peak (−0.38), on weekdays and at night. Per-direction weekend slices have only 5 day-blocks and are "insufficient data"; the combined weekend slice (10 blocks) is "not significant" for all three models. The full table is in `run.json` (`bqml.significance`, `family = slices`).
 
 **What this supports:** the live registry choice (`SG_TO_MY` → `lin_h30`, `MY_TO_SG` → persistence) beats or matches persistence in each direction on this window. `xgb_h30` would improve `MY_TO_SG` over the served persistence, and the ensemble improves `SG_TO_MY` over persistence; neither is served. Registry changes are a separate, approved write.
 
@@ -173,7 +173,12 @@ Plots: `eval/runs/report/bqml/mae-by-direction.png`, `bqml/mae-diff-ci.png` (for
 
 **Question:** do rainfall, the 2-hour forecast, or camera-2701 queue depth reduce 30-minute MAE beyond Maps-only features?
 
-**Data:** Maps bins rebuilt in pandas from a `travel_times` export by [`eval/features.py`](../eval/features.py). The run compared them with the live `v_training_set` on 7,172 rows (through 2026-09-30 15:20 UTC): every compared column matched, largest difference 1.4e-14 (`joined.dataset.parity_with_live_v_training_set`). Rainfall at station S210 (Woodlands Centre) and the Woodlands 2-hour forecast were fetched from data.gov.sg for 5–30 Sep ([`Causeway/`](../Causeway/README.md)). Every feature uses data available at or before the forecast origin: rainfall readings stamped at or before it, and the forecast most recently **acquired by data.gov.sg** (`update_timestamp`) whose valid period covers the target time. At run time the BigQuery weather tables ended on 31 Aug SGT and the camera tables on 18 Jul, so the experiment reads the CSVs directly (the same Woodlands rows were later appended to BigQuery; see [inventory.md](inventory.md)). The camera row is pending the backfill in [handoff-camera-pilot.md](handoff-camera-pilot.md).
+**Data:**
+
+- **Maps features:** rebuilt in pandas from the `travel_times` export by [`eval/features.py`](../eval/features.py). The run compared them with the live `v_training_set` on 7,172 rows (through 2026-09-30 15:20 UTC); every compared column matched (largest difference 1.4e-14, `joined.dataset.parity_with_live_v_training_set`).
+- **Weather:** rainfall at station S210 (Woodlands Centre Road) and the Woodlands 2-hour forecast, fetched from data.gov.sg ([`Causeway/`](../Causeway/README.md)). The experiment reads these CSVs; at run time the BigQuery weather tables ended on 31 Aug SGT (the same rows were appended to BigQuery afterwards; see [inventory.md](inventory.md)).
+- **Causality:** rainfall readings stamped at or before the forecast origin; the forecast most recently **acquired by data.gov.sg** (`update_timestamp`) at or before the origin whose valid period covers the target time.
+- **Camera:** pending the backfill in [handoff-camera-pilot.md](handoff-camera-pilot.md) (BigQuery camera tables end on 18 Jul).
 
 **Design:** rolling-origin daily folds, test days 13–30 Sep SGT (18 folds, 5,184 rows, same window as section 1). Each fold trains on rows whose label was observed before the test day. Models: ridge (median imputation + missing indicators) and XGBoost (seed 42); ensemble = their mean.
 
@@ -199,7 +204,7 @@ Significance (Holm over 15 comparisons, both directions):
 | Ridge [Maps + weather] | Ridge [Maps] | +0.011 | [−0.002, +0.025] | not significant |
 | Ensemble [Maps + weather] | XGBoost [Maps + weather] | +0.036 | [−0.003, +0.075] | not significant (also on `MY_TO_SG`: +0.076, Holm p = 0.064) |
 
-**Finding:** on 13–30 Sep, weather features did **not** reduce 30-minute MAE (difference indistinguishable from zero for both models, and slightly positive). An XGBoost refit daily on Maps-only features beats persistence by about 0.37 min. The camera experiment is pending: no camera-2701 frames have been scored for this window yet (0% coverage; see the camera backfill in [plan-eval-integrity.md](plan-eval-integrity.md)). A camera row will be marked insufficient below 60% coverage of test rows.
+**Finding:** on 13–30 Sep, weather features did **not** reduce 30-minute MAE (difference indistinguishable from zero for both models, and slightly positive). An XGBoost refit daily on Maps-only features beats persistence by about 0.37 min. The camera experiment is pending: no camera-2701 frames have been scored for this window yet (0% coverage). A camera row will be marked insufficient below 60% coverage of test rows.
 
 Plots: `eval/runs/report/joined/joined-mae-diff.png`, `joined/joined-mae-by-feature-set.png`.
 
@@ -216,7 +221,7 @@ Plots: `eval/runs/report/joined/joined-mae-diff.png`, `joined/joined-mae-by-feat
 | Persistence T-60 | backtest 27–30 Sep | 4.739 | 6.440 |
 | Naive D-1/D-7 blend | backtest 27–30 Sep | 4.641 | 6.297 |
 
-XGBoost vs persistence T-60 on the hold-out: −1.208 min, CI [−1.594, −0.660], two-sided DM p = 6.5e-07, but the hold-out spans only 5 day-blocks, so the decision is **insufficient data**. The point estimates and the four backtest days all favour XGBoost; a significance claim needs a longer hold-out.
+XGBoost vs persistence T-60 on the hold-out: −1.208 min, CI [−1.594, −0.660], two-sided DM p = 6.5e-07. XGBoost vs Maps typical: −11.25 min, CI [−12.32, −10.27]. Both decisions are **insufficient data**: the hold-out spans 5 day-blocks, below the 10 required. The point estimates and all four backtest days favour XGBoost; a significance claim needs a longer hold-out.
 
 Backtest days are full days after the split. These numbers replace the 2026-09-26 offline results, which used the value 115 minutes before the target as "persistence T-60", a target-time Maps feature, smoothed labels, and backtest days inside the training period.
 
@@ -230,13 +235,17 @@ Do not put the 60-minute one-route numbers and the 30-minute two-direction numbe
 
 ## Reproduce
 
+The report run used the cached Maps export `eval/data/causeway_gdata.csv` (its SHA-256 is `offline.dataset.cache.sha256` in `run.json`). To reproduce it, keep that file and do **not** pass `--refresh-bq`:
+
 ```bash
 cd eval
 pip install -r requirements-dev.txt
-python generate_comparison_plots.py --refresh-bq --bqml --window-end "2026-09-30 23:50" --joined
+python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined
 python promote_report_run.py --check
-python promote_report_run.py <run_id>          # add --allow-dirty only with a recorded reason
+python promote_report_run.py <run_id>
 ```
+
+Adding `--refresh-bq` downloads a newer export: that extends the data and is a new result, not a reproduction. `--allow-dirty` on promotion is only for a recorded reason.
 
 Weather CSVs: see [Causeway/README.md](../Causeway/README.md). Camera counts: `python backfill_camera_counts.py --dry-run` (billed against Roboflow credits; see [eval/README.md](../eval/README.md)). Run layout and the manifest schema: [eval/runs/README.md](../eval/runs/README.md).
 
@@ -248,4 +257,4 @@ Weather CSVs: see [Causeway/README.md](../Causeway/README.md). Camera counts: `p
 
 **The label is not an independent clock.** Report skill against persistence on the Maps series. Do not write "we beat Google" from that comparison.
 
-**Short history.** The 30-minute window is 18 days; the offline hold-out is under 5 days. Day-block intervals are coarse and results can change with more data.
+**Short history.** The 30-minute window is 18 days; the offline hold-out is 5 days. Day-block intervals are coarse and results can change with more data.

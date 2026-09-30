@@ -18,7 +18,7 @@ The report describes **one system at two depths** (high-level, then detailed). T
 - Weather and camera-2701 congestion views exist and are not joined.
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
-- Layer B is scored and promoted to [`eval/runs/report/`](../eval/runs/report/): production models at 30 min on 13–30 Sep (`layer_b.py`), the joined weather experiment (`joined.py`), and offline 60-min XGBoost (`timeseries_xgb.py`), all with DM/Holm significance. Numbers are in [evaluation.md](evaluation.md).
+- Layer B is scored and promoted to [`eval/runs/report/`](../eval/runs/report/): production models at 30 min on 13–30 Sep (`layer_b.py`), the joined weather experiment (`joined.py`), and offline 60-min XGBoost (`timeseries_xgb.py`), all with significance tests (Diebold–Mariano on error differences, Holm correction across models). Numbers are in [evaluation.md](evaluation.md).
 - Weather history for 5–30 Sep is fetched (`Causeway/`); weather gave no significant gain. The Layer A scorer exists (`eval/layer_a.py`); no export is scored.
 - Report drafts exist: design, evaluation, findings, inventory (2026-10-01).
 
@@ -29,6 +29,8 @@ The report describes **one system at two depths** (high-level, then detailed). T
 Do these in order. A later step that needs a number waits on the harness.
 
 ### 1. First presentation (by 30 Sep)
+
+**Done (30 Sep).** Kept for the rules that still apply to later decks.
 
 **Done when** the Zoom deck states goals, data, techniques, and progress. Any MAE on a slide must come from `eval/runs/report/run.json` with its window and baseline.
 
@@ -46,9 +48,9 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 **Remaining**
 
-1. Commit the code, then re-run `generate_comparison_plots.py --refresh-bq --bqml --joined` and re-promote without `--allow-dirty`.
-2. Keep slide/report wording distinct: **60 min offline XGB (one route)** vs **30 min production serve (both directions)**.
-3. Before the final report, extend the window (more days, more rain events) and re-run.
+1. Keep slide/report wording distinct: **60 min offline XGB (one route)** vs **30 min production serve (both directions)**.
+2. Before the final report, extend the window (more days, more rain events) and re-run `generate_comparison_plots.py --bqml --joined` from a clean tree, then promote (see [eval/README.md](../eval/README.md#reproduce-the-report-run)).
+3. Deep-learning forecasters (LSTM, Transformer) are deferred; see [deep-learning-assessment.md](deep-learning-assessment.md) for when to revisit.
 
 **Done when** the report cites data source, horizon, and persistence baseline for each table. Do not write "we beat Google." Maps is the label.
 
@@ -72,7 +74,7 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 ### 5. Join the features the views already hold
 
-**Done (weather, offline):** [`eval/joined.py`](../eval/joined.py) joins fresh data.gov.sg rainfall and forecasts; no significant MAE gain on 13–30 Sep. The BigQuery views could not be used (stale since 3 Sep / 18 Jul, and in a different location from `traffic_prediction`).
+**Done (weather, offline):** [`eval/joined.py`](../eval/joined.py) joins fresh data.gov.sg rainfall and forecasts; no significant MAE gain on 13–30 Sep. The BigQuery views were not used: at run time the weather tables ended on 31 Aug (1–30 Sep was appended on 1 Oct, see [inventory.md](inventory.md)), camera tables end on 18 Jul, and both sit in a different location from `traffic_prediction`.
 
 **Remaining:** camera 2701 counts for 5–30 Sep via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves.
 
@@ -104,7 +106,7 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 | Gap | Why it matters | What to do |
 | --- | --- | --- |
 | No `cloudbuild.yaml` in git | The `swiftbackend` trigger is inline in Cloud Build. It runs **pytest** before deploy; `includedFiles` is runtime paths only (not test-only files). | Treat the live trigger as the source of truth (`gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder`). Behavior is documented in [camdetect/README.md](../camdetect/README.md). History: [CHANGELOG.md](../CHANGELOG.md). Do not add a second trigger. |
-| `Causeway/` writes CSV only | It does not load `rainfall` or `weatherforecast`. The BigQuery weather pipeline is still outside the repo. | Do not wire these scripts up as if they were that pipeline. Recover the loader with the same export procedure. |
+| Weather load is manual | `Causeway/load_bigquery.py` appends to `rainfall` / `weatherforecast` (snapshot first, refuses overlaps). Nothing schedules it, and the original pipeline that filled the tables to 31 Aug is still outside the repo. | Re-run fetchers plus the loader before a report refresh. Add a Cloud Run job or Scheduler only as an approved deploy. |
 | Direction names differ | `camdetect` emits `SG-MY` / `MY-SG`. The congestion view expects `to_JB` / `to_Woodlands` and emits `SG_TO_MY` / `MY_TO_SG`. | Map them in the join (step 5). Do not treat the strings as already aligned. |
 | Camera 2701 line only | 2702 detections become `Unknown`. | Add a line only after it is calibrated on a real frame. |
 

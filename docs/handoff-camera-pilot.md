@@ -56,11 +56,16 @@ Share the CSV `eval/data/camera/cam2701_counts.csv` with the evaluation owner (i
 
 ## After the backfill (evaluation owner)
 
+Put the shared CSV at `eval/data/camera/cam2701_counts.csv`, commit any code changes first (promotion refuses a dirty tree), then:
+
 ```powershell
 cd eval
 ..\.venv\Scripts\python.exe generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined
+..\.venv\Scripts\python.exe promote_report_run.py --check
 ..\.venv\Scripts\python.exe promote_report_run.py <run_id>
 ```
+
+Do not add `--refresh-bq`: it re-downloads `travel_times` past the report cut, so the offline numbers would change for a reason unrelated to the camera.
 
 `joined.py` scores the "+camera" models only on test rows with a camera value and reports coverage. Below 60% of test rows the row is marked **insufficient** and must not be quoted as a result. Then update the camera row in [evaluation.md](evaluation.md) and findings item 5 in [findings.md](findings.md).
 

@@ -18,6 +18,6 @@ jupyter notebook notebooks/causeway_xgb_timeseries.ipynb
 
 **Data:** canonical `causeway.travel_times` via `sync_canonical_travel_times`, cached at `eval/data/causeway_gdata.csv` (gitignored; see [`../data/README.md`](../data/README.md)). Set `REFRESH_FROM_BQ = True` in the notebook to refresh from BigQuery (read-only).
 
-**Evaluation rules the notebook follows** (enforced in `timeseries_xgb.py` and its tests): inputs are causal (forward-fill up to 30 min, no bfill, slew cap on inputs only); labels are raw observations; persistence is the last observed value 60 minutes before the label; `duration_sec` is taken at the forecast origin; backtest days are full days after the train/test boundary.
+**Evaluation rules the notebook follows** (enforced in `timeseries_xgb.py` and its tests): inputs are causal (forward-fill up to 30 min, no bfill, slew cap on inputs only); labels are raw observations; persistence is the value at the forecast origin, 60 minutes before the label (forward-filled up to 30 min, like the inputs); `duration_sec` is taken at the forecast origin; backtest days are full days after the train/test boundary.
 
 **LSTM:** section 3 uses [`timeseries_lstm.py`](../timeseries_lstm.py) on the same train/test rows as XGB, with a pluggable custom `keras.layers.Layer` (example `ResidualGatedLSTM`).
