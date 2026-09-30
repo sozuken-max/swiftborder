@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Generate comparison plots for offline (60 min) and optional BQML (30 min) eval."""
+"""Offline (60 min, sklearn XGB) scoring and figures, plus optional BQML (30 min) via layer_b.
+
+Writes one run folder under eval/runs/<run_id>/ with a schema-v2 run.json (see run_artifacts.py).
+
+    python generate_comparison_plots.py                 # offline only (uses the CSV cache)
+    python generate_comparison_plots.py --refresh-bq    # re-download travel_times first (read-only)
+    python generate_comparison_plots.py --bqml          # offline + BQML fixed window
+"""
 
 from __future__ import annotations
 
@@ -11,6 +18,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from run_artifacts import (
     artifact_relpath,
     create_run_dir,
+    file_fingerprint,
+    metric_row,
+    new_manifest,
     subdir,
     update_latest_pointer,
     write_manifest,
@@ -18,290 +28,210 @@ from run_artifacts import (
 )
 
 CACHE = Path(__file__).resolve().parent / "data" / "causeway_gdata.csv"
-BACKTEST_DAYS = ("2026-09-22", "2026-09-23", "2026-09-24")
+XGB_SEED = 42
 
 
-def _comparison_to_dict(result) -> Dict[str, Any]:
-    return {
-        "label_challenger": result.label_challenger,
-        "label_reference": result.label_reference,
-        "n": int(result.n),
-        "mean_ae_diff_min": float(result.mean_ae_diff_min),
-        "paired_t_pvalue": float(result.paired_t_pvalue),
-        "bootstrap_ci_low_min": float(result.bootstrap_ci_low_min),
-        "bootstrap_ci_high_min": float(result.bootstrap_ci_high_min),
-        "challenger_better_at_alpha": bool(result.challenger_better_at_alpha),
-    }
-
-
-def _offline_plots(run_dir: Path, refresh_bq: bool) -> Tuple[List[Path], Dict[str, Any]]:
-    import pandas as pd
+def offline_component(
+    run_dir: Path,
+    *,
+    refresh_bq: bool = False,
+    cache: Path = CACHE,
+    project: str = "swiftborder",
+    alpha: float = 0.05,
+) -> Tuple[List[Path], Dict[str, Any]]:
+    """Train on the chronological 80% (by target time); score the rest and full backtest days."""
+    import numpy as np
 
     import timeseries_xgb as tsx
     from plots import plot_backtest_method_means, plot_holdout_forecast_sample, plot_mae_diff_forest
-    from significance import format_comparison_table
+    from significance import apply_holm, compare_absolute_errors, format_comparison_table
 
     out = subdir(run_dir, "offline")
     config = tsx.TimeSeriesConfig()
-    export = tsx.sync_canonical_travel_times(CACHE, refresh=refresh_bq)
+    export = tsx.sync_canonical_travel_times(cache, project=project, refresh=refresh_bq)
     raw = tsx.prepare_route_frame(export, config)
     features = tsx.engineer_features(raw, config)
-    x_train, x_test, y_train, y_test = tsx.build_supervised_matrices(features, config)
-    model = tsx.train_xgb(x_train, y_train, config=config)
-    pred = model.predict(x_test)
-    persist = tsx.holdout_persistence_predictions(x_test, config)
+    split = tsx.split_supervised(features, config)
+    model = tsx.train_xgb(split.train[split.feature_cols], split.train["y"].to_numpy(), config=config, random_state=XGB_SEED)
 
-    y_series, free_flow = tsx.regularized_series(raw, config)
-    scores = tsx.score_forecast_days(model, y_series, free_flow, BACKTEST_DAYS, config)
+    test = split.test
+    y = test["y"].to_numpy()
+    pred = model.predict(test[split.feature_cols])
+    persist = test["persistence"].to_numpy()
+    maps_typical = test["duration_sec"].to_numpy()
+    persist_label = f"Persistence T-{config.horizon_minutes}"
+    maps_label = "Maps typical duration at origin"
+
+    candidates = {"XGB (sklearn)": pred, persist_label: persist, maps_label: maps_typical}
+    metrics: List[Dict[str, Any]] = []
+    for name, p in candidates.items():
+        ok = ~np.isnan(p)
+        metrics.append(metric_row(name, "holdout", int(ok.sum()), tsx.mae_minutes(y[ok], p[ok]), tsx.rmse_minutes(y[ok], p[ok])))
+
+    days = tsx.backtest_days(split)
+    scores = tsx.score_forecast_days(model, features, split, days, config)
+    for _, row in scores.iterrows():
+        metrics.append(metric_row(row["method"], f"backtest {row['date']}", row["n"], row["MAE_min"], row["RMSE_min"]))
+    if not scores.empty:
+        for method, g in scores.groupby("method"):
+            metrics.append(
+                metric_row(method, "backtest mean of days", int(g["n"].sum()), float(g["MAE_min"].mean()), float(g["RMSE_min"].mean()))
+            )
+
+    ok = ~np.isnan(maps_typical)
+    scale = 1.0 / 60.0
+    timestamps = list(test["target_ts"])
+    comparisons = apply_holm(
+        [
+            compare_absolute_errors(
+                y * scale, pred * scale, persist * scale,
+                label_challenger="XGB (sklearn)", label_reference=persist_label,
+                horizon_steps=config.horizon_steps, timestamps=timestamps, alpha=alpha,
+            ),
+            compare_absolute_errors(
+                y[ok] * scale, pred[ok] * scale, maps_typical[ok] * scale,
+                label_challenger="XGB (sklearn)", label_reference=maps_label,
+                horizon_steps=config.horizon_steps, timestamps=[t for t, k in zip(timestamps, ok) if k], alpha=alpha,
+            ),
+        ]
+    )
+    print("Offline significance (Holm over this family):")
+    print(format_comparison_table(comparisons))
 
     written: List[Path] = []
-    written.append(
-        plot_backtest_method_means(
-            scores,
-            out / "backtest-mae.png",
-            title="Offline 60 min: mean MAE by method (22-24 Sep 2026)",
+    if not scores.empty:
+        written.append(
+            plot_backtest_method_means(
+                scores,
+                out / "backtest-mae.png",
+                title=f"Offline 60 min: mean MAE by method ({days[0]} .. {days[-1]}, after split)",
+            )
         )
-    )
-
-    split_index = int(len(features) * config.train_fraction)
-    offset = config.window_size + config.horizon_steps - 1
-    test_start = split_index + offset
-    ts_raw = pd.to_datetime(raw["observed_at_sgt"], errors="coerce")
-    test_times = ts_raw.iloc[test_start : test_start + len(y_test)]
-
-    actual_min = y_test / 60.0
     written.append(
         plot_holdout_forecast_sample(
-            test_times,
-            actual_min,
-            {
-                "XGB": pred / 60.0,
-                f"Persistence T-{config.horizon_minutes}": persist / 60.0,
-            },
+            list(test["target_ts"]),
+            y / 60.0,
+            {"XGB": pred / 60.0, persist_label: persist / 60.0},
             out / "holdout-sample.png",
-            title="Offline 60 min: hold-out tail (actual vs XGB vs persistence)",
+            title="Offline 60 min: hold-out tail (raw actual vs XGB vs persistence)",
             max_points=288,
         )
     )
-
-    sig = tsx.holdout_significance_vs_persistence(model, x_test, y_test, config, block_size=12)
-    written.append(
-        plot_mae_diff_forest(
-            [sig],
-            out / "holdout-mae-diff.png",
-            title="Offline hold-out: paired MAE diff vs persistence (bootstrap CI)",
-        )
-    )
-    print("Offline significance:")
-    print(format_comparison_table([sig]))
-
-    try:
-        cache_rel = CACHE.relative_to(Path(__file__).resolve().parent.parent).as_posix()
-    except ValueError:
-        cache_rel = CACHE.as_posix()
-    meta: Dict[str, Any] = {
-        "dataset": {
-            "source": "swiftborder.causeway.travel_times",
-            "cache_path": cache_rel,
-            "refreshed_from_bq": refresh_bq,
-            "canonical_rows": len(export),
-            "route_id": config.route_id,
-            "route_scope": tsx.OFFLINE_ROUTE_LABEL,
-            "route_rows": len(raw),
-        },
-        "models": [
-            "sklearn.XGBRegressor (timeseries_xgb.train_xgb; teammate hyperparams 2026-09-26)",
-        ],
-        "preprocessing": {
-            "max_slew_step_sec": config.max_slew_step_sec,
-            "use_dwt": config.use_dwt,
-        },
-        "xgb_hyperparameters": dict(config.xgb.__dict__),
-        "horizon_minutes": config.horizon_minutes,
-        "train_fraction": config.train_fraction,
-        "backtest_days": list(BACKTEST_DAYS),
-        "holdout_rmse_min": float(tsx.rmse_minutes(y_test, pred)),
-        "significance_vs_persistence": _comparison_to_dict(sig),
-        "artifacts": [artifact_relpath(run_dir, p) for p in written],
-    }
-    return written, meta
-
-
-def _bqml_plots(
-    run_dir: Path,
-    project: str,
-    holdout_days: int,
-    block_size: int,
-    alpha: float,
-) -> Tuple[List[Path], Dict[str, Any]]:
-    from google.cloud import bigquery
-
-    from layer_b import MODELS, _fetch_model, _fetch_persistence
-    from metrics import score_slices
-    from plots import plot_bqml_mae_comparison, plot_mae_diff_forest
-    from significance import compare_scored_rows
-
-    out = subdir(run_dir, "bqml")
-    client = bigquery.Client(project=project)
-    window_start, window_end, persist_rows = _fetch_persistence(client, project, holdout_days)
-    slices_by_candidate: Dict[str, List[dict]] = {
-        "Persistence": score_slices(persist_rows, "y_30", "predicted"),
-    }
-    model_row_sets: Dict[str, List[dict]] = {}
-    for model in MODELS:
-        model_row_sets[model] = _fetch_model(client, project, model, holdout_days)
-        slices_by_candidate[model] = score_slices(model_row_sets[model], "y_30", "predicted")
-
-    written: List[Path] = []
-    written.append(
-        plot_bqml_mae_comparison(
-            slices_by_candidate,
-            out / "mae-by-direction.png",
-            title=f"BQML 30 min hold-out ({holdout_days}d): MAE by direction",
-        )
-    )
-
-    comparisons = []
-    for model in MODELS:
-        for direction in ("both", "SG_TO_MY", "MY_TO_SG"):
-            comparisons.append(
-                compare_scored_rows(
-                    persist_rows,
-                    model_row_sets[model],
-                    direction=direction,
-                    time_of_day="all",
-                    label_challenger=f"{model} ({direction})",
-                    label_reference="Persistence",
-                    block_size=block_size,
-                    alpha=alpha,
-                )
-            )
     written.append(
         plot_mae_diff_forest(
             comparisons,
-            out / "mae-diff-ci.png",
-            title="BQML 30 min: paired MAE difference vs persistence (bootstrap CI)",
+            out / "holdout-mae-diff.png",
+            title="Offline hold-out: paired MAE difference (day-block bootstrap CI)",
         )
     )
 
-    both_all = next(
-        (s for s in slices_by_candidate["Persistence"] if s["direction"] == "both" and s["time_of_day"] == "all"),
-        {},
-    )
     meta: Dict[str, Any] = {
         "dataset": {
-            "project": project,
-            "view": "traffic_prediction.v_training_set",
-            "holdout_days": holdout_days,
-            "window_start": window_start,
-            "window_end": window_end,
-            "holdout_rows": len(persist_rows),
+            "source": f"{project}.causeway.travel_times",
+            "cache": file_fingerprint(cache),
+            "refreshed_from_bq": refresh_bq,
+            "canonical_rows": int(len(export)),
+            "route_id": config.route_id,
+            "route_scope": tsx.OFFLINE_ROUTE_LABEL,
+            "route_rows": int(len(raw)),
+            "observed_min_sgt": str(raw["observed_at_sgt"].min()),
+            "observed_max_sgt": str(raw["observed_at_sgt"].max()),
+            "supervised_rows": {"train": int(len(split.train)), "test": int(len(test))},
         },
-        "models": ["Persistence (y_persistence)", "lin_h30", "xgb_h30"],
-        "horizon_minutes": 30,
-        "significance_block_size": block_size,
-        "significance_alpha": alpha,
-        "significance_comparisons": [_comparison_to_dict(c) for c in comparisons],
-        "mae_min_both_all": {
-            "Persistence": both_all.get("mae"),
-            **{
-                m: next(
-                    (
-                        s["mae"]
-                        for s in slices_by_candidate[m]
-                        if s["direction"] == "both" and s["time_of_day"] == "all"
-                    ),
-                    None,
-                )
-                for m in MODELS
-            },
+        "window": {
+            "timezone": "Asia/Singapore",
+            "basis": "target time; train labels < start <= test labels",
+            "start": str(split.boundary),
+            "end": str(test["target_ts"].max()),
+            "backtest_days": days,
         },
+        "models": ["sklearn.XGBRegressor (timeseries_xgb.train_xgb)", persist_label, maps_label],
+        "horizon_minutes": config.horizon_minutes,
+        "config": {
+            "window_size": config.window_size,
+            "keep_lags": config.keep_lags,
+            "train_fraction": config.train_fraction,
+            "max_slew_step_sec": config.max_slew_step_sec,
+            "max_ffill_steps": config.max_ffill_steps,
+            "use_dwt": config.use_dwt,
+            "xgb": dict(config.xgb.__dict__),
+            "xgb_seed": XGB_SEED,
+            "features": split.feature_cols,
+        },
+        "metrics": metrics,
+        "significance": [c.to_dict() for c in comparisons],
         "artifacts": [artifact_relpath(run_dir, p) for p in written],
     }
     return written, meta
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--runs-root",
-        type=Path,
-        default=None,
-        help="Parent directory for run folders (default: eval/runs)",
-    )
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--runs-root", type=Path, default=None, help="Parent directory for run folders (default: eval/runs)")
     parser.add_argument("--run-id", default=None, help="Explicit run folder name")
-    parser.add_argument(
-        "--reuse-run",
-        action="store_true",
-        help="Write into an existing run directory (must exist)",
-    )
-    parser.add_argument("--refresh-bq", action="store_true", help="Re-download travel_times before offline plots")
-    parser.add_argument("--bqml", action="store_true", help="Include 30 min BQML plots (with offline by default)")
-    parser.add_argument("--bqml-only", action="store_true", help="BQML plots only (no offline)")
+    parser.add_argument("--reuse-run", action="store_true", help="Write into an existing run directory")
+    parser.add_argument("--refresh-bq", action="store_true", help="Re-download travel_times before offline scoring")
+    parser.add_argument("--bqml", action="store_true", help="Also run the BQML fixed-window harness (layer_b)")
+    parser.add_argument("--bqml-only", action="store_true", help="BQML only (no offline)")
     parser.add_argument("--project", default="swiftborder")
-    parser.add_argument("--holdout-days", type=int, default=3)
-    parser.add_argument("--significance-block-size", type=int, default=6)
-    parser.add_argument("--significance-alpha", type=float, default=0.05)
+    parser.add_argument("--window-start", default=None, help="BQML window start (SGT); default in layer_b")
+    parser.add_argument("--window-end", default=None, help="BQML window end (SGT); default latest labelled bin")
+    parser.add_argument("--joined", action="store_true", help="Also run the joined-feature experiment (joined.py)")
+    parser.add_argument("--joined-start", default=None, help="first joined test day (SGT, default joined.DEFAULT_TEST_START)")
+    parser.add_argument("--joined-end", default=None, help="last joined test day (SGT, default joined.DEFAULT_TEST_END)")
+    parser.add_argument("--alpha", type=float, default=0.05)
     args = parser.parse_args(argv)
 
-    if args.bqml_only:
-        components = ["bqml"]
-    elif args.bqml:
-        components = ["offline", "bqml"]
-    else:
-        components = ["offline"]
+    components = ["bqml"] if args.bqml_only else (["offline", "bqml"] if args.bqml else ["offline"])
+    if args.joined:
+        components.append("joined")
+    run_dir = create_run_dir(components=components, run_id=args.run_id, runs_root=args.runs_root, exist_ok=args.reuse_run)
+    manifest = new_manifest(components)
+    written: List[Path] = []
 
-    if args.run_id:
-        from run_artifacts import RUNS_ROOT
-
-        runs_root = args.runs_root or RUNS_ROOT
-        run_dir = runs_root / args.run_id
-        if not run_dir.exists():
-            run_dir.mkdir(parents=True)
-        elif not args.reuse_run:
-            print(f"Run directory exists: {run_dir} (use --reuse-run to append)", file=sys.stderr)
-            return 2
-    else:
-        run_dir = create_run_dir(
-            components=components,
-            runs_root=args.runs_root,
-            exist_ok=args.reuse_run,
-        )
-
-    manifest: Dict[str, Any] = {"components": components}
-    all_written: List[Path] = []
-
-    run_offline = "offline" in components
-    if run_offline:
+    if "offline" in components:
         try:
-            paths, offline_meta = _offline_plots(run_dir, args.refresh_bq)
-            all_written.extend(paths)
-            manifest["offline"] = offline_meta
+            paths, meta = offline_component(run_dir, refresh_bq=args.refresh_bq, project=args.project, alpha=args.alpha)
         except FileNotFoundError as exc:
-            print(f"Offline plots skipped: {exc}", file=sys.stderr)
-            print("Place a cache at eval/data/causeway_gdata.csv or use --refresh-bq.", file=sys.stderr)
+            print(f"Offline skipped: {exc}. Place eval/data/causeway_gdata.csv or use --refresh-bq.", file=sys.stderr)
+            return 1
+        written.extend(paths)
+        manifest["offline"] = meta
 
-    if args.bqml:
-        paths, bqml_meta = _bqml_plots(
-            run_dir,
-            args.project,
-            args.holdout_days,
-            args.significance_block_size,
-            args.significance_alpha,
+    if "bqml" in components:
+        from layer_b import bqml_component
+
+        paths, meta = bqml_component(
+            run_dir, project=args.project, window_start=args.window_start, window_end=args.window_end, alpha=args.alpha
         )
-        all_written.extend(paths)
-        manifest["bqml"] = bqml_meta
+        written.extend(paths)
+        manifest["bqml"] = meta
 
-    if not all_written:
-        return 1
+    if "joined" in components:
+        import joined
+
+        import features
+
+        frame, info = joined.load_inputs(refresh_bq=False)  # offline step already refreshed the cache if asked
+        parity = features.parity_with_live_view(frame, project=args.project)
+        info["parity_with_live_v_training_set"] = parity
+        print("Parity with live v_training_set (max abs diff per column):", parity)
+        paths, meta = joined.joined_component(
+            run_dir,
+            frame,
+            start=args.joined_start or joined.DEFAULT_TEST_START,
+            end=args.joined_end or joined.DEFAULT_TEST_END,
+            alpha=args.alpha,
+            inputs=info,
+        )
+        written.extend(paths)
+        manifest["joined"] = meta
 
     write_manifest(run_dir, manifest)
     write_run_readme(run_dir, manifest)
-    update_latest_pointer(run_dir, manifest)
-
+    update_latest_pointer(run_dir, manifest, runs_root=args.runs_root)
     print(f"\nRun directory: {run_dir}")
-    print("Wrote:")
-    for p in all_written:
+    for p in written:
         print(f"  {p}")
     return 0
 

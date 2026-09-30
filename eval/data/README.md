@@ -1,30 +1,21 @@
 # Local data (not in git)
 
-The canonical dataset is **`swiftborder.causeway.travel_times`** in BigQuery. The notebook downloads it with [`sync_canonical_travel_times`](../timeseries_xgb.py) and caches here.
+Everything under `eval/data/` except this README and `.gitkeep` is gitignored.
 
-## Cache file
+| Path | Written by | Content |
+| --- | --- | --- |
+| `causeway_gdata.csv` | `timeseries_xgb.sync_canonical_travel_times` (`--refresh-bq`) | Full read-only export of `swiftborder.causeway.travel_times` (all routes) |
+| `features_10min.parquet` | `features.py --build` | Joined causal 10-min feature table |
+| `camera/cam2701_counts.csv` | `backfill_camera_counts.py` | Camera 2701 counts per sampled bin (append-only, resumable) |
+| `layer_a/` | you | Drop a Roboflow export here (COCO `_annotations.coco.json` or YOLO `labels/` + `images/`) for `layer_a.py` |
 
-| Path | Role |
-| --- | --- |
-| `causeway_gdata.csv` | Full-table snapshot (all routes). Refreshed when the notebook runs with `REFRESH_FROM_BQ = True`. |
+Weather CSVs live in `Causeway/data/` (see [Causeway/README.md](../../Causeway/README.md)).
 
-`*.csv` is gitignored.
-
-## Without the notebook
+## Refresh the Maps export
 
 ```bash
 cd eval
-python -c "
-from pathlib import Path
-import timeseries_xgb as t
-t.sync_canonical_travel_times('data/causeway_gdata.csv', refresh=True)
-"
+python -c "import timeseries_xgb as t; t.sync_canonical_travel_times('data/causeway_gdata.csv', refresh=True)"
 ```
 
-Requires Application Default Credentials and `pip install -r requirements-dev.txt` (`db-dtypes`, `pyarrow`).
-
-Route-level frames use `prepare_route_frame(export, config)` (default **`jb_to_woodlands` — JB → SG only**; reverse route not in the offline notebook).
-
-## Other eval paths
-
-- **30 min BQML:** [`layer_b.py`](../layer_b.py) on `traffic_prediction.v_training_set` (live BigQuery, not this CSV).
+Needs Application Default Credentials. Each report run records the export's SHA-256, size and observed time range in `run.json`, so the exact file a result came from is identifiable.

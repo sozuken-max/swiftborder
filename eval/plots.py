@@ -72,27 +72,25 @@ def plot_mae_diff_forest(
     """Forest-style plot: challenger mean AE diff with block-bootstrap CI."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    labels = [f"{c.label_challenger}\n({c.n})" for c in comparisons]
+    comparisons = list(comparisons)[::-1]  # first comparison at the top
+    labels = [f"{c.label_challenger}\nvs {c.label_reference} (n={c.n})" for c in comparisons]
     means = [c.mean_ae_diff_min for c in comparisons]
     err_lo = [c.mean_ae_diff_min - c.bootstrap_ci_low_min for c in comparisons]
     err_hi = [c.bootstrap_ci_high_min - c.mean_ae_diff_min for c in comparisons]
+    decisions = [getattr(c, "decision", "not significant") for c in comparisons]
+    colours = {"challenger": "#2ca02c", "reference": "#d62728", "not significant": "#7f7f7f"}
 
     y = np.arange(len(comparisons))
-    fig, ax = plt.subplots(figsize=(8, max(3, 0.45 * len(comparisons) + 1)))
-    ax.errorbar(
-        means,
-        y,
-        xerr=[err_lo, err_hi],
-        fmt="o",
-        capsize=4,
-        color="#1f77b4",
-        ecolor="#555555",
-    )
+    fig, ax = plt.subplots(figsize=(10, max(3, 0.55 * len(comparisons) + 1.5)))
+    for yi, m, lo, hi, d in zip(y, means, err_lo, err_hi, decisions):
+        ax.errorbar([m], [yi], xerr=[[lo], [hi]], fmt="o", capsize=4, color=colours.get(d, "#1f77b4"), ecolor="#555555")
     ax.axvline(0.0, color="black", lw=1, linestyle="--", alpha=0.7)
     ax.set_yticks(y)
-    ax.set_yticklabels(labels, fontsize=9)
-    ax.set_xlabel("Mean |err_ch| - |err_ref| (negative => challenger better)")
-    ax.set_title(title)
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.set_xlabel("Mean |err_challenger| - |err_reference| (min); negative = challenger better")
+    ax.set_title(title, fontsize=10, wrap=True)
+    handles = [plt.Line2D([], [], marker="o", ls="", color=v, label=k) for k, v in colours.items()]
+    ax.legend(handles=handles, loc="lower right", fontsize=8, title="Holm-adjusted decision", title_fontsize=8)
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
