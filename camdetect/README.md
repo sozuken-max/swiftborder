@@ -9,7 +9,9 @@ each detection by direction -> return JSON or an annotated JPEG.
 
 ## Request parameters
 
-Accepted in the query string or a JSON body (body wins). `GET`, `POST` and
+Accepted in the query string or a JSON object body. A body value wins unless it
+is missing, `null` or an empty string (so `confidence: 0` is honoured, and
+`"date_time": ""` falls back to the query string). `GET`, `POST` and
 `OPTIONS` are supported.
 
 | Parameter | Default | Meaning |
@@ -42,9 +44,18 @@ carriageway, i.e. queue depth. They are not flow counts: data.gov.sg refreshes
 each camera only every minute or so, far too sparse to track a vehicle across
 frames, so "how many crossed" is not derivable from a single frame.
 
-`congestion` reports how far up the frame a direction's detections reach, as a
-fraction of frame height: `Free Flow` (<0.25), `Quarter Way` (<0.5),
+`extent` (JSON only) is the **vertical spread** of a direction's box centres,
+`(max y - min y) / frame height`; it is 0 with fewer than two detections.
+`congestion` bands that spread: `Free Flow` (<0.25), `Quarter Way` (<0.5),
 `Half Way` (<0.75), `Back to Back` (otherwise).
+
+Limits of this proxy, stated so reports do not over-read it:
+
+- It measures spread, not how far the queue reaches: one distant vehicle gives 0.
+- It uses box centres, while direction uses foot points.
+- The SG-MY carriageway lies above a diagonal line, so its maximum possible
+  spread is well under 1.0; bands are not comparable between directions.
+- It is occupancy in one frame, not crossing time.
 
 ## Responses
 
@@ -89,14 +100,38 @@ X-Frame-Datetime         timestamp used
 }
 ```
 
+## Errors
+
+| Status | When |
+| --- | --- |
+| 400 | `date_time` is not a real `YYYY-MM-DDTHH:MM:SS` string (checked before any upstream call) |
+| 404 | data.gov.sg has no frame for that camera and time |
+| 500 | `ROBOFLOW_API_KEY` is not configured (no upstream call is made) |
+| 502 | data.gov.sg, the frame download, or Roboflow failed, or the frame is not an image |
+
+Error bodies are `{"error": "..."}` with a generic message; upstream detail
+(URLs, exception text) goes to the service log only. A frame that is not a
+valid image is rejected **before** the billed Roboflow call.
+
 ## Compatibility
 
-Every change is additive. The default `format=image` response is byte-identical
-to the previous version, all pre-existing JSON keys and headers keep their old
-values, existing prediction fields are untouched, and an unrecognised `format`
-still falls back to the legacy image. `Access-Control-Expose-Headers` is now
-set, so browsers can finally read the `X-*` headers cross-origin — previously
-they were sent but invisible to `fetch()`.
+Changes are additive for well-formed requests: `format=image` still returns
+green boxes and a `Vehicles: N` banner, existing JSON keys and headers keep
+their meaning, and an unrecognised `format` falls back to the plain image.
+Differences: `confidence=0` in a JSON body is now honoured (it used to fall
+back to the default); a prediction without a numeric `confidence` is reported
+with `confidence: 0.0`; `directions.*.extent` is new; malformed `date_time`
+returns 400 and non-image frames return 502 instead of a 500 or a silent
+empty result.
+
+## Security (live service)
+
+The deployed `swiftbackend` accepts unauthenticated calls from any origin
+(recorded in [docs/inventory.md](../docs/inventory.md) and
+[docs/findings.md](../docs/findings.md)). Every call can trigger a billed
+Roboflow inference. The code does not check the `Authorization` header it
+lists in CORS. Lock-down is a separate, approved change; set `ALLOWED_ORIGIN`
+to the demo origin at minimum.
 
 ## Configuration
 
@@ -113,6 +148,10 @@ DEFAULT_CONFIDENCE    default 0.1
 ALLOWED_ORIGIN        CORS origin, default *
 DIVIDING_LINES        JSON, overrides the built-in per-camera lines
 ```
+
+A malformed `DEFAULT_CONFIDENCE` or `DIVIDING_LINES` logs a warning and falls
+back to the default. The live service also sets `CACHE_BUCKET`; this code does
+not read it, and no code in git writes to `swiftborder-frame-cache`.
 
 ### Adding a camera
 
@@ -167,16 +206,24 @@ gcloud builds triggers import --source=trigger.json --project=swiftborder
 
 ## Tests
 
-Direction, congestion, and payload parsing are covered without calling
-data.gov.sg or Roboflow.
+Direction geometry, congestion, payload parsing, and the HTTP handler
+(`tests/test_handler.py`: parameter precedence, every `format`, 400/404/500/502
+paths, non-image frames, malformed predictions, `detect_frame` parity) run
+offline with data.gov.sg and Roboflow mocked. No key or network is needed.
 
 ```bash
 pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Run that from this directory. `requirements.txt` is the Cloud Run dependency
-set; `pytest` is only in `requirements-dev.txt`.
+Run that from this directory (or `scripts/run_tests.ps1 -Suite camdetect` from
+the repo root). `requirements.txt` is the pinned Cloud Run dependency set;
+`pytest` is only in `requirements-dev.txt`. A push of `main.py` or
+`requirements.txt` to `main` redeploys `swiftbackend`.
 
-Not covered here: the HTTP handler, image download, and the Roboflow call.
-Those need network and `ROBOFLOW_API_KEY`.
+## Reuse outside the handler
+
+`detect_frame(image_bytes, camera_id, min_confidence)` runs validation,
+inference and direction attribution on raw bytes and returns `kept`,
+`summary`, `image_size` and `points`. The offline camera backfill in
+[`eval/`](../eval/README.md) uses it.

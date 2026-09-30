@@ -2,7 +2,10 @@ import base64
 import datetime
 import io
 import json
+import logging
+import math
 import os
+import re
 
 try:
     from zoneinfo import ZoneInfo
@@ -23,7 +26,24 @@ ROBOFLOW_WORKFLOW_ID = os.environ.get(
 )
 TRAFFIC_IMAGES_API = "https://api.data.gov.sg/v1/transport/traffic-images"
 DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "2701")
-DEFAULT_CONFIDENCE = float(os.environ.get("DEFAULT_CONFIDENCE", "0.1"))
+logger = logging.getLogger("camdetect")
+
+
+def _env_float(name, default):
+    """Float env var; a malformed value logs a warning instead of crashing the cold start."""
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("ignoring non-numeric %s=%r; using %s", name, raw, default)
+        return default
+    return value if math.isfinite(value) else default
+
+
+DEFAULT_CONFIDENCE = _env_float("DEFAULT_CONFIDENCE", 0.1)
+DATE_TIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 BOX_COLOR = (0, 255, 0)
 
@@ -113,11 +133,33 @@ def _get_camera_image_url(camera_id, date_time):
     resp = requests.get(TRAFFIC_IMAGES_API, params={"date_time": date_time}, timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    for item in data.get("items", []):
-        for camera in item.get("cameras", []):
-            if camera.get("camera_id") == camera_id:
+    for item in data.get("items", []) or []:
+        for camera in item.get("cameras", []) or []:
+            if str(camera.get("camera_id")) == str(camera_id):
                 return camera.get("image")
     return None
+
+
+class InvalidImage(ValueError):
+    """The downloaded source frame is not a decodable image."""
+
+
+def _download_image(image_url):
+    """Fetch the source frame; raises requests errors on HTTP failure, InvalidImage if not an image."""
+    resp = requests.get(image_url, timeout=30)
+    resp.raise_for_status()
+    image_bytes = resp.content
+    _image_size(image_bytes)
+    return image_bytes
+
+
+def _image_size(image_bytes):
+    """(width, height) from the header, or InvalidImage."""
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as probe:
+            return probe.size
+    except (OSError, ValueError) as exc:
+        raise InvalidImage(str(exc)) from exc
 
 
 def _run_workflow(image_bytes):
@@ -144,11 +186,38 @@ def _run_workflow(image_bytes):
 
 
 def _extract_predictions(outputs):
-    """Match the Colab structure, but degrade to an empty list if it differs."""
+    """Match the Colab structure, but degrade to an empty list if it differs.
+
+    Non-dict entries are dropped. A non-numeric confidence becomes 0.0 so filtering never raises.
+    """
     try:
-        return outputs[0]["predictions"]["predictions"]
+        preds = outputs[0]["predictions"]["predictions"]
     except (IndexError, KeyError, TypeError):
         return []
+    if not isinstance(preds, list):
+        return []
+    clean = []
+    for p in preds:
+        if not isinstance(p, dict):
+            continue
+        try:
+            conf = float(p.get("confidence", 0))
+        except (TypeError, ValueError):
+            conf = 0.0
+        clean.append({**p, "confidence": conf if math.isfinite(conf) else 0.0})
+    return clean
+
+
+def _box(pred):
+    """(x1, y1, x2, y2) for a prediction, or None when geometry is missing or not numeric."""
+    try:
+        cx, cy = float(pred["x"]), float(pred["y"])
+        w, h = float(pred["width"]), float(pred["height"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not all(math.isfinite(v) for v in (cx, cy, w, h)):
+        return None
+    return cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
 
 
 def _dividing_line(camera_id, image_size):
@@ -200,11 +269,16 @@ def _classify_direction(pred, points):
     return DIR_SG_MY if foot_y < y_limit else DIR_MY_SG
 
 
-def _congestion_level(y_centres, image_height):
-    """Queue depth as the vertical spread of a direction's detections."""
+def _congestion_extent(y_centres, image_height):
+    """Vertical spread of a direction's box centres as a fraction of frame height (0 if <2 boxes)."""
     if not y_centres or not image_height:
-        return CONGESTION_BANDS[0][1]
-    extent = (max(y_centres) - min(y_centres)) / image_height
+        return 0.0
+    return (max(y_centres) - min(y_centres)) / image_height
+
+
+def _congestion_level(y_centres, image_height):
+    """Queue depth label from the vertical spread of a direction's detections (see README)."""
+    extent = _congestion_extent(y_centres, image_height)
     for threshold, label in CONGESTION_BANDS:
         if extent < threshold:
             return label
@@ -234,10 +308,12 @@ def _summarize_directions(predictions, points, image_size):
         "sg_my": {
             "count": counts[DIR_SG_MY],
             "congestion": _congestion_level(centres[DIR_SG_MY], height),
+            "extent": round(_congestion_extent(centres[DIR_SG_MY], height), 4),
         },
         "my_sg": {
             "count": counts[DIR_MY_SG],
             "congestion": _congestion_level(centres[DIR_MY_SG], height),
+            "extent": round(_congestion_extent(centres[DIR_MY_SG], height), 4),
         },
         "unknown": {"count": counts[DIR_UNKNOWN]},
     }
@@ -282,10 +358,10 @@ def _draw_boxes(image, predictions):
     font = _load_font(max(14, image.width // 90))
 
     for pred in predictions:
-        cx, cy = pred["x"], pred["y"]
-        w, h = pred["width"], pred["height"]
-        x1, y1 = cx - w / 2, cy - h / 2
-        x2, y2 = cx + w / 2, cy + h / 2
+        box = _box(pred)
+        if box is None:
+            continue
+        x1, y1, x2, y2 = box
         draw.rectangle([x1, y1, x2, y2], outline=BOX_COLOR, width=line_width)
 
         label = f"{pred.get('class', 'vehicle')} {pred.get('confidence', 0):.2f}"
@@ -310,10 +386,10 @@ def _draw_directional(image, predictions, points, summary):
     for pred in predictions:
         direction = pred.get("direction", DIR_UNKNOWN)
         color = DIR_COLORS.get(direction, DIR_COLORS[DIR_UNKNOWN])
-        cx, cy = pred["x"], pred["y"]
-        w, h = pred["width"], pred["height"]
-        x1, y1 = cx - w / 2, cy - h / 2
-        x2, y2 = cx + w / 2, cy + h / 2
+        box = _box(pred)
+        if box is None:
+            continue
+        x1, y1, x2, y2 = box
         draw.rectangle([x1, y1, x2, y2], outline=color, width=line_width)
 
         label = f"{direction} {pred.get('confidence', 0):.2f}"
@@ -330,65 +406,118 @@ def _draw_directional(image, predictions, points, summary):
     _draw_banner(draw, image, banner)
 
 
+class MissingApiKey(RuntimeError):
+    """ROBOFLOW_API_KEY is not configured."""
+
+
+def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None):
+    """Run detection and direction attribution on one frame (no HTTP request object).
+
+    Returns a dict: ``kept`` (predictions at or above ``min_confidence``, each tagged with
+    ``direction``), ``summary`` (per-direction counts, congestion labels and extents),
+    ``image_size`` and ``points`` (the scaled dividing line or None).
+
+    Raises InvalidImage for undecodable bytes (checked before any billed inference call),
+    MissingApiKey when no key is configured, and requests/ValueError errors from the workflow.
+    Used by ``detect()`` and by the offline camera backfill in ``eval/``.
+    """
+    if min_confidence is None:
+        min_confidence = DEFAULT_CONFIDENCE
+    image_size = _image_size(image_bytes)
+    if not ROBOFLOW_API_KEY:
+        raise MissingApiKey("ROBOFLOW_API_KEY is not set")
+    predictions = _extract_predictions(_run_workflow(image_bytes))
+    kept = [p for p in predictions if p["confidence"] >= min_confidence]
+    points = _dividing_line(camera_id, image_size)
+    summary = _summarize_directions(kept, points, image_size)
+    return {"kept": kept, "summary": summary, "image_size": image_size, "points": points}
+
+
+def _param(body, args, name):
+    """Body wins over query string; a missing, null or empty-string body value falls back."""
+    value = body.get(name) if isinstance(body, dict) else None
+    if value is None or value == "":
+        value = args.get(name)
+    return value
+
+
+def _parse_confidence(value):
+    if value is None or value == "":
+        return DEFAULT_CONFIDENCE
+    try:
+        conf = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_CONFIDENCE
+    return conf if math.isfinite(conf) else DEFAULT_CONFIDENCE
+
+
+def _valid_date_time(value):
+    """True for a string 'YYYY-MM-DDTHH:MM:SS' that is a real calendar time."""
+    if not isinstance(value, str) or not DATE_TIME_PATTERN.match(value):
+        return False
+    try:
+        datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return False
+    return True
+
+
 @functions_framework.http
 def detect(request):
     if request.method == "OPTIONS":
         return ("", 204, _cors_headers())
 
     args = request.args or {}
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        body = {}
 
-    camera_id = str(body.get("camera_id") or args.get("camera_id") or DEFAULT_CAMERA_ID)
-    date_time = body.get("date_time") or args.get("date_time")
-    output_format = str(body.get("format") or args.get("format") or "image").lower()
-    try:
-        min_confidence = float(
-            body.get("confidence") or args.get("confidence") or DEFAULT_CONFIDENCE
-        )
-    except (TypeError, ValueError):
-        min_confidence = DEFAULT_CONFIDENCE
+    camera_id = str(_param(body, args, "camera_id") or DEFAULT_CAMERA_ID)
+    date_time = _param(body, args, "date_time")
+    output_format = str(_param(body, args, "format") or "image").lower()
+    min_confidence = _parse_confidence(_param(body, args, "confidence"))
 
     # If no timestamp is supplied, use the current Singapore-local time.
-    if not date_time:
+    if date_time is None or date_time == "":
         date_time = datetime.datetime.now(ZoneInfo("Asia/Singapore")).strftime(
             "%Y-%m-%dT%H:%M:%S"
         )
+    elif not _valid_date_time(date_time):
+        return _error("date_time must be YYYY-MM-DDTHH:MM:SS (Singapore time)", 400)
+
+    if not ROBOFLOW_API_KEY:
+        logger.error("ROBOFLOW_API_KEY is not set")
+        return _error("Service is not configured", 500)
 
     # 1. Resolve the source image URL from data.gov.sg
     try:
         image_url = _get_camera_image_url(camera_id, date_time)
-    except requests.RequestException as exc:
-        return _error(f"traffic-images API request failed: {exc}", 502)
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("traffic-images lookup failed: %s", exc)
+        return _error("Traffic camera API request failed", 502)
     if not image_url:
         return _error(f"No image found for camera {camera_id} at {date_time}", 404)
 
-    # 2. Download the source frame
+    # 2. Download and validate the source frame (before any billed inference)
     try:
-        image_bytes = requests.get(image_url, timeout=30).content
+        image_bytes = _download_image(image_url)
     except requests.RequestException as exc:
-        return _error(f"Failed to download source image: {exc}", 502)
+        logger.warning("source frame download failed: %s", exc)
+        return _error("Failed to download source image", 502)
+    except InvalidImage as exc:
+        logger.warning("source frame is not an image: %s", exc)
+        return _error("Source frame is not a valid image", 502)
 
-    # 3. Run the Roboflow workflow over HTTP
+    # 3. Run the Roboflow workflow and attribute directions
     try:
-        outputs = _run_workflow(image_bytes)
+        result = detect_frame(image_bytes, camera_id, min_confidence)
     except requests.RequestException as exc:
-        return _error(f"Inference request failed: {exc}", 502)
+        logger.warning("inference request failed: %s", exc)
+        return _error("Inference request failed", 502)
     except ValueError as exc:
-        return _error(f"Inference returned a non-JSON response: {exc}", 502)
-
-    predictions = _extract_predictions(outputs)
-    kept = [p for p in predictions if p.get("confidence", 0) >= min_confidence]
-
-    # 4. Attribute each detection to a direction. Frame size is read from the
-    # header alone, so JSON callers still never decode the pixels. Anything that
-    # fails here degrades to Unknown rather than failing the request.
-    try:
-        with Image.open(io.BytesIO(image_bytes)) as probe:
-            image_size = probe.size
-    except (OSError, ValueError):
-        image_size = None
-    points = _dividing_line(camera_id, image_size)
-    summary = _summarize_directions(kept, points, image_size)
+        logger.warning("inference returned a non-JSON response: %s", exc)
+        return _error("Inference returned an invalid response", 502)
+    kept, summary, points = result["kept"], result["summary"], result["points"]
 
     # Optional JSON mode for inspecting the raw detections
     if output_format == "json":

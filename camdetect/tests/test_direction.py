@@ -89,8 +89,9 @@ def test_dividing_line_rejects_unknown_camera_and_unsorted_x():
 
 
 def test_extract_predictions_degrades_on_a_changed_payload():
+    # A missing confidence is normalised to 0.0 so the confidence filter never raises.
     assert main._extract_predictions([{"predictions": {"predictions": [{"class": "car"}]}}]) == [
-        {"class": "car"}
+        {"class": "car", "confidence": 0.0}
     ]
     assert main._extract_predictions([]) == []
     assert main._extract_predictions([{"predictions": {}}]) == []
