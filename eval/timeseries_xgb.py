@@ -1,7 +1,24 @@
 """Exploratory sklearn XGBoost on causeway Maps durations (not the BQML serve path).
 
-Scope: **one Maps route only** — ``route_id = jb_to_woodlands`` (JB → Woodlands / inbound to SG).
-The reverse leg (SG → JB) is **not** implemented here; score both directions with ``layer_b.py`` (BQML).
+Scope: **one Maps route only**: ``route_id = jb_to_woodlands`` (JB -> Woodlands / inbound to SG).
+The reverse leg (SG -> JB) is not implemented here; score both directions with ``layer_b.py`` (BQML).
+
+Pipeline (all causal; every model input is observed at or before the forecast origin):
+
+1. ``prepare_route_frame``: keep ``status = OK`` rows for one route. Raw values, no filling.
+2. ``regular_grid``: 5-minute bins ``[ts, ts + 5 min)``. ``y_raw`` is the bin mean (NaN when the bin
+   has no observation). ``y_ffill`` forward-fills at most ``max_ffill_steps`` bins (no bfill). The
+   model-input column (``config.target_col``) is ``y_ffill`` after the causal slew-rate cap.
+3. ``engineer_features``: calendar fields per bin plus D-1 / D-7 lookups of the input series.
+4. ``build_supervised_frame``: one row per forecast origin ``t`` with label ``y = y_raw[t + h]``.
+   Lags come from the input series at ``t, t-1, ...``; ``target_lag_1`` is the origin value.
+   ``duration_sec`` is the Maps typical duration at the origin. Calendar and D-1/D-7 describe the
+   target time (known in advance because ``h`` is less than a day). ``persistence`` is the last
+   observed value at the origin (``y_ffill[t]``), not a model feature.
+5. ``split_supervised``: chronological split on target time. Backtest days are full calendar days on
+   or after the split boundary, so no backtest label was seen in training.
+
+Scores use raw labels only: bins without an observation are never scored.
 """
 
 from __future__ import annotations
@@ -12,17 +29,20 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from numpy.lib.stride_tricks import sliding_window_view
 
-# JB → Woodlands (one row in causeway.travel_times). Not the SG → JB route.
+# JB -> Woodlands (one row in causeway.travel_times). Not the SG -> JB route.
 DEFAULT_ROUTE_ID = "jb_to_woodlands"
-OFFLINE_ROUTE_LABEL = "JB → SG (jb_to_woodlands only)"
+OFFLINE_ROUTE_LABEL = "JB -> SG (jb_to_woodlands only)"
 TARGET_COL = "duration_in_traffic_sec"
 STEP_MINUTES = 5
+STEPS_PER_DAY = 24 * 60 // STEP_MINUTES
 CANONICAL_TABLE = "causeway.travel_times"
 DEFAULT_MAX_SLEW_STEP_SEC = 300
+DEFAULT_MAX_FFILL_STEPS = 6  # 30 minutes
 DWT_WAVELET = "db2"
 DWT_LEVEL = 3
+CALENDAR_COLS = ("hour", "minute", "dayofweek", "day", "month", "nonworkday")
+META_COLS = ("origin_ts", "target_ts", "y", "persistence")
 
 
 @dataclass(frozen=True)
@@ -38,16 +58,54 @@ class XGBTrainConfig:
     reg_lambda: float = 1.0
 
 
+@dataclass(frozen=True)
+class TimeSeriesConfig:
+    window_size: int = 36
+    horizon_steps: int = 12  # 5-minute steps -> 60 minutes ahead
+    keep_lags: int = 12
+    train_fraction: float = 0.8
+    route_id: str = DEFAULT_ROUTE_ID
+    target_col: str = TARGET_COL
+    max_slew_step_sec: int = DEFAULT_MAX_SLEW_STEP_SEC
+    max_ffill_steps: int = DEFAULT_MAX_FFILL_STEPS
+    use_dwt: bool = False
+    xgb: XGBTrainConfig = field(default_factory=XGBTrainConfig)
+
+    @property
+    def horizon_minutes(self) -> int:
+        return self.horizon_steps * STEP_MINUTES
+
+
+@dataclass
+class SupervisedSplit:
+    """Chronological train/test split of a supervised frame (see ``build_supervised_frame``)."""
+
+    train: pd.DataFrame
+    test: pd.DataFrame
+    boundary: pd.Timestamp
+    feature_cols: List[str]
+
+
 def apply_slew_rate_limit(values: np.ndarray, max_step: float) -> np.ndarray:
-    """Cap step-to-step change in the target series (notebook: 300 s per 5-min bin)."""
-    if max_step <= 0:
-        return np.asarray(values, dtype=float).copy()
+    """Causal cap on step-to-step change (notebook: 300 s per 5-min bin).
+
+    NaN entries stay NaN and the filter restarts at the next observation, so a gap does not drag
+    the first value after it toward the value before it.
+    """
     vals = np.asarray(values, dtype=float)
-    filtered = np.empty_like(vals)
-    filtered[0] = vals[0]
-    for i in range(1, len(vals)):
-        step = np.clip(vals[i] - filtered[i - 1], -max_step, max_step)
-        filtered[i] = filtered[i - 1] + step
+    if max_step <= 0:
+        return vals.copy()
+    filtered = np.full_like(vals, np.nan)
+    prev = np.nan
+    for i, v in enumerate(vals):
+        if np.isnan(v):
+            prev = np.nan
+            continue
+        if np.isnan(prev):
+            filtered[i] = v
+        else:
+            filtered[i] = prev + np.clip(v - prev, -max_step, max_step)
+        prev = filtered[i]
     return filtered
 
 
@@ -84,6 +142,14 @@ def ensure_observed_at_sgt(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _parse_sgt(values: pd.Series) -> pd.Series:
+    """Naive SGT timestamps from strings or tz-aware values."""
+    ts = pd.to_datetime(values, errors="coerce", format="mixed")
+    if getattr(ts.dt, "tz", None) is not None:
+        ts = ts.dt.tz_convert("Asia/Singapore").dt.tz_localize(None)
+    return ts
+
+
 def sync_canonical_travel_times(
     cache_path: Union[str, Path],
     project: str = "swiftborder",
@@ -117,26 +183,9 @@ def prepare_route_frame(
     export: pd.DataFrame,
     config: Optional[TimeSeriesConfig] = None,
 ) -> pd.DataFrame:
-    """Filter a full-table export to one route and clean the target series."""
+    """Filter a full-table export to one route. Raw observations; nothing is filled."""
     config = config or TimeSeriesConfig()
     return _filter_route(ensure_observed_at_sgt(export), config)
-
-
-@dataclass(frozen=True)
-class TimeSeriesConfig:
-    window_size: int = 36
-    horizon_steps: int = 12  # 5-minute steps -> 60 minutes ahead
-    keep_lags: int = 12
-    train_fraction: float = 0.8
-    route_id: str = DEFAULT_ROUTE_ID
-    target_col: str = TARGET_COL
-    max_slew_step_sec: int = DEFAULT_MAX_SLEW_STEP_SEC
-    use_dwt: bool = False
-    xgb: XGBTrainConfig = field(default_factory=XGBTrainConfig)
-
-    @property
-    def horizon_minutes(self) -> int:
-        return self.horizon_steps * STEP_MINUTES
 
 
 def load_from_csv(path: str, config: Optional[TimeSeriesConfig] = None) -> pd.DataFrame:
@@ -188,48 +237,130 @@ def _filter_route(frame: pd.DataFrame, config: TimeSeriesConfig) -> pd.DataFrame
     if missing:
         raise ValueError(f"missing columns: {sorted(missing)}")
 
-    out = frame[
-        [
-            "observed_at_sgt",
-            "route_id",
-            "status",
-            "duration_sec",
-            config.target_col,
-            "error_message",
-        ]
-    ].copy()
+    out = frame[list(required)].copy()
     out = out[
         (out["status"] == "OK")
         & (out["error_message"].isna())
         & (out["route_id"] == config.route_id)
     ]
-    out = out.drop(columns=["error_message", "status"])
+    out["observed_at_sgt"] = _parse_sgt(out["observed_at_sgt"])
+    out[config.target_col] = pd.to_numeric(out[config.target_col], errors="coerce").astype(float)
+    out["duration_sec"] = pd.to_numeric(out["duration_sec"], errors="coerce").astype(float)
+    out = out.dropna(subset=["observed_at_sgt", config.target_col])
     out = out.sort_values("observed_at_sgt")
-    target = pd.to_numeric(out[config.target_col], errors="coerce").astype(float)
-    target = target.interpolate(method="linear").bfill().ffill()
-    if config.max_slew_step_sec > 0:
-        target = apply_slew_rate_limit(target.to_numpy(), float(config.max_slew_step_sec))
-    out[config.target_col] = target
+    return out[["observed_at_sgt", "route_id", "duration_sec", config.target_col]].reset_index(drop=True)
+
+
+def regular_grid(raw: pd.DataFrame, config: TimeSeriesConfig) -> pd.DataFrame:
+    """5-minute grid indexed by bin start (naive SGT).
+
+    Columns: ``y_raw`` (bin mean, NaN if empty), ``y_ffill`` (causal fill, at most
+    ``max_ffill_steps`` bins), ``duration_sec`` (causal fill), and the model-input column
+    ``config.target_col`` (``y_ffill`` after the causal slew cap).
+    """
+    step = f"{STEP_MINUTES}min"
+    frame = raw.copy()
+    frame["ts"] = _parse_sgt(frame["observed_at_sgt"]).dt.floor(step)
+    binned = frame.groupby("ts")[[config.target_col, "duration_sec"]].mean()
+    index = pd.date_range(binned.index.min(), binned.index.max(), freq=step, name="ts")
+    binned = binned.reindex(index)
+
+    limit = config.max_ffill_steps if config.max_ffill_steps > 0 else None
+    grid = pd.DataFrame(index=index)
+    grid["y_raw"] = binned[config.target_col]
+    grid["y_ffill"] = grid["y_raw"].ffill(limit=limit)
+    grid["duration_sec"] = binned["duration_sec"].ffill(limit=limit)
+    grid[config.target_col] = apply_slew_rate_limit(grid["y_ffill"].to_numpy(), float(config.max_slew_step_sec))
+    return grid
+
+
+def engineer_features(raw: pd.DataFrame, config: TimeSeriesConfig) -> pd.DataFrame:
+    """Grid plus calendar fields and D-1 / D-7 lookups of the input series (per bin time)."""
+    grid = regular_grid(raw, config)
+    ts = grid.index
+    grid["hour"] = ts.hour
+    grid["minute"] = ts.minute
+    grid["dayofweek"] = ts.dayofweek
+    grid["day"] = ts.day
+    grid["month"] = ts.month
+    grid["nonworkday"] = ts.dayofweek.isin([5, 6]).astype(int)
+    series = grid[config.target_col]
+    grid["d1"] = series.reindex(ts - pd.Timedelta(days=1)).to_numpy()
+    grid["d7"] = series.reindex(ts - pd.Timedelta(days=7)).to_numpy()
+    return grid
+
+
+def build_supervised_frame(features: pd.DataFrame, config: TimeSeriesConfig) -> pd.DataFrame:
+    """One row per forecast origin with a raw label ``h`` steps ahead (see module docstring).
+
+    Rows need a complete input window (``window_size`` bins ending at the origin) and an observed
+    label. Columns: ``origin_ts``, ``target_ts``, feature columns, ``y``, ``persistence``.
+    """
+    h = config.horizon_steps
+    if h * STEP_MINUTES >= 24 * 60:
+        raise ValueError("horizon must be shorter than one day (D-1 features must be known at the origin)")
+    w = config.window_size
+    if config.keep_lags > w:
+        raise ValueError("keep_lags cannot exceed window_size")
+
+    inputs = features[config.target_col].to_numpy(dtype=float)
+    y_raw = features["y_raw"].to_numpy(dtype=float)
+    y_ffill = features["y_ffill"].to_numpy(dtype=float)
+    dur = features["duration_sec"].to_numpy(dtype=float)
+    ts = features.index
+    n = len(features)
+    if n < w + h:
+        return pd.DataFrame(columns=list(META_COLS))
+
+    origins = np.arange(w - 1, n - h)
+    windows = np.stack([inputs[o - w + 1 : o + 1] for o in origins]) if len(origins) else np.empty((0, w))
+    targets = origins + h
+    valid = ~np.isnan(windows).any(axis=1) & ~np.isnan(y_raw[targets])
+    origins, targets, windows = origins[valid], targets[valid], windows[valid]
+
+    out = pd.DataFrame(
+        {
+            "origin_ts": ts[origins],
+            "target_ts": ts[targets],
+            "duration_sec": dur[origins],
+        }
+    )
+    for col in CALENDAR_COLS + ("d1", "d7"):
+        out[col] = features[col].to_numpy()[targets]
+    for k in range(config.keep_lags, 0, -1):
+        out[f"target_lag_{k}"] = windows[:, w - k]
+    if config.use_dwt and len(windows):
+        out = pd.concat([out, dwt_features_from_windows(windows)], axis=1)
+    out["y"] = y_raw[targets]
+    out["persistence"] = y_ffill[origins]
     return out.reset_index(drop=True)
 
 
-def engineer_features(frame: pd.DataFrame, config: TimeSeriesConfig) -> pd.DataFrame:
-    """Calendar features and D-1 / D-7 lookups on a 5-minute grid."""
-    features = frame.copy()
-    dt_tmp = pd.to_datetime(features["observed_at_sgt"], errors="coerce")
-    features["hour"] = dt_tmp.dt.hour
-    features["minute"] = dt_tmp.dt.minute
-    features["dayofweek"] = dt_tmp.dt.dayofweek
-    features["day"] = dt_tmp.dt.day
-    features["month"] = dt_tmp.dt.month
-    features["nonworkday"] = features["dayofweek"].isin([5, 6]).astype(int)
+def feature_columns(supervised: pd.DataFrame) -> List[str]:
+    return [c for c in supervised.columns if c not in META_COLS]
 
-    ts_grid = dt_tmp.dt.round(f"{STEP_MINUTES}min")
-    lookup = pd.Series(features[config.target_col].values, index=ts_grid.values)
-    features["d1"] = (ts_grid - pd.Timedelta(days=1)).map(lookup).values
-    features["d7"] = (ts_grid - pd.Timedelta(days=7)).map(lookup).values
-    features = features.drop(columns="observed_at_sgt")
-    return features
+
+def split_boundary(supervised: pd.DataFrame, train_fraction: float) -> pd.Timestamp:
+    """Target time at which the test set starts (``train_fraction`` of rows before it)."""
+    if not 0 < train_fraction < 1:
+        raise ValueError("train_fraction must be in (0, 1)")
+    ordered = supervised["target_ts"].sort_values().reset_index(drop=True)
+    return pd.Timestamp(ordered.iloc[int(len(ordered) * train_fraction)])
+
+
+def split_supervised(
+    features: pd.DataFrame,
+    config: TimeSeriesConfig,
+    *,
+    train_fraction: Optional[float] = None,
+) -> SupervisedSplit:
+    """Chronological split on target time: train labels all precede test labels."""
+    train_fraction = train_fraction if train_fraction is not None else config.train_fraction
+    sup = build_supervised_frame(features, config)
+    boundary = split_boundary(sup, train_fraction)
+    train = sup[sup["target_ts"] < boundary].reset_index(drop=True)
+    test = sup[sup["target_ts"] >= boundary].reset_index(drop=True)
+    return SupervisedSplit(train=train, test=test, boundary=boundary, feature_cols=feature_columns(sup))
 
 
 def build_supervised_matrices(
@@ -238,44 +369,15 @@ def build_supervised_matrices(
     *,
     train_fraction: Optional[float] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
-    """Chronological split, lag windows, and aligned X/y for train and test."""
-    train_fraction = train_fraction if train_fraction is not None else config.train_fraction
-    split_index = int(len(features) * train_fraction)
-    train_data = features.iloc[:split_index].copy()
-    test_data = features.iloc[split_index:].copy()
-
-    target = config.target_col
-    train_target = train_data[target].values
-    test_target = test_data[target].values
-
-    h = config.horizon_steps
-    w = config.window_size
-
-    train_windows = sliding_window_view(train_target, window_shape=w)
-    test_windows = sliding_window_view(test_target, window_shape=w)
-    train_target_windows = train_windows[:-h]
-    test_target_windows = test_windows[:-h]
-
-    lag_cols = [f"target_lag_{i}" for i in range(w, 0, -1)]
-    train_lags = pd.DataFrame(train_target_windows, columns=lag_cols)
-    test_lags = pd.DataFrame(test_target_windows, columns=lag_cols)
-
-    drop_cols = [target, "route_id"]
-    offset = w + h - 1
-    train_feats = train_data.drop(columns=drop_cols).iloc[offset:].reset_index(drop=True)
-    test_feats = test_data.drop(columns=drop_cols).iloc[offset:].reset_index(drop=True)
-
-    keep = [f"target_lag_{i}" for i in range(config.keep_lags, 0, -1)]
-    train_parts: List[pd.DataFrame] = [train_feats, train_lags[keep]]
-    test_parts: List[pd.DataFrame] = [test_feats, test_lags[keep]]
-    if config.use_dwt:
-        train_parts.append(dwt_features_from_windows(train_target_windows))
-        test_parts.append(dwt_features_from_windows(test_target_windows))
-    x_train = pd.concat(train_parts, axis=1)
-    x_test = pd.concat(test_parts, axis=1)
-    y_train = train_target[offset:]
-    y_test = test_target[offset:]
-    return x_train, x_test, y_train, y_test
+    """Compatibility wrapper: (x_train, x_test, y_train, y_test) from ``split_supervised``."""
+    split = split_supervised(features, config, train_fraction=train_fraction)
+    cols = split.feature_cols
+    return (
+        split.train[cols],
+        split.test[cols],
+        split.train["y"].to_numpy(),
+        split.test["y"].to_numpy(),
+    )
 
 
 def train_xgb(
@@ -312,129 +414,137 @@ def rmse_minutes(y_true: Sequence[float], y_pred: Sequence[float]) -> float:
     return rmse_seconds(y_true, y_pred) / 60.0
 
 
-def holdout_persistence_predictions(x_test: pd.DataFrame, config: TimeSeriesConfig) -> np.ndarray:
-    """Persistence T-H: lag `horizon_steps` on the supervised test matrix."""
-    lag_col = f"target_lag_{config.horizon_steps}"
-    if lag_col not in x_test.columns:
-        raise ValueError(f"missing {lag_col} for persistence baseline")
-    return x_test[lag_col].to_numpy(dtype=float)
-
-
-def holdout_significance_vs_persistence(
-    model,
-    x_test: pd.DataFrame,
-    y_test: np.ndarray,
-    config: Optional[TimeSeriesConfig] = None,
-    *,
-    block_size: int = 12,
-    alpha: float = 0.05,
-    random_state: int = 0,
-):
-    """Paired MAE significance (minutes) for chronological hold-out vs persistence T-H."""
-    from significance import compare_absolute_errors
-
-    config = config or TimeSeriesConfig()
-    pred = model.predict(x_test)
-    persist = holdout_persistence_predictions(x_test, config)
-    scale = 1.0 / 60.0
-    return compare_absolute_errors(
-        y_test * scale,
-        pred * scale,
-        persist * scale,
-        label_challenger="XGB (sklearn)",
-        label_reference=f"Persistence T-{config.horizon_minutes}",
-        block_size=block_size,
-        alpha=alpha,
-        random_state=random_state,
-    )
-
-
 def mae_minutes(y_true: Sequence[float], y_pred: Sequence[float]) -> float:
     return float(np.mean(np.abs(np.asarray(y_true, dtype=float) - np.asarray(y_pred, dtype=float)))) / 60.0
 
 
-def regularized_series(
-    frame: pd.DataFrame,
-    config: TimeSeriesConfig,
-) -> Tuple[pd.Series, float]:
-    """5-minute grid of target and a free-flow proxy from median duration_sec."""
-    s = frame[["observed_at_sgt", config.target_col, "duration_sec"]].copy()
-    s["ts"] = pd.to_datetime(s["observed_at_sgt"]).dt.round(f"{STEP_MINUTES}min")
-    s = s.groupby("ts")[[config.target_col, "duration_sec"]].mean()
-    full_index = pd.date_range(s.index.min(), s.index.max(), freq=f"{STEP_MINUTES}min")
-    s = s.reindex(full_index).interpolate(method="time")
-    free_flow = float(s["duration_sec"].median())
-    return s[config.target_col], free_flow
+def holdout_persistence_predictions(test: pd.DataFrame, config: Optional[TimeSeriesConfig] = None) -> np.ndarray:
+    """Persistence T-H: last observed value at the forecast origin (``persistence`` column)."""
+    if "persistence" not in test.columns:
+        raise ValueError("expected a supervised frame with a 'persistence' column")
+    return test["persistence"].to_numpy(dtype=float)
+
+
+def holdout_metrics(model, split: SupervisedSplit) -> Dict[str, float]:
+    """MAE / RMSE (minutes) for the model and persistence on the chronological hold-out."""
+    y = split.test["y"].to_numpy()
+    pred = model.predict(split.test[split.feature_cols])
+    persist = holdout_persistence_predictions(split.test)
+    return {
+        "n": int(len(y)),
+        "model_mae_min": mae_minutes(y, pred),
+        "model_rmse_min": rmse_minutes(y, pred),
+        "persistence_mae_min": mae_minutes(y, persist),
+        "persistence_rmse_min": rmse_minutes(y, persist),
+    }
+
+
+def holdout_significance_vs_persistence(
+    model,
+    split: SupervisedSplit,
+    config: Optional[TimeSeriesConfig] = None,
+    *,
+    alpha: float = 0.05,
+    random_state: int = 0,
+    **kwargs,
+):
+    """Paired absolute-error comparison (minutes) on the hold-out vs persistence T-H."""
+    from significance import compare_absolute_errors
+
+    config = config or TimeSeriesConfig()
+    scale = 1.0 / 60.0
+    y = split.test["y"].to_numpy() * scale
+    pred = model.predict(split.test[split.feature_cols]) * scale
+    persist = holdout_persistence_predictions(split.test) * scale
+    return compare_absolute_errors(
+        y,
+        pred,
+        persist,
+        label_challenger="XGB (sklearn)",
+        label_reference=f"Persistence T-{config.horizon_minutes}",
+        horizon_steps=config.horizon_steps,
+        timestamps=list(split.test["target_ts"]),
+        alpha=alpha,
+        random_state=random_state,
+        **kwargs,
+    )
+
+
+def backtest_days(split: SupervisedSplit, *, min_coverage: float = 0.9) -> List[str]:
+    """Full calendar days (SGT) starting at or after the split boundary with enough labels."""
+    test = split.test
+    if test.empty:
+        return []
+    per_day = test.groupby(test["target_ts"].dt.normalize()).size()
+    days = [
+        d.strftime("%Y-%m-%d")
+        for d, count in per_day.items()
+        if d >= split.boundary and count >= min_coverage * STEPS_PER_DAY
+    ]
+    return days
 
 
 def score_forecast_days(
     model,
-    y_series: pd.Series,
-    free_flow: float,
+    features: pd.DataFrame,
+    split: SupervisedSplit,
     dates: Sequence[str],
     config: TimeSeriesConfig,
     *,
     w_yday: float = 0.5,
     w_lastwk: float = 0.5,
 ) -> pd.DataFrame:
-    """Backtest fixed calendar days (notebook cell 2 logic)."""
+    """Per-day backtest on test rows only (raw labels; identical rows for every method).
+
+    Methods: XGB on the actual lag window; XGB on a D-1/D-7 blended lag window; their average;
+    persistence T-H; the naive D-1/D-7 blend at the target time.
+    """
+    series = features[config.target_col]
     step = pd.Timedelta(minutes=STEP_MINUTES)
-    h = config.horizon_steps
-    w = config.window_size
-    feature_cols = list(model.get_booster().feature_names)
 
-    def blended_at(idx: pd.DatetimeIndex) -> np.ndarray:
-        d1 = y_series.reindex(idx - pd.Timedelta(days=1)).values
-        d7 = y_series.reindex(idx - pd.Timedelta(days=7)).values
-        return w_yday * d1 + w_lastwk * d7
-
-    def build_x(day_idx: pd.DatetimeIndex, source: str) -> pd.DataFrame:
-        rows: List[Dict[str, float]] = []
-        for t in day_idx:
-            lag_times = pd.DatetimeIndex([t - (h + k - 1) * step for k in range(w, 0, -1)])
-            if source == "actual":
-                lags = y_series.reindex(lag_times).values
-            else:
-                lags = blended_at(lag_times)
-            row = {
-                "duration_sec": free_flow,
-                "hour": t.hour,
-                "minute": t.minute,
-                "dayofweek": t.dayofweek,
-                "day": t.day,
-                "month": t.month,
-                "nonworkday": int(t.dayofweek in (5, 6)),
-                "d1": y_series.get(t - pd.Timedelta(days=1), np.nan),
-                "d7": y_series.get(t - pd.Timedelta(days=7), np.nan),
-            }
-            row.update({f"target_lag_{k}": v for k, v in zip(range(w, 0, -1), lags)})
-            rows.append(row)
-        return pd.DataFrame(rows)[feature_cols]
+    def blended(times: pd.DatetimeIndex) -> np.ndarray:
+        """Weighted D-1/D-7 mean; uses whichever is available when the other is missing."""
+        d1 = series.reindex(times - pd.Timedelta(days=1)).to_numpy()
+        d7 = series.reindex(times - pd.Timedelta(days=7)).to_numpy()
+        w1 = np.where(np.isnan(d1), 0.0, w_yday)
+        w7 = np.where(np.isnan(d7), 0.0, w_lastwk)
+        total = w1 + w7
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out = (np.nan_to_num(d1) * w1 + np.nan_to_num(d7) * w7) / total
+        return np.where(total > 0, out, np.nan)
 
     scores: List[Dict[str, object]] = []
     for d in dates:
-        day_idx = pd.date_range(pd.Timestamp(d), periods=288, freq=f"{STEP_MINUTES}min")
-        actual = y_series.reindex(day_idx)
-        fc_actual = pd.Series(model.predict(build_x(day_idx, "actual")), index=day_idx)
-        fc_blend = pd.Series(model.predict(build_x(day_idx, "blend")), index=day_idx)
-        proxy = pd.Series(blended_at(day_idx), index=day_idx)
-        persist = y_series.reindex(day_idx - h * step).set_axis(day_idx)
-        fc_avg = (fc_actual + fc_blend) / 2
-        ts = pd.Timestamp(d)
-        label = f"{d[5:]} {ts.day_name()[:3]}"
-        for name, pred in [
-            ("XGB actual window", fc_actual),
-            ("XGB blend window", fc_blend),
-            ("XGB average", fc_avg),
-            (f"Persistence T-{config.horizon_minutes}", persist),
-            ("Naive blend", proxy),
-        ]:
+        rows = split.test[split.test["target_ts"].dt.strftime("%Y-%m-%d") == d].reset_index(drop=True)
+        if rows.empty:
+            continue
+        x_actual = rows[split.feature_cols]
+        x_blend = x_actual.copy()
+        origins = pd.DatetimeIndex(rows["origin_ts"])
+        for k in range(config.keep_lags, 0, -1):
+            x_blend[f"target_lag_{k}"] = blended(origins - (k - 1) * step)
+        fc_actual = model.predict(x_actual)
+        fc_blend = model.predict(x_blend)
+        methods = {
+            "XGB actual window": fc_actual,
+            "XGB blend window": fc_blend,
+            "XGB average": (fc_actual + fc_blend) / 2,
+            f"Persistence T-{config.horizon_minutes}": rows["persistence"].to_numpy(),
+            "Naive blend": blended(pd.DatetimeIndex(rows["target_ts"])),
+        }
+        keep = np.ones(len(rows), dtype=bool)
+        for pred in methods.values():
+            keep &= ~np.isnan(np.asarray(pred, dtype=float))
+        y = rows["y"].to_numpy()[keep]
+        label = f"{d[5:]} {pd.Timestamp(d).day_name()[:3]}"
+        for name, pred in methods.items():
             scores.append(
                 {
                     "date": label,
                     "method": name,
-                    "RMSE_min": rmse_minutes(actual, pred),
-                    "MAE_min": mae_minutes(actual, pred),
+                    "n": int(keep.sum()),
+                    "RMSE_min": rmse_minutes(y, np.asarray(pred)[keep]),
+                    "MAE_min": mae_minutes(y, np.asarray(pred)[keep]),
                 }
             )
     return pd.DataFrame(scores)

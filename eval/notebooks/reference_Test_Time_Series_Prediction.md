@@ -11,15 +11,16 @@ Source file (local): `Test_Time_Series_Prediction (1).ipynb` (2026-09-26).
 ## Teammate notes (2026-09-26)
 
 - Best offline scores so far with **updated XGB hyperparameters** (see `XGBTrainConfig`).
-- **DWT (`USE_DWT`) off** for now — only marginal gain; short Maps history is likely insufficient for wavelet features to help reliably.
+- **DWT (`USE_DWT`) off** for now: only marginal gain; short Maps history is likely insufficient for wavelet features to help reliably.
 - **Slew-rate limit** 300 s per 5-minute step on `duration_in_traffic_sec` before training.
 
-## Reported 60 min backtest (22–24 Sep 2026, mean columns)
+## Superseded numbers
 
-| Method | RMSE (min) mean | MAE (min) mean |
-| --- | --- | --- |
-| Persistence T-60 | 5.30 | 3.58 |
-| Naive blend | 4.24 | 2.71 |
-| **XGB actual window** | **3.45** | **2.28** |
+The teammate's 22–24 Sep backtest table is **not** reportable. The 2026-09-30 review found that the notebook pipeline:
 
-Reconcile with [`../../docs/evaluation.md`](../../docs/evaluation.md) after `python generate_comparison_plots.py` and `python promote_report_run.py`.
+- labelled the value 115 minutes before the target as "persistence T-60";
+- used `duration_sec` from the target row (same Maps call as the label);
+- scored interpolated, bfilled, slew-limited labels instead of raw observations;
+- backtested days that overlapped the 80% training split.
+
+`timeseries_xgb.py` fixes all four (tests in `../tests/test_timeseries_xgb.py`). Report numbers come only from [`../runs/report/run.json`](../runs/report/run.json); see [`../../docs/evaluation.md`](../../docs/evaluation.md).

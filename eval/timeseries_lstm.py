@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Type
 import numpy as np
 import pandas as pd
 
-from timeseries_xgb import TimeSeriesConfig, mae_minutes, rmse_minutes
+from timeseries_xgb import TimeSeriesConfig, mae_minutes, rmse_minutes, split_supervised
 
 ARCHITECTURE_CHOICES: Tuple[str, ...] = (
     "lstm",
@@ -75,6 +75,68 @@ def sequence_feature_columns(features: pd.DataFrame, config: TimeSeriesConfig) -
     return [c for c in candidates if c in features.columns and c != "route_id"]
 
 
+@dataclass
+class LSTMSplit:
+    """Sequence tensors aligned to the same supervised rows as the XGB split."""
+
+    x_train: np.ndarray
+    x_test: np.ndarray
+    y_train: np.ndarray
+    y_test: np.ndarray
+    cols: List[str]
+    test_target_ts: pd.Series
+    test_persistence: np.ndarray
+    boundary: pd.Timestamp
+
+
+def _sequence_matrix(features: pd.DataFrame, cols: Sequence[str], config: TimeSeriesConfig) -> np.ndarray:
+    """Per-bin channel matrix. Missing side channels fall back to the input value at that bin."""
+    frame = features[list(cols)].astype(np.float64).copy()
+    fallback = features[config.target_col].astype(np.float64)
+    for col in cols:
+        if col != config.target_col:
+            frame[col] = frame[col].fillna(fallback)
+    return frame.to_numpy()
+
+
+def build_lstm_split(
+    features: pd.DataFrame,
+    config: TimeSeriesConfig,
+    *,
+    sequence_cols: Optional[Sequence[str]] = None,
+    train_fraction: Optional[float] = None,
+) -> LSTMSplit:
+    """Chronological train/test tensors built from ``timeseries_xgb.split_supervised``.
+
+    Each sample is the ``window_size`` bins ending at the forecast origin; the label is the raw
+    observation ``h`` steps later. Train and test rows (and the boundary) are identical to the
+    XGB split, so LSTM and XGB scores are comparable.
+    """
+    cols = list(sequence_cols) if sequence_cols is not None else sequence_feature_columns(features, config)
+    if config.target_col not in cols:
+        raise ValueError(f"target column {config.target_col} must be in sequence_cols")
+    split = split_supervised(features, config, train_fraction=train_fraction)
+    matrix = _sequence_matrix(features, cols, config)
+    w = config.window_size
+
+    def tensor(rows: pd.DataFrame) -> np.ndarray:
+        pos = features.index.get_indexer(pd.DatetimeIndex(rows["origin_ts"]))
+        if len(pos) == 0:
+            return np.empty((0, w, len(cols)))
+        return np.stack([matrix[p - w + 1 : p + 1] for p in pos])
+
+    return LSTMSplit(
+        x_train=tensor(split.train),
+        x_test=tensor(split.test),
+        y_train=split.train["y"].to_numpy(dtype=np.float64),
+        y_test=split.test["y"].to_numpy(dtype=np.float64),
+        cols=cols,
+        test_target_ts=split.test["target_ts"],
+        test_persistence=split.test["persistence"].to_numpy(dtype=np.float64),
+        boundary=split.boundary,
+    )
+
+
 def build_lstm_sequences(
     features: pd.DataFrame,
     config: TimeSeriesConfig,
@@ -82,32 +144,9 @@ def build_lstm_sequences(
     sequence_cols: Optional[Sequence[str]] = None,
     train_fraction: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str]]:
-    """
-    Chronological train/test tensors for sequence models.
-
-    Returns X (n, window_size, n_features), y in seconds, and column order used.
-    """
-    train_fraction = train_fraction if train_fraction is not None else config.train_fraction
-    cols = list(sequence_cols) if sequence_cols is not None else sequence_feature_columns(features, config)
-    if config.target_col not in cols:
-        raise ValueError(f"target column {config.target_col} must be in sequence_cols")
-    target_idx = cols.index(config.target_col)
-
-    matrix = features[cols].astype(np.float64).values
-    window = config.window_size
-    horizon = config.horizon_steps
-
-    x_list: List[np.ndarray] = []
-    y_list: List[float] = []
-    for end in range(window + horizon - 1, len(matrix)):
-        start = end - window - horizon + 1
-        x_list.append(matrix[start : start + window])
-        y_list.append(float(matrix[end, target_idx]))
-
-    x_all = np.stack(x_list, axis=0)
-    y_all = np.asarray(y_list, dtype=np.float64)
-    split = int(len(x_all) * train_fraction)
-    return x_all[:split], x_all[split:], y_all[:split], y_all[split:], cols
+    """Compatibility wrapper: (x_train, x_test, y_train, y_test, cols) from ``build_lstm_split``."""
+    s = build_lstm_split(features, config, sequence_cols=sequence_cols, train_fraction=train_fraction)
+    return s.x_train, s.x_test, s.y_train, s.y_test, s.cols
 
 
 def persistence_predictions_from_sequences(
@@ -115,7 +154,10 @@ def persistence_predictions_from_sequences(
     sequence_cols: Sequence[str],
     config: TimeSeriesConfig,
 ) -> np.ndarray:
-    """Persistence T-H: target value at the last timestep of each input window."""
+    """Model-input value at the origin (last timestep). Equals persistence when the slew cap is off.
+
+    The scored persistence baseline is ``LSTMSplit.test_persistence`` (last raw observation).
+    """
     target_idx = list(sequence_cols).index(config.target_col)
     return x[:, -1, target_idx].astype(np.float64)
 
@@ -301,9 +343,8 @@ def train_lstm(
 ) -> Tuple[Any, LSTMTrainResult]:
     """Train one architecture; returns (keras model, result bundle)."""
     train_config = train_config or LSTMTrainConfig()
-    x_train, x_test, y_train, y_test, cols = build_lstm_sequences(
-        features, ts_config, sequence_cols=sequence_cols
-    )
+    split = build_lstm_split(features, ts_config, sequence_cols=sequence_cols)
+    x_train, x_test, y_train, y_test = split.x_train, split.x_test, split.y_train, split.y_test
     x_fit, x_val, y_fit, y_val = _chronological_val_split(x_train, y_train)
     x_fit, x_val, x_test_s, _ = scale_sequences(x_fit, x_val, x_test)
 
@@ -327,8 +368,7 @@ def train_lstm(
     history = model.fit(x_fit, y_fit, **fit_kw)
     pred = model.predict(x_test_s, verbose=0)
     metrics = evaluate_predictions(y_test, pred)
-    persist = persistence_predictions_from_sequences(x_test, cols, ts_config)
-    persistence_metrics = evaluate_predictions(y_test, persist)
+    persistence_metrics = evaluate_predictions(y_test, split.test_persistence)
     hist = {k: [float(v) for v in vals] for k, vals in history.history.items()}
     result = LSTMTrainResult(
         config=train_config,
@@ -381,7 +421,7 @@ def tune_lstm_hyperparameters(
     best_metrics: Optional[Dict[str, float]] = None
     best_val_rmse = float("inf")
 
-    x_train, x_test, y_train, y_test, cols = build_lstm_sequences(features, ts_config)
+    x_train, x_test, y_train, y_test, _cols = build_lstm_sequences(features, ts_config)
     x_fit, x_val, y_fit, y_val = _chronological_val_split(x_train, y_train)
     x_fit_s, x_val_s, x_test_s, _ = scale_sequences(x_fit, x_val, x_test)
 
