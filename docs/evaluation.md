@@ -406,7 +406,34 @@ Caveats:
 
 Plots: `eval/runs/report/joined/camfc-mae-diff.png`, `joined/camfc-profiles.png`.
 
-#### 7b. Observed counts (pending)
+
+#### 7b. Could Layer A output replace the Distance Matrix data?
+
+**Not on current evidence.** The results support a narrower statement: *camera-derived queue counts follow the same daily cycle as Maps travel time, and a queue forecast learned from them improves the 30-minute forecast as much as a Maps-derived profile does.* They do not support "Layer A output is highly correlated with the Layer B target", and they do not make camera counts a substitute for Distance Matrix.
+
+Why the stronger claim is not supported:
+
+- **No paired observations.** No camera count and Maps reading have ever been observed for the same time (the table at the start of section 7), so no row-level correlation has been measured.
+- **What section 7a shows is shared shape, not measurement.** The camera forecast depends only on the calendar. Its gain equals a Maps-derived profile's, and it adds nothing on top of that profile. That is evidence that both series have the same daily cycle, not that a count tracks today's travel time.
+- **Averaged profiles overstate agreement.** Comparing hour-of-day means from different months hides the within-day variation that a substitute would have to follow. Any such comparison should not be quoted as a correlation between Layer A and Layer B.
+
+Why a substitute is a larger step than an input:
+
+- **Counts saturate.** Once the frame is full the count plateaus, while the queue, and the crossing time, keep growing beyond the frame.
+- **Counts do not show speed.** A full frame of moving traffic and a full frame of stopped traffic give similar counts. The `extent` measure helps a little. Speed would need tracking across frames, which are about 10 minutes apart.
+- **One camera sees one stretch.** Camera 2701 does not see the checkpoint queue or the Johor side.
+- **A substitute still needs a label.** Any count-to-duration model is calibrated against something, and today that is Maps. Without an independent ground truth, the realistic role for Layer A is a fallback or complement (for example during a Distance Matrix outage or to cap API cost), not a replacement.
+- **Visibility.** Fog, haze, heavy rain, night glare, lens obstruction, and stale or missing LTA frames make frames unusable. The dangerous case is a frame where nothing is visible: it scores as "0 vehicles" and would read as free-flowing traffic. The backfill records missing and stale frames as missing, but it cannot yet tell a foggy frame from an empty road; a visibility check is needed before any substitute use.
+
+**What would test it:** raw camera 2701 frames exist for 6–11 Sep in `traffic_images.metadata` and on data.gov.sg (about 144 per day), and they overlap the Maps label. Scoring them costs about 864 Roboflow calls (`backfill_camera_counts.py --mode full --start 2026-09-06 --end 2026-09-11`). With those counts, three checks become possible:
+
+1. Row-level correlation of count and `extent` with Maps travel time, per direction, with day-block intervals.
+2. A camera-only estimate of the current travel time (counts, extent and calendar), against a calendar-only baseline. This is the direct test of substitution.
+3. A visibility flag (image brightness or contrast, or no detections at a time when some are expected), so unusable frames are counted as missing and reported separately.
+
+Six days is short. Significance decisions will probably be "insufficient data", but the correlation and the camera-only error would show whether substitution is worth pursuing. The harness for these checks is not built yet.
+
+#### 7c. Observed counts (pending)
 
 Observed counts depend on the camera backfill ([handoff-camera-pilot.md](handoff-camera-pilot.md)). Once it has run, the "Maps + weather + camera" arm of section 2 answers the question with the same folds and the same significance rules. The test should be against `maps+mpfc`, not `maps`, so a time-of-day prior is not credited to the camera.
 
@@ -445,7 +472,7 @@ Weather CSVs: see [Causeway/README.md](../Causeway/README.md). Camera counts: `p
 
 ## Principal risks
 
-**Counts are not crossing duration.** Report Layer A and Layer B separately. A low count error does not imply a low MAE.
+**Counts are not crossing duration.** Report Layer A and Layer B separately. A low count error does not imply a low MAE. A shared daily cycle is not evidence that counts can replace the Distance Matrix label (section 7b); obscured frames (fog, haze, glare) look like empty roads.
 
 **The label is not an independent clock.** Report skill against persistence on the Maps series. Do not write "we beat Google" from that comparison.
 

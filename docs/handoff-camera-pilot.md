@@ -33,12 +33,17 @@ Windows PowerShell, from the repo root, Python 3.11.
    ..\.venv\Scripts\python.exe backfill_camera_counts.py --coverage
    ```
 5. **Record the Credit Usage page again** and compute credits per call = (after − before) / 50.
-6. **Decide the budget.** Calls affordable this cycle = remaining credits / credits per call. Leave headroom for demos of `swiftbackend`, which is public and draws on the same credits ([findings.md](findings.md#known-risk-public-swiftbackend-documented-not-changed)). Then run with a cap:
+6. **Optional first target: 6–11 Sep.** These frames overlap the Maps label and are the cheapest test of whether camera counts track travel time at all ([evaluation.md §7b](evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)). All bins, about 864 calls:
+   ```powershell
+   ..\.venv\Scripts\python.exe backfill_camera_counts.py --mode full --start 2026-09-06 --end 2026-09-11 --max-calls <budget>
+   ```
+   Note foggy, hazy or dark frames in the report-back table if you see them: they score as zero vehicles, not as missing.
+7. **Decide the budget.** Calls affordable this cycle = remaining credits / credits per call. Leave headroom for demos of `swiftbackend`, which is public and draws on the same credits ([findings.md](findings.md#known-risk-public-swiftbackend-documented-not-changed)). Then run with a cap:
    ```powershell
    ..\.venv\Scripts\python.exe backfill_camera_counts.py --max-calls <budget>
    ```
    Peak hours (06:00–10:59, 16:00–21:59 SGT) are scored first. Re-running resumes where it stopped, including after the monthly reset. Exit code 3 means a quota stop.
-7. **Clear the key:** `Remove-Item env:ROBOFLOW_API_KEY`.
+8. **Clear the key:** `Remove-Item env:ROBOFLOW_API_KEY`.
 
 ## What to report back
 

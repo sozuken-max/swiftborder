@@ -33,7 +33,7 @@ Use this for the proposal, the presentations and the final report (31 Oct 2026).
 | Say this | Do not say this | Until |
 | --- | --- | --- |
 | Woodlands only; cameras 2701 and 2702 are in scope | The live divider covers 2702 | 2702 geometry exists and is demoed |
-| Layer A measures detection; Layer B measures duration. A queue forecast learned from Layer A output lowers 30-min MAE significantly, as much as a Maps-derived daily profile does. Observed counts are untested (no overlap with the Maps window) | Live queue counts improve the forecast, or the camera adds information beyond the daily cycle | An observed-count row beats `maps+mpfc` with sufficient coverage in [evaluation.md](evaluation.md) |
+| Layer A measures detection; Layer B measures duration. Camera-derived queue counts follow the same daily cycle as Maps travel time, and a queue forecast learned from them lowers 30-min MAE significantly, as much as a Maps-derived daily profile does. Observed counts are untested (no overlap with the Maps window) | Layer A output is highly correlated with the Layer B target; camera counts can replace Distance Matrix data; live queue counts improve the forecast; the camera adds information beyond the daily cycle | An observed-count row beats `maps+mpfc` with sufficient coverage in [evaluation.md](evaluation.md) |
 | Maps durations log live; serve horizon is 30 minutes | A 24-hour forecast is running | A scored horizon beyond 60 minutes is in the results tables |
 | On 13–30 Sep, `xgb_h30` and the ensemble have lower 30-min MAE than persistence (significant, Holm) | `xgb_h30` or the ensemble is the production model | `model_registry` and `v_forecast_recent` are changed (an approved write) |
 | A daily-refit XGBoost (or a stack) would cut the served 30-min MAE by ~0.27 min on 13–30 Sep | The served forecast is significantly better than persistence; ensembling beats the best single model | A longer window shows it |
@@ -65,6 +65,8 @@ Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `r
 **Ensembles and hybrids.** The combiners converge on the best single model, because the BQML models are older and weaker than a daily refit on the same features. The useful hybrid in this project is a regression forecast followed by fuzzy level assignment, not a blend of regressors.
 
 **Registry.** The harness supports keeping persistence for `MY_TO_SG` over `lin_h30`, but `xgb_h30` would do better there, and a daily-refit XGBoost better still in both directions. A registry change, or a daily retrain job, is an approved write, not a harness output.
+
+**Camera as a substitute for Distance Matrix.** It is an attractive idea (no API cost, an independent sensor), but it is untested and faces structural limits: counts saturate when the frame is full, do not show speed, cover one stretch of road, and still need a label to calibrate against. Fog, haze and glare make frames look empty. The cheapest test is scoring the 6–11 Sep frames that overlap the Maps label (about 864 Roboflow calls), then a camera-only estimate of current travel time against a calendar baseline ([evaluation.md §7b](evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)).
 
 **Two clocks for vision.** A demo of `swiftbackend` shows a live frame. A chart of `Cam2701` shows detections from 13 Mar–22 Apr 2026. The report should say which one a figure is.
 

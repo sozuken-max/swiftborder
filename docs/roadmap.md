@@ -79,7 +79,9 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 **Done (Layer A forecast):** a queue forecast learned from the Mar–Apr detections is scored as a Layer B input; its gain equals a Maps daily profile ([evaluation.md §7a](evaluation.md#7a-layer-a-forecast-as-a-layer-b-input-evalcamera_forecastpy-scored-in-evaljoinedpy)).
 
-**Remaining:** observed camera 2701 counts for 5–30 Sep (no Layer A output overlaps the Maps window) via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves.
+**Remaining:** observed camera 2701 counts for 5–30 Sep (no Layer A output overlaps the Maps window) via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves against `maps+mpfc`.
+
+**Before any "camera instead of Distance Matrix" claim:** score the 6–11 Sep frames that overlap the Maps label, add a visibility flag (fog, haze, glare → missing, not zero), and build a camera-only estimate of current travel time scored against a calendar baseline ([evaluation.md §7b](evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)).
 
 Camera 2702 has detections and no congestion view. Add that view before claiming both cameras feed the forecast. The dividing line for a live 2702 demo is a geometry change in `camdetect`, separate from the historical table.
 
