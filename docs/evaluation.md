@@ -1,223 +1,251 @@
 # Evaluation and reasoning
 
-**Report section:** performance (methods now; numbers when a harness writes them)  
-**Source of truth for live resources:** GCP project `swiftborder`  
-**Live resources:** [inventory.md](inventory.md). **Rubric:** methods and metrics are graded. This file is the methods chapter. Result cells stay `pending` until a harness run is recorded here. Claims that depend on those cells belong in the final report, not in the proposal.
+**Report section:** performance (methods, reasoning, scored results).
+**Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
+**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T172339Z_offline-bqml-joined` (schema v2). That run was made from uncommitted code and promoted with `--allow-dirty`. Its `provenance.code_sha256` (`e735477a…`) matched the working tree at promotion; promotion refuses a run whose hash differs. Re-run and re-promote after the code is committed. Cells marked `pending` have no harness output yet.
 
-Diagrams: [images/eval-layer-a.png](images/eval-layer-a.png), [images/eval-layer-b.png](images/eval-layer-b.png).
+Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` are stale until regenerated ([diagrams/README.md](diagrams/README.md)).
 
 ---
 
 ## What would count as success
 
-The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes.
-
-The live serve path is narrower than the product sentence. `v_forecast_recent` emits a **30-minute** forecast of Google Maps `duration_in_traffic`. Training features are lags and time-of-day from that same series. Layer A counts vehicles in a camera frame. Those counts are occupancy, not crossing time.
-
-<= 15 min MAE and the 24-hour horizon stay **targets**.
+The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes. **Both stay targets.** The live serve path emits a **30-minute** forecast of Google Maps `duration_in_traffic` (`v_forecast_recent`). No model here forecasts beyond 60 minutes, and there is no independent crossing-time label to test the 15-minute target against.
 
 ---
 
 ## Reasoning
 
-### The series is Maps' current estimate
+### The label is Maps' current estimate
 
-`causeway.travel_times.duration_in_traffic_sec` is the Distance Matrix estimate at observation time. There is no second ground truth in the project (no probe-vehicle wait, no checkpoint timestamp). Every Layer B score is skill **on the Maps series**.
+`causeway.travel_times.duration_in_traffic_sec` is the Distance Matrix estimate at observation time. There is no second ground truth (no probe-vehicle wait, no checkpoint timestamp). Every Layer B score is skill **on the Maps series**: a model beats persistence when its error on a future Maps reading is lower than carrying the current reading forward. Say "skill over persistence on the Maps duration series", not "we beat Google".
 
-`v_training_set` defines:
+`v_training_set` defines `y_persistence` as the mean duration in the current 10-minute bin and `y_30` / `y_60` as the bin 3 / 6 bins later. The bin mean includes readings up to the bin end, so a row is treated as known at bin start + 10 minutes.
 
-- `y_persistence` as duration in the current 10-minute bin
-- `y_30` and `y_60` as the duration 3 and 6 bins later (`LEAD`)
+### Baselines
 
-A model beats persistence when its error on a **future** Maps reading is lower than carrying the current reading forward. That is a real forecast test.
-
-It is not, by itself, "we beat Google." Maps is the label generator. The project does not store a separate Google forecast at a 30-minute or 24-hour horizon. Wording for the report: **skill over persistence on the Maps duration series**. Reserve "beat Google" for a comparison against an independent wait measurement, which this dataset does not contain.
+| Baseline | Why |
+| --- | --- |
+| Persistence (`y_t` predicts `y_{t+h}`) | Naive forecast; required in every Layer B table |
+| **Maps typical** (`duration_sec` at the origin: Google's duration without traffic) | The "vs Maps" comparator the project can actually score. It is a weak baseline (no traffic), included so the report does not only compare against itself |
+| `lin_h30` | The model `v_forecast_recent` calls |
+| `xgb_h30` | Trained, not served |
+| Ensemble | Mean of two models; tests the hybrid/ensemble category |
 
 ### Layer A cannot carry the product metric
 
-A strong detector can still leave Layer B wrong, because a queue visible in one frame is not the time to cross. Camera refresh is about once a minute, so a frame cannot be turned into a flow count. Layer A is graded on detection quality (mAP, precision, recall, count-error, day versus night). Layer B is graded on duration error. The report should keep those tables separate.
+A strong detector can still leave Layer B wrong, because a queue visible in one frame is not the time to cross. Layer A is scored on detection (mAP, precision, recall, count error, day versus night). Layer B is scored on duration error. Keep the tables separate.
 
-### Weather and congestion are hypotheses, not current inputs
+### Significance
 
-`v_weather_features_10min` and `cam2701.v_congestion_index_10min` exist. `v_training_set` does not reference them. The protocol includes them because the proposal's claim is a multi-source forecast. Until they are joined, a results table that credits rain or queue depth is unsupported. The honest current feature set is Maps lags, rolling means, and time-of-day.
-
-### Significance (paired error differences)
-
-Point forecasts are **paired** on the same `(direction, time)` rows. For each observation, compute
-`d_i = |y_i - ŷ_i^A| - |y_i - ŷ_i^B|` in minutes (negative means A has lower absolute error than B).
+Point forecasts are **paired** on the same `(direction, time)` rows. For each row, `d_i = |y_i - ŷ_i^challenger| - |y_i - ŷ_i^reference|` in minutes (negative: challenger better). Code: [`eval/significance.py`](../eval/significance.py).
 
 | Method | Role |
 | --- | --- |
-| **Block bootstrap CI** on `mean(d)` | Primary test when bins are serially correlated (default block **6** × 10 min = 1 h for BQML; **12** × 5 min = 1 h for offline XGB). |
-| **Paired t-test** on `d_i` | Supplementary; treat as approximate when autocorrelation is strong. |
+| **Diebold–Mariano** on `d_i`, Newey–West (Bartlett) variance, Harvey–Leybourne–Newbold small-sample correction, Student-t(n−1) | Primary test, two-sided. HAC lag = the larger of h−1, ⌊4(n/100)^(2/9)⌋ and one day of samples (capped at n/3), because traffic loss differentials stay correlated for about a day; autocovariances stay within a direction |
+| **Moving-block bootstrap** CI for mean(`d`) | Overlapping blocks of one calendar day of samples, drawn within each direction (never across) |
+| **Holm** correction | Two-sided DM p-values, one family per harness family: family-wise error of any directional claim ≤ α = 0.05 |
+| Paired t-test | Supplementary only (assumes independent errors; reported, not used for decisions) |
 
-**Interpretation (α = 0.05):** call challenger **better** than reference when the bootstrap CI for `mean(d)` lies entirely below 0 (one-sided improvement on MAE). A lower aggregate MAE with a CI that crosses 0 is **not** significant.
+**Decision rule:** "challenger" only when the Holm-adjusted two-sided DM p < 0.05, the mean difference is negative, **and** the two-sided 95% bootstrap CI lies entirely below 0; "reference" by the mirror rule; **"insufficient data"** when a resample has fewer than 10 day-blocks (the CI is too coarse); otherwise "not significant". Very small p-values are reported as computed but should be read as "far below α", not as precise probabilities.
 
-**Code:** [`eval/significance.py`](../eval/significance.py). BQML harness: `python layer_b.py --significance`. Offline XGB: `holdout_significance_vs_persistence()` in [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py).
+References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybourne & Newbold (1997), *Int. J. Forecasting* 13(2); Newey & West (1987), *Econometrica* 55(3); Künsch (1989), *Ann. Statist.* 17(3); Holm (1979), *Scand. J. Statist.* 6(2).
 
-### Why these baselines
+### Techniques this evaluation is accountable for
 
-| Comparison | Why it is in the protocol |
-| --- | --- |
-| Persistence (`y_t` predicts `y_{t+h}`) | Naive forecast. Required in every Layer B table. |
-| `lin_h30` (linear regression) | The model `v_forecast_recent` actually calls. |
-| `xgb_h30` (boosted tree) | Trained on 12 Sep and not called by the serve view. The harness decides whether it earns the registry row. |
-| sklearn XGB (`eval/timeseries_xgb.py`) | Exploratory **60-minute** horizon on **one route**: `jb_to_woodlands` (**JB → SG only**; SG → JB not in the notebook). Not production; see [eval/notebooks/](../eval/notebooks/). |
-| Day / night, direction, time-of-day | The border is not one regime. A single MAE can hide a peak-hour failure. |
-
-`model_registry` has two rows (see [model_registry_reference.sql](../sql/bigquery/traffic_prediction/model_registry_reference.sql)). Training features and OPTIONS for `lin_h30` / `xgb_h30` are in [sql/bigquery/traffic_prediction/](../sql/bigquery/traffic_prediction/). The report should fill registry rows from harness scores (direction, serving model, reason, test window, date), not from preference alone.
-
----
-
-## Techniques this evaluation is accountable for
-
-The module asks for at least three of the categories below. Hybrid or ensemble is available as a fourth once the harness compares a blend. The serve view today selects `lin_h30` or persistence, so a blend is not yet demonstrated.
-
-| Category | Where it shows up | What the harness must report |
+| Category | Where it shows up | Scored here |
 | --- | --- | --- |
-| Supervised learning | Roboflow labels; regression of future Maps duration | Hold-out detection metrics; time-based hold-out for `y_30` / `y_60` |
-| Machine learning / deep learning | YOLO via Roboflow; BigQuery ML `lin_h30` and `xgb_h30` | Same hold-outs, one row per candidate |
-| Intelligent sensing | LTA frames to directional occupancy (camera 2701 geometry in `camdetect`) | Count-error and day/night, not crossing time |
-| Deep learning (LSTM) | [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py) — 60 min **JB→SG** only; `train_lstm.py` (`train` / `compare` / `tune`). Windows GPU: [`requirements-tf-gpu-windows.txt`](../eval/requirements-tf-gpu-windows.txt) + `check_tf_gpu.py` | Hold-out RMSE/MAE vs persistence; not in `report/` until promoted |
-| Hybrid / ensemble | Not in the serve path | Only if a blend is scored against the single models |
+| Supervised learning | Roboflow labels; regression of future Maps duration | Layer B tables below; Layer A pending |
+| Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
+| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`) | Layer A scorer ready; results pending |
+| Hybrid / ensemble | `ensemble_mean` of `lin_h30` + `xgb_h30`; ridge + XGBoost in the joined experiment | Layer B tables below |
+| Deep learning (LSTM) | [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py), same rows as offline XGB | Code and tests only; **not scored** in `report/` |
 
 ---
 
 ## Layer A — vision
 
-**Question:** On held-out frames, how well does a detector localize vehicles and recover directional counts?
+**Question:** on held-out frames, how well does a detector localise vehicles and recover directional counts?
 
-**Candidates:** pretrained baseline, fine-tuned YOLO, optional ResNet. Same hold-out for all three.
+**Procedure:** export a Roboflow dataset version (Public allows dataset export; weight download is Core), hold out the `test` split, and score each candidate with [`eval/layer_a.py`](../eval/layer_a.py): mAP@0.5, mAP@0.5:0.95 (101-point, class-aware), precision and recall at confidence 0.1, count error overall and per direction using the 2701 dividing line, split day (07:00–18:59 SGT) versus night. The scorer is tested on hand-computed fixtures (`eval/tests/test_layer_a.py`).
 
-**Procedure:**
+**Status:** labels live in Roboflow; `traffic_images.labels` has 0 rows; `traffic_images.metadata` is populated and is not a label table. **No export has been scored.**
 
-1. Export a Roboflow dataset version and hold out frames. Do not train on that hold-out.
-2. Score each candidate.
-3. Report the metrics below, split by day and night.
-4. Record scores before promoting a serving checkpoint. Roboflow remains the serve path. Public plan: dataset export after a version is allowed; manual weight download is Core.
+<!-- mermaid:eval-layer-a -->
+```mermaid
+flowchart LR
+  EXP["Held-out frames<br/>Roboflow export COCO or YOLO<br/>test split only"]
+  CAND["Candidate detectors<br/>pretrained YOLO<br/>fine-tuned YOLO<br/>optional ResNet"]
+  HARNESS["Scorer PRESENT<br/>eval/layer_a.py<br/>mAP50 mAP50-95 P R<br/>count error by direction<br/>day vs night"]
+  SERVE["Production serve today<br/>Roboflow via swiftbackend"]
+  EXP --> CAND --> HARNESS
+  HARNESS -.->|"record scores before promote"| SERVE
 
-**Status:** labels are in Roboflow. `traffic_images.labels` has 0 rows. `traffic_images.metadata` is populated and is not a label table. There is **no** checked-in Layer A scoring script; only the protocol and table below.
+  subgraph STATUS["Status"]
+    S1["labels in Roboflow"]
+    S2["traffic_images.labels empty in BQ"]
+    S3["scorer tested on fixtures<br/>results pending: no export scored"]
+    S4["Public export OK weights Core"]
+  end
 
-![Layer A evaluation](images/eval-layer-a.png)
+  HARNESS -.-> STATUS
+```
+<!-- /mermaid:eval-layer-a -->
 
-### Results table (fill from the harness)
+### Results table
 
-| Candidate | Split | mAP | Precision | Recall | Count-error | Day | Night |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Pretrained | hold-out | pending | pending | pending | pending | pending | pending |
-| Fine-tuned YOLO | hold-out | pending | pending | pending | pending | pending | pending |
-| ResNet (optional) | hold-out | pending | pending | pending | pending | pending | pending |
+| Candidate | Split | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | Count MAE | Day | Night |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Pretrained | test | pending | pending | pending | pending | pending | pending | pending |
+| Fine-tuned YOLO (served) | test | pending | pending | pending | pending | pending | pending | pending |
+| ResNet (optional) | test | pending | pending | pending | pending | pending | pending | pending |
 
 ---
 
 ## Layer B — crossing-time forecast
 
-**Question:** On a later window of the Maps series, how far is each forecast from the observed duration, compared with persistence?
+<!-- mermaid:eval-layer-b -->
+```mermaid
+flowchart LR
+  DATA["v_training_set<br/>Maps-only features<br/>label y_30"]
+  CAND["Candidates<br/>persistence lin_h30 xgb_h30<br/>ensemble mean"]
+  HAR["layer_b.py<br/>fixed window 13-30 Sep SGT<br/>after model training 12 Sep"]
+  SIG["significance.py<br/>DM-HAC + day-block CI<br/>Holm per family"]
+  REP["eval/runs/report/<br/>run.json schema v2"]
+  REG["model_registry<br/>per-direction serving_model<br/>not written by harness"]
+  SRV["Serve 30 min<br/>v_forecast_recent<br/>lin_h30 or persistence"]
+  DATA --> CAND --> HAR --> SIG --> REP
+  REG --> SRV
+  REP -.->|"evidence for promotion"| REG
 
-**Procedure:**
-
-1. Build 10-minute bins from `causeway.travel_times` (`status = OK`). Add weather and congestion only after those views are joined. Add holiday flags only after a calendar exists.
-2. Fit candidates on an earlier window. Always include persistence. Include `lin_h30` and `xgb_h30`.
-3. Score MAE and RMSE on the held-out window, by direction (`SG_TO_MY`, `MY_TO_SG`) and by time-of-day (morning peak, evening peak, other).
-4. Write the chosen serving model to `model_registry` with reason, test window, and date.
-5. Leave <= 15 min MAE as a target until a cell in the table supports it.
-
-**Status:** see [inventory.md](inventory.md) for live row counts and serve path. Production serve is **30 minutes** (`v_forecast_recent`: `lin_h30` or persistence). **Recorded runs (2026-09-26 SGT):** offline sklearn XGB on a cached full export of `causeway.travel_times`; BQML candidates via read-only `layer_b.py` on `v_training_set` (trailing 3-day hold-out).
-
-![Layer B evaluation](images/eval-layer-b.png)
-
-### Offline evaluation (full `travel_times` export)
-
-**Data:** canonical table `swiftborder.causeway.travel_times` — BigQuery download with CSV cache ([`eval/data/README.md`](../eval/data/README.md)). **Export size (this run):** 11,842 rows canonical; 5,921 rows after `jb_to_woodlands` filter. **Route scope:** **`jb_to_woodlands` only (JB → SG / inbound to Woodlands).** The teammate notebook does **not** train or backtest the **SG → JB** reverse route; do not quote offline XGB numbers as bidirectional. For **both** directions at **30 minutes**, use [`eval/layer_b.py`](../eval/layer_b.py) on `v_training_set`. **Code:** [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py), [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py), [`eval/notebooks/causeway_xgb_timeseries.ipynb`](../eval/notebooks/causeway_xgb_timeseries.ipynb).
-
-**Chronological 80/20 hold-out** on the 5-minute series (sklearn XGB, 60-minute horizon `H=12`):
-
-| Metric | Value | Notes |
-| --- | --- | --- |
-| Test RMSE | **3.24 min** | Same-scale naive persistence not in this row; see day backtest |
-| Dominant feature | `target_lag_1` (~70% importance) | Maps duration is highly persistent at 5-minute cadence |
-
-**Fixed-day backtest** (60 min ahead; mean RMSE/MAE in minutes over 22–24 Sep 2026):
-
-| Method | RMSE (min) mean | MAE (min) mean | vs persistence MAE (3.60) |
-| --- | --- | --- | --- |
-| Persistence T-60 | 5.35 | 3.60 | — |
-| Naive D-1/D-7 blend | 4.30 | 2.72 | Better |
-| **XGB (actual lag window)** | **3.57** | **2.18** | **Better** |
-| XGB (blend window) | 4.46 | 2.81 | Better |
-| XGB average of windows | 3.84 | 2.39 | Better |
-
-This path is **not** the live serve model (`v_forecast_recent` is 30-minute BQML). It shows that a richer lag + calendar model on the **same Maps series** can beat persistence at **60 minutes** on this export.
-
-### BQML serve-path harness (30 minutes; optional)
-
-[`eval/layer_b.py`](../eval/layer_b.py) scores **persistence**, `lin_h30`, and `xgb_h30` on a trailing hold-out of `traffic_prediction.v_training_set` via **read-only BigQuery** (both directions, peak slices). Use this to audit **production** models; it does not re-read the offline CSV.
-
-```bash
-cd eval && pip install -r requirements.txt && python layer_b.py --project swiftborder --holdout-days 3
+  subgraph OFF["Offline, in eval/"]
+    JX["joined.py<br/>rolling daily folds<br/>Maps vs +weather vs +camera"]
+    OX["timeseries_xgb.py<br/>60 min jb_to_woodlands"]
+  end
+  JX --> SIG
+  OX --> SIG
+  INTENT["24h horizon<br/>target, not served"] -.-> SRV
 ```
+<!-- /mermaid:eval-layer-b -->
 
-### Results table (production models at 30 min)
+### 1. Production models, 30 minutes (`eval/layer_b.py`)
 
-Headline rows use `layer_b.py --holdout-days 3` (n=866 per direction slice at `both` / `all`). Full peak and direction breakdown is in the harness stdout.
+**Window:** 2026-09-13 00:00 to 2026-09-30 23:50 SGT (forecast origin), both directions. `lin_h30` and `xgb_h30` were trained once on 2026-09-12 (06:15 / 06:19 UTC) with a CUSTOM split on 11–12 Sep; the harness asserts training precedes the window, so every scored row is out-of-sample. **Rows:** 5,184 (2,592 per direction), filtered to `after_gap = 0` and an exact +30-minute label (0 rows excluded). Read-only BigQuery.
 
-| Candidate | Horizon | Test window | MAE (min) | RMSE (min) | Persistence MAE | Direction | Time of day |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Persistence | 30 min | 2026-09-23 06:50 UTC .. 2026-09-26 06:50 UTC | 2.62 | 3.86 | — | both | all |
-| `lin_h30` | 30 min | same | 2.89 | 3.83 | 2.62 | both | all |
-| `xgb_h30` | 30 min | same | **2.51** | **3.76** | 2.62 | both | all |
-| Joined model (weather + congestion) | 30 min | pending | pending | pending | pending | both | all |
-| sklearn XGB (offline export) | **60 min** | full export; 80/20 + 22–24 Sep | **2.18** (XGB actual-window MAE mean) | **3.57** (RMSE mean) | 3.60 | `jb_to_woodlands` | all |
-| Any 24 h model | 24 h | pending | pending | pending | pending | both | all |
+| Candidate | Direction | n | MAE (min) | RMSE (min) |
+| --- | --- | --- | --- | --- |
+| Persistence | both | 5,184 | 2.640 | 3.894 |
+| `lin_h30` | both | 5,184 | 2.777 | 3.777 |
+| `xgb_h30` | both | 5,184 | 2.493 | 3.678 |
+| Ensemble (mean of both) | both | 5,184 | 2.459 | 3.526 |
+| Persistence | SG_TO_MY | 2,592 | 2.777 | 4.046 |
+| `lin_h30` | SG_TO_MY | 2,592 | 2.580 | 3.674 |
+| `xgb_h30` | SG_TO_MY | 2,592 | 2.653 | 3.883 |
+| Ensemble | SG_TO_MY | 2,592 | 2.468 | 3.611 |
+| Persistence | MY_TO_SG | 2,592 | 2.504 | 3.736 |
+| `lin_h30` | MY_TO_SG | 2,592 | 2.974 | 3.877 |
+| `xgb_h30` | MY_TO_SG | 2,592 | 2.333 | 3.461 |
+| Ensemble | MY_TO_SG | 2,592 | 2.450 | 3.440 |
 
-On this 3-day window, **`xgb_h30` beats persistence on combined MAE**; **`lin_h30` does not** (worse than persistence overall, though better on `SG_TO_MY` alone). Serve view still selects `lin_h30` or persistence — registry promotion should cite this window if `xgb_h30` is claimed. Do not mix **60 min** offline XGB and **30 min** BQML in one headline MAE.
+**Headline significance** (Holm over these 11 comparisons; mean AE difference in minutes, 95% day-block CI):
 
-### Comparison plots (per run)
+| Challenger | Reference | Direction | Mean diff | CI | Decision |
+| --- | --- | --- | --- | --- | --- |
+| `lin_h30` | Persistence | both | +0.136 | [+0.026, +0.259] | not significant (Holm p = 0.33) |
+| `xgb_h30` | Persistence | both | −0.147 | [−0.233, −0.061] | challenger |
+| Ensemble | Persistence | both | −0.182 | [−0.253, −0.095] | challenger |
+| `lin_h30` | Persistence | SG_TO_MY | −0.198 | [−0.337, −0.076] | challenger |
+| `xgb_h30` | Persistence | SG_TO_MY | −0.124 | [−0.268, +0.005] | not significant |
+| Ensemble | Persistence | SG_TO_MY | −0.309 | [−0.414, −0.225] | challenger |
+| `lin_h30` | Persistence | MY_TO_SG | +0.471 | [+0.310, +0.706] | reference (`lin_h30` worse) |
+| `xgb_h30` | Persistence | MY_TO_SG | −0.170 | [−0.258, −0.052] | challenger |
+| Ensemble | Persistence | MY_TO_SG | −0.054 | [−0.155, +0.111] | not significant |
+| Ensemble | `lin_h30` | both | −0.318 | [−0.378, −0.255] | challenger |
+| Ensemble | `xgb_h30` | both | −0.034 | [−0.109, +0.049] | not significant |
 
-Regenerate after a new harness run:
+**Slices** (a second Holm family of 63 comparisons, exploratory): `lin_h30` is significantly worse than persistence on `MY_TO_SG` in morning peak (+0.93), evening peak (+0.79), on weekdays and in daytime; `xgb_h30` is significantly better there in morning peak (−0.29), off-peak and on weekdays. On `SG_TO_MY`, `lin_h30` is significantly better in morning peak (−0.38), on weekdays and at night. Weekend slices have only 5 day-blocks per direction and are "insufficient data". The full table is in `run.json` (`bqml.significance`, `family = slices`).
+
+**What this supports:** the live registry choice (`SG_TO_MY` → `lin_h30`, `MY_TO_SG` → persistence) beats or matches persistence in each direction on this window. `xgb_h30` would improve `MY_TO_SG` over the served persistence, and the ensemble improves `SG_TO_MY` over persistence; neither is served. Registry changes are a separate, approved write.
+
+Plots: `eval/runs/report/bqml/mae-by-direction.png`, `bqml/mae-diff-ci.png` (forest plot coloured by decision).
+
+### 2. Joined features, 30 minutes (`eval/joined.py`)
+
+**Question:** do rainfall, the 2-hour forecast, or camera-2701 queue depth reduce 30-minute MAE beyond Maps-only features?
+
+**Data:** Maps bins rebuilt in pandas from a `travel_times` export by [`eval/features.py`](../eval/features.py). The run compared them with the live `v_training_set` on 7,172 rows (through 2026-09-30 15:20 UTC): every compared column matched, largest difference 1.4e-14 (`joined.dataset.parity_with_live_v_training_set`). Rainfall at station S210 (Woodlands Centre) and the Woodlands 2-hour forecast were fetched from data.gov.sg for 5–30 Sep ([`Causeway/`](../Causeway/README.md)). Every feature uses data available at or before the forecast origin: rainfall readings stamped at or before it, and the forecast most recently **acquired by data.gov.sg** (`update_timestamp`) whose valid period covers the target time. At run time the BigQuery weather tables ended on 31 Aug SGT and the camera tables on 18 Jul, so the experiment reads the CSVs directly (the same Woodlands rows were later appended to BigQuery; see [inventory.md](inventory.md)). The camera row is pending the backfill in [handoff-camera-pilot.md](handoff-camera-pilot.md).
+
+**Design:** rolling-origin daily folds, test days 13–30 Sep SGT (18 folds, 5,184 rows, same window as section 1). Each fold trains on rows whose label was observed before the test day. Models: ridge (median imputation + missing indicators) and XGBoost (seed 42); ensemble = their mean.
+
+| Candidate | Features | MAE (min) | RMSE (min) |
+| --- | --- | --- | --- |
+| Persistence | — | 2.640 | 3.894 |
+| Maps typical | — | 12.816 | 15.650 |
+| Ridge | Maps | 2.500 | 3.553 |
+| XGBoost | Maps | 2.275 | 3.311 |
+| Ensemble | Maps | 2.306 | 3.324 |
+| Ridge | Maps + weather | 2.511 | 3.573 |
+| XGBoost | Maps + weather | 2.277 | 3.314 |
+| Ensemble | Maps + weather | 2.313 | 3.337 |
+| any | Maps + weather + camera | pending | pending |
+
+Significance (Holm over 15 comparisons, both directions):
+
+| Challenger | Reference | Mean diff (both) | CI | Decision |
+| --- | --- | --- | --- | --- |
+| XGBoost [Maps] | Persistence | −0.366 | [−0.486, −0.246] | challenger (also in each direction) |
+| XGBoost [Maps] | Maps typical | −10.54 | [−11.52, −9.62] | challenger |
+| XGBoost [Maps + weather] | XGBoost [Maps] | +0.003 | [−0.015, +0.022] | not significant |
+| Ridge [Maps + weather] | Ridge [Maps] | +0.011 | [−0.002, +0.025] | not significant |
+| Ensemble [Maps + weather] | XGBoost [Maps + weather] | +0.036 | [−0.003, +0.075] | not significant (also on `MY_TO_SG`: +0.076, Holm p = 0.064) |
+
+**Finding:** on 13–30 Sep, weather features did **not** reduce 30-minute MAE (difference indistinguishable from zero for both models, and slightly positive). An XGBoost refit daily on Maps-only features beats persistence by about 0.37 min. The camera experiment is pending: no camera-2701 frames have been scored for this window yet (0% coverage; see the camera backfill in [plan-eval-integrity.md](plan-eval-integrity.md)). A camera row will be marked insufficient below 60% coverage of test rows.
+
+Plots: `eval/runs/report/joined/joined-mae-diff.png`, `joined/joined-mae-by-feature-set.png`.
+
+### 3. Offline 60 minutes, one route (`eval/timeseries_xgb.py`)
+
+**Scope:** `jb_to_woodlands` only (JB → SG). 5-minute grid, 60-minute horizon. Export of 14,366 rows (the cached export used by the run; 7,183 on this route), observed 2026-09-06 01:53 to 2026-10-01 00:30 SGT. Chronological 80/20 split on target time: training labels end before **2026-09-26 01:35 SGT**; 1,428 test rows. Inputs are causal (forward-fill up to 30 minutes, no bfill, slew cap on inputs only); labels are raw observations; `duration_sec` is taken at the origin; persistence is the last observation at or before the origin, 60 minutes before the label (up to 30 minutes older when bins are missing, the same input the model sees).
+
+| Candidate | Rows | MAE (min) | RMSE (min) |
+| --- | --- | --- | --- |
+| XGBoost (sklearn) | hold-out, 1,428 | 3.469 | 4.958 |
+| Persistence T-60 | hold-out, 1,428 | 4.677 | 6.386 |
+| Maps typical | hold-out, 1,428 | 14.715 | 16.880 |
+| XGBoost (actual lag window) | backtest 27–30 Sep, mean of days | 3.515 | 4.957 |
+| Persistence T-60 | backtest 27–30 Sep | 4.739 | 6.440 |
+| Naive D-1/D-7 blend | backtest 27–30 Sep | 4.641 | 6.297 |
+
+XGBoost vs persistence T-60 on the hold-out: −1.208 min, CI [−1.594, −0.660], two-sided DM p = 6.5e-07, but the hold-out spans only 5 day-blocks, so the decision is **insufficient data**. The point estimates and the four backtest days all favour XGBoost; a significance claim needs a longer hold-out.
+
+Backtest days are full days after the split. These numbers replace the 2026-09-26 offline results, which used the value 115 minutes before the target as "persistence T-60", a target-time Maps feature, smoothed labels, and backtest days inside the training period.
+
+Plots: `eval/runs/report/offline/backtest-mae.png`, `offline/holdout-sample.png`, `offline/holdout-mae-diff.png`.
+
+### Do not combine
+
+Do not put the 60-minute one-route numbers and the 30-minute two-direction numbers in one headline. The 30-minute production window (section 1) is the headline for the served system.
+
+---
+
+## Reproduce
 
 ```bash
 cd eval
 pip install -r requirements-dev.txt
-python generate_comparison_plots.py --bqml
-# or: python layer_b.py --holdout-days 3 --significance --plots
+python generate_comparison_plots.py --refresh-bq --bqml --window-end "2026-09-30 23:50" --joined
+python promote_report_run.py --check
+python promote_report_run.py <run_id>          # add --allow-dirty only with a recorded reason
 ```
 
-**Report citation target (committed):** [`eval/runs/report/`](../eval/runs/report/) — promote with `python eval/promote_report_run.py` when tables and prose match a harness run. Ephemeral runs live under **`eval/runs/<run_id>/`** (gitignored). Each run includes:
-
-- **`run.json`** — datasets, models, horizons, significance summaries, artifact paths
-- **`README.md`** — human-readable copy of the same metadata
-- **`offline/`** — 60 min sklearn figures (when generated)
-- **`bqml/`** — 30 min BQML figures (when generated)
-
-The latest local run id is in [`eval/runs/LATEST.json`](../eval/runs/LATEST.json). Layout and gitignore rules: [`eval/runs/README.md`](../eval/runs/README.md).
-
-| Path (under `eval/runs/report/`) | What it shows |
-| --- | --- |
-| `offline/backtest-mae.png` | Mean MAE by method across 22–24 Sep backtest days |
-| `offline/holdout-sample.png` | Tail of chronological hold-out: actual vs XGB vs persistence T-60 |
-| `offline/holdout-mae-diff.png` | Bootstrap CI for mean paired AE difference (offline hold-out) |
-| `bqml/mae-by-direction.png` | BQML candidates vs persistence MAE by direction |
-| `bqml/mae-diff-ci.png` | Paired MAE difference vs persistence for `lin_h30` / `xgb_h30` by direction |
-
-Dataset and model details for the committed snapshot: [`eval/runs/report/run.json`](../eval/runs/report/run.json).
-
-Protocol diagrams for methods (not scored runs) remain [`images/eval-layer-a.png`](images/eval-layer-a.png) and [`images/eval-layer-b.png`](images/eval-layer-b.png).
-
-**How to read the forest plots:** each point is `mean(|err_ch| - |err_ref|)` in minutes; error bars are block-bootstrap 95% CIs. Intervals entirely left of zero mean the challenger has **significantly** lower MAE than persistence at alpha = 0.05 (see [Significance](#significance-paired-error-differences)).
-
-### Plot analysis (2026-09-26 run)
-
-**Offline 60 minutes (JB → SG, `jb_to_woodlands` only).** The backtest bar chart ranks methods the same way as the table: **XGB (actual lag window)** has the lowest mean MAE (~2.2 min), ahead of naive D-1/D-7 blend and well ahead of persistence T-60 (~3.6 min). The hold-out time-series panel shows XGB tracking sharp moves in the Maps duration series more closely than persistence; gaps widen when the series turns after a plateau. On the full chronological hold-out (n = 1,138 supervised rows), the paired MAE-difference forest plot sits **far left of zero** (mean improvement ~3.7 min vs persistence T-60; bootstrap CI excludes zero). That is a much stronger separation than the 3-day BQML window — different horizon, route filter, and model — but it supports the same story: **rich lags beat naive carry-forward on this label**.
-
-**BQML 30 minutes (both directions, trailing 3 days).** The direction bar chart shows **regime split**: persistence MAE is lower on `MY_TO_SG` than on `SG_TO_MY`, and both learned models struggle most on **morning peak** rows (see harness tables). `xgb_h30` has the lowest combined MAE, but the forest plot shows the **combined** (`both`) CI for `xgb_h30` **crosses zero** — the headline MAE gain (~0.1 min) is not significant under block bootstrap. `lin_h30` is **significantly worse than persistence combined** (CI entirely right of zero) while **significantly better on `SG_TO_MY` alone** — a pattern visible in the per-direction bars and worth stating explicitly in the report (do not quote a single "both" MAE without the direction plot). `xgb_h30` is **significantly better than persistence on `MY_TO_SG`** in this window; on `SG_TO_MY` the point estimate favors `xgb_h30` but the CI still overlaps zero.
-
-**Reporting takeaway:** use the **bar charts** for magnitude and direction splits; use **forest plots** before claiming "model A beats persistence." The offline 60 min path can support a strong supervised-learning slide; the live 30 min BQML path supports **auditing serve candidates** with honest significance qualifiers.
+Weather CSVs: see [Causeway/README.md](../Causeway/README.md). Camera counts: `python backfill_camera_counts.py --dry-run` (billed against Roboflow credits; see [eval/README.md](../eval/README.md)). Run layout and the manifest schema: [eval/runs/README.md](../eval/runs/README.md).
 
 ---
 
-## Principal risk
+## Principal risks
 
-**Counts are not crossing duration.** Report Layer A and Layer B separately. A low count-error does not imply a low MAE.
+**Counts are not crossing duration.** Report Layer A and Layer B separately. A low count error does not imply a low MAE.
 
-**The label is not an independent clock.** Report skill against persistence on the Maps series. Do not write "we beat Google" from that comparison alone.
+**The label is not an independent clock.** Report skill against persistence on the Maps series. Do not write "we beat Google" from that comparison.
+
+**Short history.** The 30-minute window is 18 days; the offline hold-out is under 5 days. Day-block intervals are coarse and results can change with more data.

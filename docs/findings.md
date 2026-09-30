@@ -1,55 +1,65 @@
 # Findings and discussion
 
-**Report section:** findings and discussion  
-**Source of truth:** GCP project `swiftborder`  
-**GCP facts:** [inventory.md](inventory.md) (dated snapshot). **Methods:** [evaluation.md](evaluation.md). **Design:** [architecture.md](architecture.md).
-
-These are findings the query supports, plus **offline performance** on a full `travel_times` export (see [evaluation.md](evaluation.md)). Live GCP facts still come from [inventory.md](inventory.md).
+**Report section:** findings and discussion
+**Source of truth:** GCP project `swiftborder`
+**GCP facts:** [inventory.md](inventory.md) (dated copy, 2026-10-01). **Methods and scored results:** [evaluation.md](evaluation.md), from [`eval/runs/report/run.json`](../eval/runs/report/run.json). **Design:** [architecture.md](architecture.md).
 
 ---
 
-## Findings the query supports
+## Findings the query and the harness support
 
-1. **A duration label is accumulating.** `causeway.travel_times` is written every five minutes for both directions (see [inventory.md](inventory.md) for row counts and latest `observed_at`). That is enough history to start a 30-minute hold-out. It is not yet a long seasonal record.
-2. **The live forecast is 30 minutes of the Maps series, from Maps lags.** `v_training_set` does not join weather or camera congestion. `v_forecast_recent` publishes `forecast_30min_min` using persistence or `lin_h30`. `xgb_h30` is trained and unused by that view. `y_60` is computed and unused.
-3. **Vision and weather are historical side stores.** Camera detection tables last changed on 18 Jul. Weather and rainfall last changed on 3 Sep. Image metadata last changed on 13 Sep (368,905 rows). `traffic_images.labels` is empty; labelling is in Roboflow.
-4. **Detection in git and detection in BigQuery are different clocks.** `camdetect` on `main` is what Cloud Build deploys to `swiftbackend`. The BigQuery camera tables are not receiving those calls. Directional geometry in the repo covers camera 2701 only.
-5. **Layer B has scored numbers, significance tests, and committed comparison plots.** Report sources: [`eval/runs/report/`](../eval/runs/report/) (`run.json` + PNGs; promote via [`promote_report_run.py`](../eval/promote_report_run.py)). **Offline (60 min):** hold-out paired MAE gain vs persistence is **large and significant** (`offline/holdout-mae-diff.png`). **Serve audit (30 min):** `xgb_h30` leads on combined MAE but **does not** clear block-bootstrap significance on `both` (`bqml/mae-diff-ci.png`). Narrative: [evaluation.md](evaluation.md#plot-analysis-2026-09-26-run). Layer A still has no scoring script.
+1. **A duration label is accumulating.** `causeway.travel_times` is written every five minutes for both directions (14,368 rows in the live table at the 1 Oct query, [inventory.md](inventory.md); the report run used a 14,366-row export taken minutes earlier). That supports an 18-day out-of-sample window at 30 minutes. It is not a seasonal record.
+2. **The live forecast is 30 minutes of the Maps series, from Maps lags.** `v_training_set` joins neither weather nor camera congestion. `v_forecast_recent` publishes persistence or `lin_h30` per the registry. `xgb_h30` is trained and unused. `y_60` is computed and unused.
+3. **On 13–30 Sep the served choice holds up, and a better one exists.** Against persistence: `lin_h30` is better on `SG_TO_MY` (−0.20 min) and worse on `MY_TO_SG` (+0.47); combined it is not significantly different. That matches the registry (lin for `SG_TO_MY`, persistence for `MY_TO_SG`). `xgb_h30` is better than persistence on `MY_TO_SG` (−0.17) and combined (−0.15). The mean of `lin_h30` and `xgb_h30` is better than persistence combined (−0.18) and on `SG_TO_MY` (−0.31). All with Holm-adjusted DM tests and day-block CIs ([evaluation.md §1](evaluation.md#1-production-models-30-minutes-evallayer_bpy)).
+4. **Weather did not help.** Adding rainfall and the 2-hour forecast (joined by data.gov.sg acquisition time) to a daily-refit model changed MAE by +0.003 (XGBoost) and +0.011 (ridge) minutes, neither significant. A daily-refit Maps-only XGBoost beats persistence by 0.37 min ([evaluation.md §2](evaluation.md#2-joined-features-30-minutes-evaljoinedpy)).
+5. **Camera features are untested.** No camera-2701 frames have been scored for the Maps window; the BigQuery camera tables stop on 18 Jul. The joined experiment is ready to take them; the backfill is handed to the Roboflow key holder ([handoff-camera-pilot.md](handoff-camera-pilot.md)).
+6. **Offline 60-minute XGBoost has lower MAE than persistence on one route after the evaluation fixes**, by 1.2 min (hold-out MAE 3.47 vs 4.68; `jb_to_woodlands` only), but the hold-out spans only 5 days, so the significance decision is "insufficient data". The earlier offline "win" of 3.7 min was an artefact of a mislabelled persistence baseline, a target-time feature and smoothed labels.
+7. **Vision tables in BigQuery are historical side stores; weather is now current to 30 Sep.** Camera tables last changed 18 Jul; image metadata 13 Sep (368,905 rows); `traffic_images.labels` is empty (labelling is in Roboflow). `rainfall.rainfall` and `weatherforecast.weatherforecast` held data to 31 Aug SGT; on 1 Oct the Woodlands rows for 1–30 Sep were appended from the Causeway CSVs by [`Causeway/load_bigquery.py`](../Causeway/load_bigquery.py) (snapshots kept). No scheduled loader keeps them current.
+8. **Layer A has a scorer and no scores.** [`eval/layer_a.py`](../eval/layer_a.py) is tested on fixtures; no Roboflow export has been scored.
+
+## Known risk: public `swiftbackend` (documented, not changed)
+
+`swiftbackend` has the IAM invoker check disabled with an empty policy, ingress `all`, CORS `*` (`ALLOWED_ORIGIN` unset) and `ROBOFLOW_API_KEY` as a plain env var ([inventory.md](inventory.md)). Anyone who finds the URL can trigger billed Roboflow inference and exhaust the free-tier credits the camera backfill also needs. The team chose to document this rather than change the live service. Minimum mitigation when approved: set `ALLOWED_ORIGIN`, move the key to Secret Manager, require an invoker identity or an API key.
 
 ---
 
 ## Claims register
 
-Use this when drafting the proposal, the first presentation (30 Sep 2026), or the final report (31 Oct 2026). Weights are in [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md). Region layout is not a graded story.
+Use this for the proposal, the presentations and the final report (31 Oct 2026). Weights are in [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md).
 
 | Say this | Do not say this | Until |
 | --- | --- | --- |
 | Woodlands only; cameras 2701 and 2702 are in scope | The live divider covers 2702 | 2702 geometry exists and is demoed |
-| Layer A measures detection; Layer B measures duration | Queue counts predict crossing time | A joined model is scored in [evaluation.md](evaluation.md) |
-| Maps durations log live; serve horizon is 30 minutes | A 24-hour forecast is running | A scored horizon beyond 30 minutes is in the results table |
-| `lin_h30` or persistence is what the serve view can emit | `xgb_h30` is the production model, or we beat Google | The harness fills MAE/RMSE against persistence and a registry row cites that window |
-| Weather and congestion views exist | They feed the model | `v_training_set` references them |
+| Layer A measures detection; Layer B measures duration | Queue counts predict crossing time | A camera-feature row is scored with sufficient coverage in [evaluation.md](evaluation.md) |
+| Maps durations log live; serve horizon is 30 minutes | A 24-hour forecast is running | A scored horizon beyond 60 minutes is in the results tables |
+| On 13–30 Sep, `xgb_h30` and the ensemble have lower 30-min MAE than persistence (significant, Holm) | `xgb_h30` or the ensemble is the production model | `model_registry` and `v_forecast_recent` are changed (an approved write) |
+| Skill over persistence on the Maps duration series | We beat Google | An independent wait-time label exists and is scored |
+| <= 15 min MAE is the product target | <= 15 min MAE is achieved | An independent crossing-time label is scored against it (Maps-series MAE of 2–3 min does not test this target) |
+| Weather features did not reduce 30-min MAE on 13–30 Sep | Weather does not matter for the causeway | A longer window with rain events is scored |
+| Weather and congestion views exist in BigQuery | They feed the served model | `v_training_set` references them |
+| Offline 60-min XGBoost is **JB → SG only**; its MAE is ~1.2 min lower than persistence on a <5-day hold-out (too short for a significance claim) | Offline XGB significantly beats persistence, covers both directions, or is the served model | A hold-out of 10+ days, and a second route, are scored |
+| Layer A scorer exists and is tested on fixtures | We measured mAP / count error | A Roboflow export is scored in the Layer A table |
 | Roboflow Public can export a dataset version; weight download is Core | Empty `traffic_images.labels` means export is impossible | — |
-| Changes to `camdetect` runtime files on `main` run pytest then deploy `swiftbackend` | The whole repo has CI, or the forecast SQL/models deploy from git | Forecast views and BQML are committed and a separate pipeline exists |
+| `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend`; tests also run in GitHub Actions | Forecast SQL/models deploy from git | A separate pipeline exists |
+| `swiftbackend` is publicly callable (known risk) | The service is secured | The live service is changed and inventory re-checked |
 | Firebase Hosting is planned | The UI is live | Hosting exists in the project |
-| <= 15 min MAE is the product target | <= 15 min MAE is proven on an independent wait-time study | Offline Maps-series MAE ~2–4 min on some slices (see evaluation) |
-| Offline eval used a full `travel_times` CSV export | Layer B numbers came from live BigQuery at slide time | Methods section names data source (export vs `layer_b.py`) |
-| Offline sklearn XGB is **JB → SG** (`jb_to_woodlands`) only | Offline XGB covers **SG → JB** or both causeway directions | A second `route_id` is scored in [evaluation.md](evaluation.md) |
 
-Paste-ready status for a slide (refresh counts from [inventory.md](inventory.md) before the deck):
+Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `run.json` before the deck):
 
-> Maps durations log every five minutes (both directions in BQ). **Serve:** 30 minutes (`v_forecast_recent`: persistence or `lin_h30`). **30 min harness (26 Sep):** both `SG_TO_MY` / `MY_TO_SG` via `layer_b.py`. **Offline 60 min** — **JB → SG only** (`jb_to_woodlands`); SG → JB **not** in the notebook; XGB MAE **~2.2 min** vs persistence **~3.6 min** (22–24 Sep slice). Weather/congestion **not** joined. Layer A in Roboflow; no Layer A metric table. **24-hour** forecast remains a target.
+> Maps durations log every five minutes (both directions). **Serve:** 30 minutes (`v_forecast_recent`: persistence or `lin_h30`). **Out-of-sample 13–30 Sep:** persistence MAE 2.64 min; `xgb_h30` 2.49 and the `lin_h30`+`xgb_h30` ensemble 2.46, both significantly better than persistence (Holm). Weather features: no significant gain. Camera features and Layer A metrics: pending. **24-hour** horizon and <= 15 min MAE remain targets.
 
 ---
 
 ## Discussion points for the report
 
-**Horizon.** Three bins ahead is implemented (`y_30`). Six bins (`y_60`) is labelled and not served. Twenty-four hours is the product sentence and has no training target yet. The report should show the 30-minute result first, then say what extra history and features a longer horizon needs.
+**Horizon.** Three bins ahead is implemented and scored (`y_30`). Six bins (`y_60`) is labelled and not served. The only 60-minute result is the offline one-route model. Twenty-four hours has no training target yet.
 
-**Unused features.** Leaving rain and queue depth out is a limitation of the current model, not a finding that they do not matter. The next experiment is to join `v_weather_features_10min` and `cam2701.v_congestion_index_10min` and read the change in MAE. Camera 2702 still needs a congestion view before it can enter that join.
+**Unused features.** Weather gave no measurable gain on 18 days with few rain events; that is a limitation of the window, not evidence that rain never matters. Camera queue depth is the untested hypothesis most tied to the proposal.
 
-**Two clocks for vision.** A demo of `swiftbackend` shows a live frame. A chart of `Cam2701` shows history that stopped on 18 Jul. The report should say which one the figure is.
+**Registry.** The harness supports keeping persistence for `MY_TO_SG` over `lin_h30`, but `xgb_h30` would do better there. A registry change is an approved write, not a harness output.
 
-**Git is still behind ingest.** Maps fetcher, `causeway.travel_times` loader, and camera/weather table writers are not in the tree. **Views, BQML, and serve SQL are in** [sql/](../sql/) (exported 2026-09-26). You can recreate Layer B logic in a project that already has `travel_times`, but you cannot replay ingest from this repo alone.
+**Two clocks for vision.** A demo of `swiftbackend` shows a live frame. A chart of `Cam2701` shows history that stopped on 18 Jul. The report should say which one a figure is.
 
-**What to defer.** ResNet, Firebase, and holiday calendars can wait. A region-consolidation story does not move the grade. The order of work is in [roadmap.md](roadmap.md).
+**Git is still behind ingest.** The Maps fetcher, `travel_times` loader, and camera/weather table writers are not in the tree. Views, BQML and serve SQL are in [sql/](../sql/) and match the live definitions (2026-09-30). The evaluation harnesses, weather fetchers and camera backfill are in the repo.
+
+**What to defer.** ResNet, Firebase and holiday calendars can wait. The order of work is in [roadmap.md](roadmap.md) and [plan-eval-integrity.md](plan-eval-integrity.md).

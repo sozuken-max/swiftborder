@@ -1,0 +1,50 @@
+flowchart LR
+  subgraph LA["Layer A - Vision"]
+    LTA["LTA cameras"]
+    ROB["Roboflow<br/>Label - Train - Serve"]
+    GH["Cloud Build<br/>pytest then deploy<br/>camdetect to swiftbackend"]
+    SB["Cloud Run<br/>swiftbackend<br/>public: no invoker auth"]
+    JBF["Cloud Run Job<br/>traffic-backfill"]
+    TI["traffic_images<br/>metadata populated<br/>labels = 0 rows"]
+    C12["cam2701 / cam2702<br/>frozen - see inventory"]
+    ROB -->|"detect API"| SB
+    GH --> SB
+    LTA --> SB
+    JBF --> TI
+    SB -.->|"no live writes"| C12
+    VCI["v_congestion_index_10min"]
+  end
+
+  subgraph LB["Layer B - Forecasting"]
+    SCH["Cloud Scheduler<br/>Gmap-Woodlands */5"]
+    GFN["Cloud Run<br/>gmap-woodlands-fetcher"]
+    TT["causeway.travel_times<br/>LIVE - see inventory.md"]
+    LBTP["traffic_prediction<br/>Maps-only BQML<br/>lin_h30 + xgb_h30"]
+    GMAP["Google Maps<br/>Distance Matrix"]
+    SCH --> GFN
+    GMAP --> GFN
+    GFN --> TT
+    TT --> LBTP
+    WX["weather feature views"] -.->|"present, not joined"| LBTP
+  end
+
+  subgraph GCS["Object storage - data path"]
+    CAM["sg-lta-traffic-cameras"]
+    CACHE["swiftborder-frame-cache"]
+  end
+
+  subgraph SERVE["Serve today"]
+    VF["v_forecast_recent<br/>30 min - lin_h30 or persistence"]
+  end
+
+  subgraph EVAL["Evaluation - repo eval/, read-only"]
+    HAR["layer_b.py / joined.py / layer_a.py<br/>eval/runs/report/"]
+  end
+
+  LTA --> CAM
+  CAM --> JBF
+  CAM -.->|"writer not in git"| CACHE
+  VCI -.->|"not joined"| LBTP
+  LBTP --> VF
+  LBTP -.->|"ML.PREDICT read-only"| HAR
+  TT -.->|"export read-only"| HAR

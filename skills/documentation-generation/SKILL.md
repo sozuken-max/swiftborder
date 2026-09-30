@@ -1,8 +1,8 @@
-﻿---
+---
 name: documentation-generation
 description: >-
   Use when writing or revising SwiftBorder README, docs/, architecture or evaluation
-  diagrams, findings, or inventory snapshots â€” keep plan+status honesty and
+  diagrams, findings, or inventory snapshots — keep plan+status honesty and
   grading-aware framing.
 ---
 
@@ -18,7 +18,7 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 1. Read root [AGENTS.md](../../AGENTS.md) and [docs/grading/nus-iss-practice-module.md](../../docs/grading/nus-iss-practice-module.md).
 2. **Source of truth is GCP project `swiftborder`.** Query it with `bq` / `gcloud` (or Console) before writing row counts, joins, serve horizon, or deploy path. `docs/inventory.md` is only the last dated copy.
 3. When the query and the docs disagree, rewrite the docs to match the project.
-4. Diff existing `docs/` â€” update rather than fork dated copies when content supersedes.
+4. Diff existing `docs/` — update rather than fork dated copies when content supersedes.
 5. Record the query in `docs/inventory.md` with an observation time. Point the root README at inventory for dated GCP facts. Do not copy volatile GCP facts into `AGENTS.md`.
 6. Put dated **repo or deploy** changes in `CHANGELOG.md`. Keep READMEs and report docs long-lived (current behavior, not "what we changed on date X").
 
@@ -29,7 +29,7 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 | `README.md` | Short pitch, Layer A/B, links into docs and inventory |
 | `CHANGELOG.md` | Dated repo and deploy history |
 | `docs/architecture.md` | Report: tools, techniques, system design |
-| `docs/evaluation.md` | Report: performance methods, reasoning, empty result tables |
+| `docs/evaluation.md` | Report: performance methods, reasoning, scored result tables (numbers only from `eval/runs/report/run.json`) |
 | `docs/findings.md` | Report: findings, discussion, claims register |
 | `docs/roadmap.md` | Ordered remaining work. Not a second architecture. |
 | `docs/agent-deploy.md` | How to export a teammate's live deploy into git and Cloud Build. |
@@ -41,8 +41,10 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 
 ## Diagram rules
 
+**Topology source of truth:** `docs/diagrams/*.mmd`. Pair each file with a deck PNG under `docs/images/` (see [docs/diagrams/README.md](../../docs/diagrams/README.md)). After editing `.mmd`, run `python docs/diagrams/sync_mermaid.py`, then regen the PNG if layout or facts changed.
+
 For any PNG under `docs/images/`, **read [../diagram-image-generation/SKILL.md](../diagram-image-generation/SKILL.md) first** and follow it.
-That skill owns style lock, edit strategy, bucket strip, and acceptance checks.
+That skill owns style lock, edit strategy, bucket strip, and acceptance checks. PNG **topology** (nodes and edges) must match the `.mmd` file; do not invent nodes or joins absent from it. Annotation panels that carry no topology (Gaps/risks, Serve TODAY, Status) are allowed in deck PNGs if every statement in them matches inventory or `run.json`.
 
 Prose / Mermaid only (still apply here):
 

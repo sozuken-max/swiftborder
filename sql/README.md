@@ -19,9 +19,17 @@ Run in BigQuery (location **US** for `traffic_prediction`; **asia-southeast1** f
 | — | [bigquery/weatherforecast/v_weather_features_10min.sql](bigquery/weatherforecast/v_weather_features_10min.sql) | Not joined to training today |
 | — | [bigquery/cam2701/v_congestion_index_10min.sql](bigquery/cam2701/v_congestion_index_10min.sql) | Not joined to training today |
 
-**Not in this folder:** `causeway.travel_times` ingest (Maps fetcher), `traffic_images` backfill, rainfall/weather table loaders. See [docs/roadmap.md](../docs/roadmap.md).
+**Not in this folder:** `causeway.travel_times` ingest (Maps fetcher), `traffic_images` backfill. The weather tables are appended by [`Causeway/load_bigquery.py`](../Causeway/load_bigquery.py) (manual; adds nullable `weatherforecast.update_timestamp`). See [docs/roadmap.md](../docs/roadmap.md).
 
 ## Models vs evaluation
 
-- `bqml_*.sql` OPTIONS match `bq show --model` on 2026-09-26. The `is_val` dates mirror `model_registry.test_window` (`2026-09-11..12`). That is the **training-time** split, not the trailing hold-out in [`eval/layer_b.py`](../eval/layer_b.py).
-- Report numbers should come from `eval/layer_b.py` (skill on the Maps series), not from BigQuery training metrics in the SQL headers.
+- `bqml_*.sql` OPTIONS match `bq show --model` (2026-09-26; models unchanged on 2026-09-30: both created 2026-09-12, never retrained). The `is_val` dates mirror `model_registry.test_window` (`2026-09-11..12`). That is the **training-time** split.
+- Report numbers come from [`eval/layer_b.py`](../eval/layer_b.py) on the fixed out-of-sample window from 13 Sep, not from BigQuery training metrics in the SQL headers.
+- Live `v_training_set` and `v_forecast_recent` SQL matched these files on 2026-09-30. `eval/features.py` reproduces `v_training_set` in pandas with exact parity.
+
+## Known view issues (documented, not changed)
+
+- `v_training_set` computes lags and `y_30` / `y_60` by **row** offset. With no missing bins this equals a time offset (0 exceptions on 2026-09-30); `eval/layer_b.py` additionally checks that the label is exactly 30 minutes ahead.
+- `v_weather_features_10min` bins forecasts by **issue** time, not valid period, and uses `ANY_VALUE(forecast)`.
+- `v_congestion_index_10min` builds per-frame counts from detections only, so frames with zero vehicles are dropped and `vis_count` is biased upward.
+- The weather and camera views are in `asia-southeast1`; `traffic_prediction` is in `US`, so they cannot be joined in one query. The joined experiment is offline in `eval/`.

@@ -1,0 +1,19 @@
+flowchart LR
+  DATA["v_training_set<br/>Maps-only features<br/>label y_30"]
+  CAND["Candidates<br/>persistence lin_h30 xgb_h30<br/>ensemble mean"]
+  HAR["layer_b.py<br/>fixed window 13-30 Sep SGT<br/>after model training 12 Sep"]
+  SIG["significance.py<br/>DM-HAC + day-block CI<br/>Holm per family"]
+  REP["eval/runs/report/<br/>run.json schema v2"]
+  REG["model_registry<br/>per-direction serving_model<br/>not written by harness"]
+  SRV["Serve 30 min<br/>v_forecast_recent<br/>lin_h30 or persistence"]
+  DATA --> CAND --> HAR --> SIG --> REP
+  REG --> SRV
+  REP -.->|"evidence for promotion"| REG
+
+  subgraph OFF["Offline, in eval/"]
+    JX["joined.py<br/>rolling daily folds<br/>Maps vs +weather vs +camera"]
+    OX["timeseries_xgb.py<br/>60 min jb_to_woodlands"]
+  end
+  JX --> SIG
+  OX --> SIG
+  INTENT["24h horizon<br/>target, not served"] -.-> SRV

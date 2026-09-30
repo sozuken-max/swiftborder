@@ -13,9 +13,10 @@ Read [AGENTS.md](../AGENTS.md) first. Do not invent services, env vars, or metri
 | Path | What it is | What it is not |
 | --- | --- | --- |
 | `camdetect/main.py` | HTTP function `detect`. Resolves an LTA frame, calls a Roboflow workflow, counts vehicles against a dividing line. | A BigQuery writer. It does not insert into `Cam2701` or `Cam2702`. |
-| `camdetect/requirements.txt` | `functions-framework`, `requests`, `Pillow`, optional `backports.zoneinfo` on Python 3.8 | No `Dockerfile` and no `cloudbuild.yaml` in git. |
-| `Causeway/*.py` | One-shot CSV downloads of NEA rainfall and the 2-hour forecast from data.gov.sg. Output goes to `Causeway/data/`, which is gitignored. | The BigQuery loaders for `rainfall.rainfall` and `weatherforecast.weatherforecast`. Those tables are not written by these scripts. |
-| `eval/layer_b.py` | Read-only Layer B hold-out scorer (persistence, `lin_h30`, `xgb_h30` at 30 min). | A deploy path. It does not change Cloud Run or write `model_registry` by default. |
+| `camdetect/requirements.txt` | Pinned `functions-framework`, `requests`, `Pillow` (+ `backports.zoneinfo` on Python 3.8). A push of this file or `main.py` to `main` redeploys `swiftbackend`. | No `Dockerfile` and no `cloudbuild.yaml` in git. |
+| `Causeway/*.py` | Day-by-day CSV history of NEA rainfall and the 2-hour forecast from data.gov.sg (complete days only), and `load_bigquery.py`, a manual append-only loader into `rainfall.rainfall` / `weatherforecast.weatherforecast`. | A scheduled pipeline. The original loader is not in git; nothing runs these on a schedule. |
+| `eval/` | Read-only harnesses: `layer_b.py` (30 min production models), `joined.py`, `layer_a.py`, offline XGB/LSTM, significance, report manifest. | A deploy path. Nothing writes to Cloud Run, BigQuery or `model_registry`. |
+| `.github/workflows/tests.yml` | Fast test suites on push and PR. | A deploy path; it has no secrets. |
 | `docs/` | Report drafts, inventory, roadmap | The Maps fetcher, the backfill job, or the forecast SQL |
 
 Direction names in `camdetect` are `SG-MY` and `MY-SG`. The BigQuery congestion view maps `to_JB` / `to_Woodlands` onto `SG_TO_MY` / `MY_TO_SG`. Any join has to translate those names. Do not assume they already match.
@@ -161,4 +162,8 @@ These do not require the missing fetcher source.
 ## Code that is still missing after a successful export
 
 - Maps ingest and table loaders. View and BQML SQL lives in [sql/](../sql/); re-export with [sql/bigquery/EXPORT.md](../sql/bigquery/EXPORT.md).
-- Published Layer B numbers in [evaluation.md](evaluation.md). The scorer is [`eval/layer_b.py`](../eval/layer_b.py); run it manually. CI should not run paid BigQuery scoring on every push.
+- Layer B numbers are published in [evaluation.md](evaluation.md) from [`eval/runs/report/`](../eval/runs/report/). The scorers run manually; CI (GitHub Actions) runs tests only and never queries BigQuery.
+
+## gcloud on a Windows dev box
+
+If `gcloud` or `bq` fail with `No module named 'six'` or `No module named 'bootstrapping'`, stale `CLOUDSDK_ROOT_DIR`, `CLOUDSDK_PYTHON_ARGS` or `CLOUDSDK_GSUTIL_PYTHON` variables point at a broken SDK copy. Clear them for the session and call the working install directly (see [inventory.md](inventory.md#querying-this-project-from-a-windows-dev-box)). Always pass `--project swiftborder`.
