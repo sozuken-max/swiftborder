@@ -2,7 +2,7 @@
 
 **Report section:** performance (methods, reasoning, scored results).
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
-**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T172339Z_offline-bqml-joined` (schema v2). That run was made from uncommitted code and promoted with `--allow-dirty`. Its `provenance.code_sha256` (`e735477a…`) matched the working tree at promotion; promotion refuses a run whose hash differs. Re-run and re-promote after the code is committed. Cells marked `pending` have no harness output yet.
+**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T175104Z_offline-bqml-joined` (schema v2). It was made from committed code (`provenance.git_sha` `15f094b`, clean tree, `code_sha256` `e735477a…`); promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet.
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` are stale until regenerated ([diagrams/README.md](diagrams/README.md)).
 

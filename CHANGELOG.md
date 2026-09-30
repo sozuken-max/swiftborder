@@ -31,7 +31,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 - `eval/layer_b.py` rewritten: fixed window from 2026-09-13 SGT, model-training-time check, gap filters, direction × time-of-day / day type / day-night slices, `ensemble_mean`, headline and slice Holm families. `--holdout-days` removed.
 - `eval/features.py` (causal joined feature table, parity with live `v_training_set`), `eval/joined.py` (rolling-origin joined experiment, Maps-typical baseline), `eval/layer_a.py` (+ fixtures), `eval/backfill_camera_counts.py` (budgeted, resumable, stops on quota).
 - Run manifest schema v2 (`run_artifacts.py`: provenance, data hashes, windows, metrics, significance, validation); `promote_report_run.py` validates and refuses dirty runs unless `--allow-dirty`.
-- `eval/runs/report/` re-promoted from `20260930T172339Z_offline-bqml-joined` (offline + BQML fixed window + joined, with parity against the live view), made from uncommitted code (`--allow-dirty`, recorded; code hash matched the tree).
+- `eval/runs/report/` re-promoted from `20260930T175104Z_offline-bqml-joined` (offline + BQML fixed window + joined, with parity against the live view), made from committed code `15f094b` on a clean tree.
 
 ### BigQuery (2026-10-01, requested write)
 
