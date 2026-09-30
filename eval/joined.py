@@ -10,7 +10,11 @@ as the BQML audit), models are refit on rows whose label is fully observed befor
 direction indicator.
 
 Feature sets: ``maps`` (v_training_set columns), ``maps+weather`` (+ rain sums, forecast flags),
-``maps+weather+camera`` (+ camera count, extent, age).
+``maps+weather+camera`` (+ camera count, extent, age). **Layer A forecast arm:** ``maps+camfc`` adds
+the camera-2701 queue forecast (``camera_forecast``: a profile learned from the Mar-Apr detections,
+known in advance for every row) and ``maps+mpfc`` adds the same estimator fitted on each fold's Maps
+rows (control: is any gain camera information, or just time-of-day shape?). These comparisons form a
+second Holm family (``camfc``) so the weather / camera family is unchanged.
 
 Candidates: persistence (``y_persistence``); **Maps typical** (Google's no-traffic duration for the
 same bin, the "vs Maps" baseline); ridge regression (median imputation + missing indicators);
@@ -33,6 +37,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+import camera_forecast as cf
 import features as fx
 
 SGT = "Asia/Singapore"
@@ -45,6 +50,9 @@ FEATURE_SETS: Dict[str, List[str]] = {
     "maps": fx.MAPS_FEATURES + ["is_my_to_sg"],
     "maps+weather": fx.MAPS_FEATURES + ["is_my_to_sg"] + fx.WEATHER_FEATURES,
     "maps+weather+camera": fx.MAPS_FEATURES + ["is_my_to_sg"] + fx.WEATHER_FEATURES + fx.CAMERA_FEATURES,
+    "maps+camfc": fx.MAPS_FEATURES + ["is_my_to_sg"] + cf.CAMFC_FEATURES,
+    "maps+mpfc": fx.MAPS_FEATURES + ["is_my_to_sg"] + cf.MP_FEATURES,
+    "maps+mpfc+camfc": fx.MAPS_FEATURES + ["is_my_to_sg"] + cf.MP_FEATURES + cf.CAMFC_FEATURES,
 }
 BASELINES = ("persistence", "maps_typical")
 MODELS = ("ridge", "xgb", "ensemble")
@@ -99,19 +107,34 @@ def predict_fold(train: pd.DataFrame, test: pd.DataFrame, cols: Sequence[str]) -
     return {"ridge": p_ridge, "xgb": p_xgb, "ensemble": (p_ridge + p_xgb) / 2.0}
 
 
-def run_folds(frame: pd.DataFrame, start: str = DEFAULT_TEST_START, end: str = DEFAULT_TEST_END, min_train_rows: int = 500) -> pd.DataFrame:
-    """Out-of-fold predictions for every test row: columns ``<model>[<feature set>]`` plus baselines."""
+def run_folds(
+    frame: pd.DataFrame,
+    start: str = DEFAULT_TEST_START,
+    end: str = DEFAULT_TEST_END,
+    min_train_rows: int = 500,
+    mp_harmonics: int = 4,
+) -> pd.DataFrame:
+    """Out-of-fold predictions for every test row: columns ``<model>[<feature set>]`` plus baselines.
+
+    Feature sets whose columns are absent are skipped. ``mp_*`` (Maps-profile control) is fitted on
+    each fold's training rows only.
+    """
     rows = []
     for day in fold_days(frame, start, end):
         train, test = fold_split(frame, day)
         if len(train) < min_train_rows or test.empty:
             continue
+        mp = cf.fold_maps_profile(train, mp_harmonics)
+        train = cf.add_profile_features(train, mp, "mp")
+        test = cf.add_profile_features(test, mp, "mp")
         out = test[["direction", "bin_ts", "date_sgt", "y_30", "y_persistence", "maps_typical_min", "cam_count"]].copy()
         out["train_rows"] = len(train)
         out["train_label_end"] = (train["bin_ts"] + LABEL_LAG).max()
         for fs, cols in FEATURE_SETS.items():
             if fs.endswith("camera") and train["cam_count"].notna().sum() == 0:
                 continue  # no camera history yet: the model would ignore the columns
+            if any(c not in train.columns for c in cols):
+                continue
             for model, pred in predict_fold(train, test, cols).items():
                 out[f"{model}[{fs}]"] = pred
         rows.append(out)
@@ -164,15 +187,29 @@ def comparison_specs(oof: pd.DataFrame) -> List[Tuple[str, str, str]]:
     return specs
 
 
-def significance(oof: pd.DataFrame, *, alpha: float = 0.05, n_bootstrap: int = 4999) -> Tuple[list, Dict[str, Any]]:
+def camfc_specs(oof: pd.DataFrame) -> List[Tuple[str, str, str]]:
+    """Layer A forecast family: camera prior vs Maps-only, and vs the Maps-profile control."""
+    specs = []
+    for model in ("xgb", "ridge"):
+        if f"{model}[maps+camfc]" in oof.columns:
+            specs.append((f"{model}[maps+camfc]", f"{model}[maps]", "all"))
+            if f"{model}[maps+mpfc]" in oof.columns:
+                specs.append((f"{model}[maps+camfc]", f"{model}[maps+mpfc]", "all"))
+            if f"{model}[maps+mpfc+camfc]" in oof.columns:
+                specs.append((f"{model}[maps+mpfc+camfc]", f"{model}[maps+mpfc]", "all"))  # camera beyond the Maps prior
+    return specs
+
+
+def significance(oof: pd.DataFrame, *, alpha: float = 0.05, n_bootstrap: int = 4999, specs=None) -> Tuple[list, Dict[str, Any]]:
     from significance import apply_holm, compare_absolute_errors
 
+    specs = comparison_specs(oof) if specs is None else specs
     comps, notes = [], {}
     coverage = {}
     for direction in DIRECTIONS:
         sub = oof if direction == "both" else oof[oof["direction"] == direction]
         coverage[direction] = float(sub["cam_count"].notna().mean()) if len(sub) else 0.0
-        for ch, ref, subset in comparison_specs(oof):
+        for ch, ref, subset in specs:
             s = sub[sub["cam_count"].notna()] if subset == "camera-covered" else sub
             s = s[s[ch].notna() & s[ref].notna()]
             if len(s) < 3 or s["date_sgt"].nunique() < 2:
@@ -208,13 +245,19 @@ def joined_component(
     from significance import format_comparison_table
 
     data = scorable(frame)
-    oof = run_folds(data, start, end)
+    cam_info = (inputs or {}).get("camera_forecast") or {}
+    oof = run_folds(data, start, end, mp_harmonics=int(cam_info.get("harmonics", 4)))
     if keep is not None:
         keep["oof"] = oof
     candidates = list(BASELINES) + [c for c in oof.columns if "[" in c]
     metrics = _metrics(oof, candidates)
     comps, notes = significance(oof, alpha=alpha, n_bootstrap=n_bootstrap)
     print(format_comparison_table(comps))
+    camfc_comps, _ = significance(oof, alpha=alpha, n_bootstrap=n_bootstrap, specs=camfc_specs(oof))
+    if camfc_comps:
+        print("Layer A forecast family (Holm within family):")
+        print(format_comparison_table(camfc_comps))
+    metrics += regime_metrics(oof, [c for c in ("persistence", "xgb[maps]", "xgb[maps+camfc]", "xgb[maps+mpfc]", "xgb[maps+mpfc+camfc]") if c in oof.columns])
     print("camera coverage of test rows:", notes["camera_coverage"])
 
     out = subdir(run_dir, "joined")
@@ -222,6 +265,10 @@ def joined_component(
         plot_mae_diff_forest(comps, out / "joined-mae-diff.png", title="Joined features, 30 min: paired MAE difference (day-block CI; Holm)"),
         _plot_mae_bars(metrics, out / "joined-mae-by-feature-set.png"),
     ]
+    if camfc_comps:
+        written.append(plot_mae_diff_forest(camfc_comps, out / "camfc-mae-diff.png", title="Layer A queue forecast as input, 30 min: paired MAE difference (Holm within family)"))
+    if cam_info.get("curves"):
+        written.append(cf.plot_profiles(cam_info["curves"], None, out / "camfc-profiles.png"))
     sig = []
     for c in comps:
         d = c.to_dict()
@@ -230,6 +277,8 @@ def joined_component(
         if status:
             d["camera_status"] = status
         sig.append(d)
+    for c in camfc_comps:
+        sig.append(dict(c.to_dict(), family="camfc"))
     days = sorted(oof["date_sgt"].unique())
     meta = {
         "dataset": {
@@ -254,6 +303,8 @@ def joined_component(
             "ridge (median impute + indicators, standardised, alpha=1)",
             f"xgb (XGBRegressor, seed {SEED})",
             "ensemble = mean(ridge, xgb)",
+            "camfc: camera-2701 queue forecast from Mar-Apr detections (camera_forecast.py)",
+            "mpfc: same estimator fitted on each fold's Maps rows (control)",
         ],
         "feature_sets": FEATURE_SETS,
         "horizon_minutes": 30,
@@ -262,6 +313,25 @@ def joined_component(
         "artifacts": [artifact_relpath(run_dir, p) for p in written],
     }
     return written, meta
+
+
+REGIME_THRESHOLD_MIN = 5.0
+
+
+def regime_metrics(oof: pd.DataFrame, candidates: Sequence[str], threshold: float = REGIME_THRESHOLD_MIN) -> List[dict]:
+    """MAE by observed 30-min change (rising / steady / falling; uses the label, diagnostic only)."""
+    from run_artifacts import metric_row
+
+    change = oof["y_30"] - oof["y_persistence"]
+    regime = np.where(change > threshold, "rising", np.where(change < -threshold, "falling", "steady"))
+    out = []
+    for name in ("rising", "steady", "falling"):
+        s = oof[regime == name]
+        for c in candidates:
+            err = (s["y_30"] - s[c]).dropna()
+            if len(err):
+                out.append(metric_row(c, f"both/regime={name}", int(len(err)), float(err.abs().mean()), float(np.sqrt((err**2).mean())), direction="both"))
+    return out
 
 
 def _plot_mae_bars(metrics: List[dict], path: Path) -> Path:
@@ -297,7 +367,14 @@ def load_inputs(refresh_bq: bool = False) -> Tuple[pd.DataFrame, Dict[str, Any]]
     info: Dict[str, Any] = {"travel_times": file_fingerprint(fx.TT_CACHE), "refreshed_from_bq": refresh_bq}
     for name, p in (("rainfall_S210", fx.RAIN_CSV), ("forecast_woodlands", fx.FORECAST_CSV), ("camera_2701", fx.CAMERA_CSV)):
         info[name] = file_fingerprint(p) if p.exists() else None
-    return fx.build(tt, rain, fc, cam), info
+    frame = fx.build(tt, rain, fc, cam)
+    history = cf.fetch_history(cf.HISTORY_CSV, refresh=False)  # read-only pull once, then cached
+    profile, cam_info = cf.fit_camera_profile(history)
+    cam_info["history"] = file_fingerprint(cf.HISTORY_CSV)
+    cam_info["source"] = f"swiftborder.{cf.HISTORY_VIEW}"
+    cam_info["curves"] = cf.profile_curves(profile)
+    info["camera_forecast"] = cam_info
+    return cf.add_profile_features(frame, profile, "camfc"), info
 
 
 def main(argv: Optional[List[str]] = None) -> int:

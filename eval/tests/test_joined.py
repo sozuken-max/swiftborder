@@ -101,3 +101,31 @@ def test_component_is_valid_v2(tmp_path):
     assert validate_manifest(manifest, run_dir) == []
     assert meta["window"]["folds"] == 4
     assert all(p.is_file() for p in paths)
+
+
+def test_camera_forecast_arm_is_scored_in_its_own_family():
+    import camera_forecast as cf
+
+    f = _frame(days=8)
+    # a known-in-advance prior that anticipates the sine: the expected change over the next 30 min
+    tod = (f["bin_ts"].dt.tz_convert("Asia/Singapore").dt.hour * 6 + f["bin_ts"].dt.tz_convert("Asia/Singapore").dt.minute // 10).to_numpy()
+    f["camfc_now"] = 25 + 5 * np.sin(tod * 2 * np.pi / 144)
+    f["camfc_30"] = 25 + 5 * np.sin((tod + 3) * 2 * np.pi / 144)
+    f["camfc_delta"] = f["camfc_30"] - f["camfc_now"]
+    data = jx.scorable(f)
+    oof = jx.run_folds(data, "2026-09-10", "2026-09-13", min_train_rows=200, mp_harmonics=2)
+    for c in ("xgb[maps+camfc]", "xgb[maps+mpfc]", "xgb[maps+mpfc+camfc]"):
+        assert c in oof.columns
+    specs = jx.camfc_specs(oof)
+    assert ("xgb[maps+camfc]", "xgb[maps]", "all") in specs
+    assert ("xgb[maps+mpfc+camfc]", "xgb[maps+mpfc]", "all") in specs
+    base = {s[0] for s in jx.comparison_specs(oof)}
+    assert not any("camfc" in s for s in base)  # the weather / camera family is unchanged
+    reg = jx.regime_metrics(oof, ["xgb[maps]"])
+    assert {m["slice"] for m in reg} <= {"both/regime=rising", "both/regime=steady", "both/regime=falling"}
+    assert cf.MP_FEATURES[0] in jx.FEATURE_SETS["maps+mpfc"]
+
+
+def test_feature_sets_with_missing_columns_are_skipped():
+    oof = jx.run_folds(jx.scorable(_frame(days=6)), "2026-09-09", "2026-09-10", min_train_rows=200)
+    assert "xgb[maps+camfc]" not in oof.columns and "xgb[maps+mpfc]" in oof.columns
