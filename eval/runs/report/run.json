@@ -9,10 +9,10 @@
     "ensemble"
   ],
   "provenance": {
-    "git_sha": "b89bc4ede2219e64fd28e036f12c26ae49e6280b",
+    "git_sha": "eb435ddb71f31ee958489201d767aaab0931d16c",
     "git_branch": "eval-integrity-overhaul",
     "git_dirty": false,
-    "code_sha256": "47ba364c8c28851cd07b538418ed469aaedf958843fa3cff1405dd039cda91cc",
+    "code_sha256": "f01342300d230559d83beae927b1965ca4a95cc796db2f876d27c0fa35a26cd5",
     "python": "3.11.9",
     "packages": {
       "numpy": "2.4.6",
@@ -22,6 +22,110 @@
       "xgboost": "3.2.0",
       "google-cloud-bigquery": "3.45.2",
       "tensorflow": "2.21.0"
+    },
+    "platform": {
+      "system": "Windows",
+      "release": "10",
+      "machine": "AMD64",
+      "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+      "python_implementation": "CPython"
+    },
+    "environment": {
+      "distributions": [
+        "absl-py==2.5.0",
+        "anyio==4.15.1",
+        "astunparse==1.6.3",
+        "blinker==1.9.0",
+        "certifi==2026.7.22",
+        "cffi==2.1.1",
+        "charset-normalizer==3.5.2",
+        "click==8.5.0",
+        "cloudevents==1.12.0",
+        "cloudpickle==3.1.2",
+        "colorama==0.4.6",
+        "contourpy==1.3.3",
+        "coverage==7.16.2",
+        "cryptography==50.0.1",
+        "cycler==0.12.1",
+        "db-dtypes==1.7.1",
+        "deprecation==2.1.0",
+        "Flask==3.1.3",
+        "flatbuffers==25.12.19",
+        "fonttools==4.66.1",
+        "functions-framework==3.10.2",
+        "gast==0.7.0",
+        "google-api-core==2.40.0",
+        "google-auth==2.59.0",
+        "google-cloud-bigquery==3.45.2",
+        "google-cloud-core==2.8.0",
+        "google-crc32c==1.9.0",
+        "google-pasta==0.2.0",
+        "google-resumable-media==2.11.0",
+        "googleapis-common-protos==1.75.5",
+        "grpcio==1.84.0",
+        "grpcio-status==1.84.0",
+        "gunicorn==26.2.0",
+        "h11==0.16.0",
+        "h5py==3.14.0",
+        "idna==3.20",
+        "iniconfig==2.3.0",
+        "itsdangerous==2.2.0",
+        "Jinja2==3.1.6",
+        "joblib==1.6.0",
+        "keras==3.15.1",
+        "kiwisolver==1.5.1",
+        "libclang==18.1.1",
+        "markdown-it-py==4.2.0",
+        "MarkupSafe==3.0.3",
+        "matplotlib==3.11.2",
+        "mdurl==0.1.2",
+        "ml_dtypes==0.6.0",
+        "namex==0.1.0",
+        "narwhals==2.26.0",
+        "numpy==2.4.6",
+        "opentelemetry-api==1.45.0",
+        "opt_einsum==3.4.0",
+        "optree==0.20.0",
+        "packaging==26.3",
+        "pandas==3.0.6",
+        "pillow==12.3.0",
+        "pip==26.2.1",
+        "pluggy==1.6.0",
+        "proto-plus==1.29.0",
+        "protobuf==7.36.2",
+        "pyarrow==25.0.1",
+        "pyasn1==0.6.4",
+        "pyasn1_modules==0.4.2",
+        "pycparser==3.0",
+        "Pygments==2.21.0",
+        "pyparsing==3.3.3",
+        "pytest==9.1.1",
+        "pytest-cov==7.1.0",
+        "python-dateutil==2.9.0.post0",
+        "PyWavelets==1.9.0",
+        "requests==2.34.2",
+        "rich==15.0.0",
+        "scikit-learn==1.9.1",
+        "scipy==1.17.1",
+        "setuptools==65.5.0",
+        "six==1.17.0",
+        "starlette==1.7.0",
+        "tensorflow==2.21.0",
+        "termcolor==3.3.0",
+        "threadpoolctl==3.7.0",
+        "typing_extensions==4.16.0",
+        "tzdata==2026.4",
+        "urllib3==2.8.0",
+        "uvicorn==0.54.0",
+        "uvicorn-worker==0.4.0",
+        "watchdog==6.0.0",
+        "Werkzeug==3.1.9",
+        "wheel==0.48.0",
+        "wrapt==2.5.0",
+        "xgboost==3.2.0"
+      ],
+      "sha256": "6c25f36cf910f5d77cca3162019a809626e00db818aa1f69508059c53219326e",
+      "lock_file": "requirements-lock-py311.txt"
     }
   },
   "offline": {
@@ -6016,7 +6120,25 @@
         "seed": 42
       },
       "window_size": 36,
-      "xgb_seed": 42
+      "xgb_seed": 42,
+      "tensorflow": {
+        "version": "2.21.0",
+        "built_with_cuda": false,
+        "devices": [
+          "CPU"
+        ],
+        "build_info": {
+          "is_cuda_build": "False",
+          "is_rocm_build": "False",
+          "is_tensorrt_build": "False",
+          "msvcp_dll_names": "msvcp140.dll,msvcp140_1.dll"
+        },
+        "env": {
+          "TF_ENABLE_ONEDNN_OPTS": null,
+          "TF_DISABLE_CUDNN_RNN": "1",
+          "TF_DETERMINISTIC_OPS": null
+        }
+      }
     },
     "seed_summary": {
       "lstm": {
@@ -6038,7 +6160,7 @@
             "epochs_run": 12,
             "best_epoch": 2,
             "best_val_loss": 0.18300412595272064,
-            "train_seconds": 24.0,
+            "train_seconds": 18.9,
             "mae_min": 4.120297144570785
           },
           {
@@ -6047,7 +6169,7 @@
             "epochs_run": 26,
             "best_epoch": 16,
             "best_val_loss": 0.165280282497406,
-            "train_seconds": 38.7,
+            "train_seconds": 32.1,
             "mae_min": 3.9715094310122807
           },
           {
@@ -6056,7 +6178,7 @@
             "epochs_run": 14,
             "best_epoch": 4,
             "best_val_loss": 0.2016281634569168,
-            "train_seconds": 24.2,
+            "train_seconds": 22.1,
             "mae_min": 4.347162989658642
           }
         ]
@@ -6080,7 +6202,7 @@
             "epochs_run": 13,
             "best_epoch": 3,
             "best_val_loss": 0.17825908958911896,
-            "train_seconds": 15.2,
+            "train_seconds": 13.3,
             "mae_min": 4.19447684482394
           },
           {
@@ -6089,7 +6211,7 @@
             "epochs_run": 12,
             "best_epoch": 2,
             "best_val_loss": 0.17416802048683167,
-            "train_seconds": 13.9,
+            "train_seconds": 12.4,
             "mae_min": 4.074022314701678
           },
           {
@@ -6098,7 +6220,7 @@
             "epochs_run": 12,
             "best_epoch": 2,
             "best_val_loss": 0.17338036000728607,
-            "train_seconds": 14.8,
+            "train_seconds": 12.6,
             "mae_min": 3.9746857935807953
           }
         ]
@@ -6122,7 +6244,7 @@
             "epochs_run": 27,
             "best_epoch": 17,
             "best_val_loss": 0.2210802435874939,
-            "train_seconds": 36.8,
+            "train_seconds": 34.9,
             "mae_min": 4.528190732481573
           },
           {
@@ -6131,7 +6253,7 @@
             "epochs_run": 16,
             "best_epoch": 6,
             "best_val_loss": 0.23401257395744324,
-            "train_seconds": 25.8,
+            "train_seconds": 22.1,
             "mae_min": 4.325416397297081
           },
           {
@@ -6140,7 +6262,7 @@
             "epochs_run": 17,
             "best_epoch": 7,
             "best_val_loss": 0.19277049601078033,
-            "train_seconds": 30.3,
+            "train_seconds": 23.8,
             "mae_min": 4.161371505268468
           }
         ]
@@ -6164,7 +6286,7 @@
             "epochs_run": 39,
             "best_epoch": 29,
             "best_val_loss": 0.08004460483789444,
-            "train_seconds": 61.2,
+            "train_seconds": 48.1,
             "mae_min": 4.7534403212375445
           },
           {
@@ -6173,7 +6295,7 @@
             "epochs_run": 25,
             "best_epoch": 15,
             "best_val_loss": 0.10723841935396194,
-            "train_seconds": 39.9,
+            "train_seconds": 32.5,
             "mae_min": 4.883104365301622
           },
           {
@@ -6182,7 +6304,7 @@
             "epochs_run": 18,
             "best_epoch": 8,
             "best_val_loss": 0.09813723713159561,
-            "train_seconds": 29.3,
+            "train_seconds": 25.1,
             "mae_min": 4.598586560987513
           }
         ]
@@ -9704,6 +9826,90 @@
       "ensemble/ensemble-60min-mae-diff.png"
     ]
   },
-  "run_id": "20260930T194805Z_offline-bqml-joined-deep-fuzzy-ensemble",
-  "created_at_utc": "2026-09-30T19:55:37Z"
+  "multiplicity": {
+    "method": "Holm over all significance rows in the run (two-sided DM p), same CI and block rules",
+    "n_comparisons": 134,
+    "transitions": {
+      "insufficient data -> insufficient data": 21,
+      "not significant -> not significant": 70,
+      "challenger -> not significant": 6,
+      "challenger -> challenger": 31,
+      "reference -> reference": 5,
+      "reference -> not significant": 1
+    },
+    "changed": [
+      {
+        "component": "bqml",
+        "family": "headline",
+        "challenger": "xgb_h30 (both/all)",
+        "reference": "Persistence",
+        "family_holm_p": 0.005989007969342248,
+        "global_holm_p": 0.0812793938696448,
+        "decision": "challenger",
+        "decision_global": "not significant"
+      },
+      {
+        "component": "bqml",
+        "family": "headline",
+        "challenger": "lin_h30 (SG_TO_MY/all)",
+        "reference": "Persistence",
+        "family_holm_p": 0.028776719004504663,
+        "global_holm_p": 0.4779376263461438,
+        "decision": "challenger",
+        "decision_global": "not significant"
+      },
+      {
+        "component": "bqml",
+        "family": "headline",
+        "challenger": "xgb_h30 (MY_TO_SG/all)",
+        "reference": "Persistence",
+        "family_holm_p": 0.005989007969342248,
+        "global_holm_p": 0.08956969077098198,
+        "decision": "challenger",
+        "decision_global": "not significant"
+      },
+      {
+        "component": "bqml",
+        "family": "slices",
+        "challenger": "xgb_h30 (both/light=night)",
+        "reference": "Persistence",
+        "family_holm_p": 0.04069370499422819,
+        "global_holm_p": 0.08895833184784767,
+        "decision": "challenger",
+        "decision_global": "not significant"
+      },
+      {
+        "component": "joined",
+        "family": "camfc",
+        "challenger": "xgb[maps+camfc] (both/all)",
+        "reference": "xgb[maps]",
+        "family_holm_p": 0.023253317388962275,
+        "global_holm_p": 0.13370657498653307,
+        "decision": "challenger",
+        "decision_global": "not significant"
+      },
+      {
+        "component": "joined",
+        "family": "camfc",
+        "challenger": "xgb[maps+camfc] (SG_TO_MY/all)",
+        "reference": "xgb[maps]",
+        "family_holm_p": 0.04489913928196664,
+        "global_holm_p": 0.2634082837875376,
+        "decision": "challenger",
+        "decision_global": "not significant"
+      },
+      {
+        "component": "fuzzy",
+        "family": "fuzzy",
+        "challenger": "Fuzzy rule base",
+        "reference": "XGB forecast -> fuzzy level",
+        "family_holm_p": 0.0035212206122210146,
+        "global_holm_p": 0.15845492754994567,
+        "decision": "reference",
+        "decision_global": "not significant"
+      }
+    ]
+  },
+  "run_id": "20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble",
+  "created_at_utc": "2026-09-30T20:36:22Z"
 }

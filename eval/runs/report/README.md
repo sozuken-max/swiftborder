@@ -1,9 +1,9 @@
-> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20260930T194805Z_offline-bqml-joined-deep-fuzzy-ensemble`.
+> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble`.
 
-# Eval run `20260930T194805Z_offline-bqml-joined-deep-fuzzy-ensemble`
+# Eval run `20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble`
 
-Created (UTC): 2026-09-30T19:55:37Z. Schema v2.
-Git `b89bc4ede221` (dirty: False); code SHA-256 `47ba364c8c28`.
+Created (UTC): 2026-09-30T20:36:22Z. Schema v2.
+Git `eb435ddb71f3` (dirty: False); code SHA-256 `f01342300d23`.
 
 ## offline
 
@@ -270,5 +270,17 @@ Figures:
 Figures:
 - `ensemble/ensemble-30min-mae-diff.png`
 - `ensemble/ensemble-60min-mae-diff.png`
+
+## Multiplicity check
+
+Holm over all 134 comparisons in the run (instead of per family) changes 7 decision(s):
+
+- xgb_h30 (both/all) vs Persistence: challenger -> not significant (global Holm p 0.0813)
+- lin_h30 (SG_TO_MY/all) vs Persistence: challenger -> not significant (global Holm p 0.4779)
+- xgb_h30 (MY_TO_SG/all) vs Persistence: challenger -> not significant (global Holm p 0.0896)
+- xgb_h30 (both/light=night) vs Persistence: challenger -> not significant (global Holm p 0.0890)
+- xgb[maps+camfc] (both/all) vs xgb[maps]: challenger -> not significant (global Holm p 0.1337)
+- xgb[maps+camfc] (SG_TO_MY/all) vs xgb[maps]: challenger -> not significant (global Holm p 0.2634)
+- Fuzzy rule base vs XGB forecast -> fuzzy level: reference -> not significant (global Holm p 0.1585)
 
 Machine-readable metadata: [`run.json`](run.json).

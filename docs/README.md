@@ -14,6 +14,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
 | Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |
+| Release checklist for PR #2: redeploy smoke test and rollback, weather-append verification and retention, credential risk | [release-pr2.md](release-pr2.md) |
 | Evidence appendix (dated GCP copy) | [inventory.md](inventory.md) |
 | Layer B harness and report figures | [../eval/README.md](../eval/README.md), committed snapshot [../eval/runs/report/](../eval/runs/report/) |
 | BigQuery views and BQML | [../sql/README.md](../sql/README.md) |

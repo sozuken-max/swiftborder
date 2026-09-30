@@ -2,7 +2,7 @@
 
 **Report section:** performance (methods, reasoning, scored results).
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
-**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T194805Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `b89bc4e`, clean tree, `code_sha256` `47ba364c…`); promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family).
+**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `eb435dd`, clean tree, `code_sha256` `f0134230…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family).
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` are stale until regenerated ([diagrams/README.md](diagrams/README.md)).
 
@@ -49,6 +49,46 @@ Point forecasts are **paired** on the same `(direction, time)` rows. For each ro
 | Paired t-test | Supplementary only (assumes independent errors; reported, not used for decisions) |
 
 **Decision rule:** "challenger" only when the Holm-adjusted two-sided DM p < 0.05, the mean difference is negative, **and** the two-sided 95% bootstrap CI lies entirely below 0; "reference" by the mirror rule; **"insufficient data"** when a resample has fewer than 10 day-blocks (the CI is too coarse); otherwise "not significant". Very small p-values are reported as computed but should be read as "far below α", not as precise probabilities.
+
+**Family boundaries.** Holm is applied within one family per question, and a claim never combines rows from two families:
+
+| Family (`run.json`) | Question | Comparisons |
+| --- | --- | --- |
+| `bqml` headline | Do the served-era BQML models beat persistence, overall and per direction? | 11 |
+| `bqml` slices | Where (time of day, day type, light)? Exploratory, not headline | 63 |
+| `joined` | Does weather (or observed camera counts) help a daily-refit model? | 15 |
+| `camfc` (in `joined`) | Does the Layer A queue forecast help, and beyond a Maps profile? | 18 |
+| `offline`, `deep` | 60-min single-route models vs persistence and XGBoost | 2 + 10 |
+| `fuzzy` | Traffic-level classifiers | 3 |
+| `ensemble` 30 / 60 min | Do combiners beat the best single model or the served forecast? | 9 + 3 |
+
+Per-question families keep each question's family-wise error at 5%, and a new experiment does not weaken the tests of an unrelated one. The price is that across the whole report, some of the 134 comparisons will reach significance by chance. **Sensitivity check:** `run.json` → `multiplicity` repeats every decision with one run-wide Holm family, which is the most conservative option. It changes 7 of 134 decisions, all to "not significant":
+
+- `xgb_h30` vs persistence: both directions (run-wide Holm p = 0.081) and `MY_TO_SG` (0.090).
+- `lin_h30` vs persistence on `SG_TO_MY` (0.48).
+- `xgb_h30` vs persistence at night (0.089).
+- The camera queue forecast in XGBoost vs `xgb[maps]`: both directions (0.13) and `SG_TO_MY` (0.26).
+- Fuzzy rule base vs the XGB → fuzzy hybrid (0.16).
+
+The claims that do not depend on the family choice:
+- The `lin_h30` + `xgb_h30` ensemble beats persistence.
+- The daily-refit `xgb[maps]` beats persistence and the served forecast; so do the stack and the fuzzy-gated stack.
+- Weather adds nothing, and no combiner beats `xgb[maps]`.
+- Ridge improves with the camera forecast, and neither model improves with it beyond the Maps profile.
+- The XGB → fuzzy hybrid beats the persistence level.
+
+Claims that change are marked "(family-level only)" below.
+
+**Practical significance.** Statistical significance says a difference is unlikely to be chance, not that it matters to a traveller. The differences here are small in absolute terms:
+
+| Comparison (30 min, both directions) | Mean diff (min) | Seconds | Share of a ~26 min crossing |
+| --- | --- | --- | --- |
+| `xgb[maps]` vs served | −0.267 | ~16 | ~1% |
+| `xgb[maps]` vs persistence | −0.366 | ~22 | ~1.4% |
+| Camera queue forecast in XGBoost | −0.065 | ~4 | ~0.25% |
+| Weather in XGBoost | +0.003 | ~0 | — |
+
+No operational threshold was set before these results were produced. So none of them is presented as a product-relevant win, only as evidence about which inputs and models carry signal. **Proposed rule for future serving decisions** (to be adopted by the team *before* the extended-window re-run, so that it is set in advance): change the served model only if the challenger is significant under run-wide Holm **and** lowers 30-minute MAE by at least 0.5 min (30 s), roughly the rounding of a forecast shown in whole minutes. No 30-minute result on 13–30 Sep meets that bar.
 
 References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybourne & Newbold (1997), *Int. J. Forecasting* 13(2); Newey & West (1987), *Econometrica* 55(3); Künsch (1989), *Ann. Statist.* 17(3); Holm (1979), *Scand. J. Statist.* 6(2).
 
@@ -164,13 +204,13 @@ flowchart LR
 | Challenger | Reference | Direction | Mean diff | CI | Decision |
 | --- | --- | --- | --- | --- | --- |
 | `lin_h30` | Persistence | both | +0.136 | [+0.026, +0.259] | not significant (Holm p = 0.33) |
-| `xgb_h30` | Persistence | both | −0.147 | [−0.233, −0.061] | challenger |
+| `xgb_h30` | Persistence | both | −0.147 | [−0.233, −0.061] | challenger (family-level only) |
 | Ensemble | Persistence | both | −0.182 | [−0.253, −0.095] | challenger |
-| `lin_h30` | Persistence | SG_TO_MY | −0.198 | [−0.337, −0.076] | challenger |
+| `lin_h30` | Persistence | SG_TO_MY | −0.198 | [−0.337, −0.076] | challenger (family-level only) |
 | `xgb_h30` | Persistence | SG_TO_MY | −0.124 | [−0.268, +0.005] | not significant |
 | Ensemble | Persistence | SG_TO_MY | −0.309 | [−0.414, −0.225] | challenger |
 | `lin_h30` | Persistence | MY_TO_SG | +0.471 | [+0.310, +0.706] | reference (`lin_h30` worse) |
-| `xgb_h30` | Persistence | MY_TO_SG | −0.170 | [−0.258, −0.052] | challenger |
+| `xgb_h30` | Persistence | MY_TO_SG | −0.170 | [−0.258, −0.052] | challenger (family-level only) |
 | Ensemble | Persistence | MY_TO_SG | −0.054 | [−0.155, +0.111] | not significant |
 | Ensemble | `lin_h30` | both | −0.318 | [−0.378, −0.255] | challenger |
 | Ensemble | `xgb_h30` | both | −0.034 | [−0.109, +0.049] | not significant |
@@ -296,7 +336,7 @@ RPS is the ranked probability score of the normalised class degrees (ordinal, lo
 | --- | --- | --- | --- | --- |
 | Fuzzy rule base | Persistence level | −0.028 | [−0.075, +0.017] | not significant |
 | XGB → fuzzy level | Persistence level | −0.096 | [−0.113, −0.067] | challenger |
-| Fuzzy rule base | XGB → fuzzy level | +0.067 | [+0.021, +0.105] | reference (the hybrid is better) |
+| Fuzzy rule base | XGB → fuzzy level | +0.067 | [+0.021, +0.105] | reference (the hybrid is better; family-level only) |
 
 **Finding:** the learned rule base is readable (for example, "IF now is heavy AND trend is rising AND time is evening AND workday AND yesterday heavy THEN heavy", CF 0.85). It halves severe errors against persistence, but its accuracy gain is not significant. The hybrid, a regression forecast followed by fuzzy level assignment, is significantly better than both. Heavy traffic on `MY_TO_SG` is the weak spot for every classifier (recall 0.38–0.47). Per-direction rows and the top rules are in `run.json` (`fuzzy`).
 
@@ -344,7 +384,7 @@ On 30 Sep the stack put about 0.61 of its weight on `xgb[maps]`, 0.24 on persist
 
 **60 minutes, one route:** the equal mean of XGBoost and the three deep models scored 3.655 min, the deep-only mean 3.929 and a rolling stack 3.561, all against XGBoost's 3.469. Every decision is "insufficient data" (5 blocks).
 
-**Finding:** ensembling and hybridising add nothing measurable over the best single model. The daily-refit `xgb[maps]` is within 0.02 min of every combiner, and the equal mean is worse. The gain available now is from **what is served**: replacing the registry choice with `xgb[maps]` or the stack would cut 30-minute MAE by about 0.27–0.29 min (significant). The served choice itself is not significantly better than persistence on this window. Changing the serve path is an approved deploy (a daily retrain job and a `v_forecast_recent` change), not something the harness does.
+**Finding:** ensembling and hybridising add nothing measurable over the best single model. The daily-refit `xgb[maps]` is within 0.02 min of every combiner, and the equal mean is worse. The gain available now is from **what is served**: replacing the registry choice with `xgb[maps]` or the stack would cut 30-minute MAE by about 0.27–0.29 min, about 16–17 seconds (significant, also under run-wide Holm; below the proposed 0.5-min serving threshold). The served choice itself is not significantly better than persistence on this window. Changing the serve path is an approved deploy (a daily retrain job and a `v_forecast_recent` change), not something the harness does.
 
 Plots: `eval/runs/report/ensemble/ensemble-30min-mae-diff.png`, `ensemble/ensemble-60min-mae-diff.png`.
 
@@ -383,7 +423,7 @@ To get around the missing overlap, Layer B gets a **forecast of the camera count
 
 | Challenger | Reference | Mean diff (both) | CI | Decision |
 | --- | --- | --- | --- | --- |
-| XGBoost [+ camera forecast] | XGBoost [Maps] | −0.065 | [−0.107, −0.029] | challenger (also `SG_TO_MY`: −0.089) |
+| XGBoost [+ camera forecast] | XGBoost [Maps] | −0.065 | [−0.107, −0.029] | challenger (also `SG_TO_MY`: −0.089); family-level only |
 | Ridge [+ camera forecast] | Ridge [Maps] | −0.053 | [−0.077, −0.028] | challenger (also `MY_TO_SG`: −0.093) |
 | XGBoost [+ camera forecast] | XGBoost [+ Maps profile] | −0.007 | [−0.045, +0.057] | not significant |
 | XGBoost [+ Maps profile + camera forecast] | XGBoost [+ Maps profile] | +0.026 | [−0.000, +0.049] | not significant |
@@ -397,7 +437,7 @@ By regime (observed 30-min change of more than 5 min; diagnostic), XGBoost MAE:
 | steady | 1.650 | 1.639 | 1.741 |
 | falling | 5.566 | 5.366 | 4.644 |
 
-**Finding:** the Layer A queue forecast is a **meaningful input**. It reduces 30-minute MAE significantly for both model types, most at queue onsets (−0.47 min when traffic is rising). The gain is the same as a Maps-derived daily profile, however, and adding the camera forecast on top of that profile adds nothing. What transfers from March–April camera data is **the shape of the daily queue cycle**: when queues build and clear, which Layer B does not get from its time-of-day features alone. It is not information the Maps series lacks. The camera forecast does have one practical property: it is fixed from a separate sensor and period and needs no Maps history. Testing whether **observed** counts add information beyond that profile still needs the backfill.
+**Finding:** the Layer A queue forecast is a **meaningful but small input**: about 4 seconds of MAE for XGBoost, below any practical threshold (see Significance). It reduces 30-minute MAE significantly for both model types (for XGBoost only within its family; ridge also under run-wide Holm), most at queue onsets (−0.47 min when traffic is rising). The gain is the same as a Maps-derived daily profile, however, and adding the camera forecast on top of that profile adds nothing. What transfers from March–April camera data is **the shape of the daily queue cycle**: when queues build and clear, which Layer B does not get from its time-of-day features alone. It is not information the Maps series lacks. The camera forecast does have one practical property: it is fixed from a separate sensor and period and needs no Maps history. Testing whether **observed** counts add information beyond that profile still needs the backfill.
 
 Caveats:
 - The congestion view drops frames with zero vehicles, so night counts are biased up.
