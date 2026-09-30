@@ -75,8 +75,9 @@ def plot_mae_diff_forest(
     comparisons = list(comparisons)[::-1]  # first comparison at the top
     labels = [f"{c.label_challenger}\nvs {c.label_reference} (n={c.n})" for c in comparisons]
     means = [c.mean_ae_diff_min for c in comparisons]
-    err_lo = [c.mean_ae_diff_min - c.bootstrap_ci_low_min for c in comparisons]
-    err_hi = [c.bootstrap_ci_high_min - c.mean_ae_diff_min for c in comparisons]
+    # Clip at 0: a degenerate CI (one block) can sit a rounding error inside the mean.
+    err_lo = [max(0.0, c.mean_ae_diff_min - c.bootstrap_ci_low_min) for c in comparisons]
+    err_hi = [max(0.0, c.bootstrap_ci_high_min - c.mean_ae_diff_min) for c in comparisons]
     decisions = [getattr(c, "decision", "not significant") for c in comparisons]
     colours = {"challenger": "#2ca02c", "reference": "#d62728", "not significant": "#7f7f7f"}
 

@@ -30,10 +30,12 @@ REPO_ROOT = EVAL_ROOT.parent
 RUNS_ROOT = EVAL_ROOT / "runs"
 LATEST_POINTER = RUNS_ROOT / "LATEST.json"
 SCHEMA_VERSION = 2
-KNOWN_COMPONENTS = ("offline", "bqml", "joined", "layer_a")
+KNOWN_COMPONENTS = ("offline", "bqml", "joined", "deep", "fuzzy", "layer_a")
 COMPONENT_KEYS = ("dataset", "window", "models", "horizon_minutes", "metrics", "significance", "artifacts")
 METRIC_KEYS = ("candidate", "slice", "n", "mae_min", "rmse_min")
 LAYER_A_METRIC_KEYS = ("candidate", "slice", "n", "map50", "map50_95", "precision", "recall", "count_mae")
+FUZZY_METRIC_KEYS = ("candidate", "slice", "n", "accuracy", "macro_f1", "severe_error_rate")
+METRIC_KEYS_BY_COMPONENT = {"layer_a": LAYER_A_METRIC_KEYS, "fuzzy": FUZZY_METRIC_KEYS}
 SIGNIFICANCE_KEYS = (
     "label_challenger",
     "label_reference",
@@ -200,7 +202,7 @@ def validate_manifest(manifest: Dict[str, Any], run_dir: Optional[Path] = None) 
         metrics = block.get("metrics") or []
         if not metrics:
             errors.append(f"{name}.metrics is empty")
-        required = LAYER_A_METRIC_KEYS if name == "layer_a" else METRIC_KEYS
+        required = METRIC_KEYS_BY_COMPONENT.get(name, METRIC_KEYS)
         for i, row in enumerate(metrics):
             missing = [k for k in required if k not in row]
             if missing:
@@ -250,7 +252,24 @@ def write_run_readme(run_dir: Path, manifest: Dict[str, Any]) -> Path:
                     f"| {m['candidate']} | {m['slice']} | {m['n']} | {m['mae_min']:.3f} | {m['rmse_min']:.3f} |"
                 )
             lines.append("")
+        cls = [m for m in metrics if m.get("slice") == "holdout" and "accuracy" in m]
+        if cls:
+            lines.extend(
+                [
+                    "| Candidate | Slice | n | Accuracy | Macro-F1 | Severe errors | RPS |",
+                    "| --- | --- | --- | --- | --- | --- | --- |",
+                ]
+            )
+            for m in cls:
+                rps = f"{m['rps']:.3f}" if m.get("rps") is not None else "-"
+                lines.append(
+                    f"| {m['candidate']} | {m['slice']} | {m['n']} | {m['accuracy']:.3f} | {m['macro_f1']:.3f} | "
+                    f"{m['severe_error_rate']:.3f} | {rps} |"
+                )
+            lines.append("")
         sig = block.get("significance") or []
+        if sig and block.get("loss_for_significance"):
+            lines.extend([f"Significance loss: {block['loss_for_significance']}.", ""])
         if sig:
             lines.extend(
                 [

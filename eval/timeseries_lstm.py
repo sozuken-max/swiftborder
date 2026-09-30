@@ -36,6 +36,7 @@ class LSTMTrainConfig:
     batch_size: int = 64
     patience: int = 6
     verbose: int = 0
+    seed: int = 42
 
     def __post_init__(self) -> None:
         if self.architecture not in ARCHITECTURE_CHOICES:
@@ -87,6 +88,8 @@ class LSTMSplit:
     test_target_ts: pd.Series
     test_persistence: np.ndarray
     boundary: pd.Timestamp
+    train_persistence: Optional[np.ndarray] = None
+    """Raw value at each training origin (anchor for residual targets)."""
 
 
 def _sequence_matrix(features: pd.DataFrame, cols: Sequence[str], config: TimeSeriesConfig) -> np.ndarray:
@@ -134,6 +137,7 @@ def build_lstm_split(
         test_target_ts=split.test["target_ts"],
         test_persistence=split.test["persistence"].to_numpy(dtype=np.float64),
         boundary=split.boundary,
+        train_persistence=split.train["persistence"].to_numpy(dtype=np.float64),
     )
 
 
@@ -179,14 +183,20 @@ def scale_sequences(
     return transform(x_train), transform(x_val), transform(x_test), scaler
 
 
-def _require_keras():
+def _require_keras(seed: Optional[int] = None):
+    """Import Keras. Seeds Python, NumPy and TensorFlow only when ``seed`` is given.
+
+    Model builders pass their config seed once, before creating layers; later calls (for example
+    to build callbacks) must not reset the generator, or every "seed" gives the same model.
+    """
     import os
 
     # DirectML and CPU-only Windows wheels cannot register CudnnRNN.
     os.environ.setdefault("TF_DISABLE_CUDNN_RNN", "1")
     import tensorflow as tf
 
-    tf.keras.utils.set_random_seed(42)
+    if seed is not None:
+        tf.keras.utils.set_random_seed(int(seed))
     return tf.keras
 
 
@@ -247,8 +257,8 @@ def build_recurrent_model(
     *,
     custom_recurrent_layer: Optional[Type] = None,
 ):
-    """Build and compile a regression model for the chosen architecture."""
-    keras = _require_keras()
+    """Build and compile a regression model for the chosen architecture (seeded by ``train_config.seed``)."""
+    keras = _require_keras(train_config.seed)
     layers = keras.layers
 
     inputs = keras.Input(shape=input_shape, name="sequence")

@@ -6,6 +6,8 @@ Writes one run folder under eval/runs/<run_id>/ with a schema-v2 run.json (see r
     python generate_comparison_plots.py                 # offline only (uses the CSV cache)
     python generate_comparison_plots.py --refresh-bq    # re-download travel_times first (read-only)
     python generate_comparison_plots.py --bqml          # offline + BQML fixed window
+    python generate_comparison_plots.py --deep          # + LSTM / GRU / patch Transformer (TensorFlow)
+    python generate_comparison_plots.py --fuzzy         # + fuzzy light / moderate / heavy classifier
 """
 
 from __future__ import annotations
@@ -179,12 +181,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--joined", action="store_true", help="Also run the joined-feature experiment (joined.py)")
     parser.add_argument("--joined-start", default=None, help="first joined test day (SGT, default joined.DEFAULT_TEST_START)")
     parser.add_argument("--joined-end", default=None, help="last joined test day (SGT, default joined.DEFAULT_TEST_END)")
+    parser.add_argument("--deep", action="store_true", help="Also score LSTM / GRU / patch Transformer on the offline split (needs TensorFlow)")
+    parser.add_argument("--deep-seeds", type=int, nargs="+", default=None, help="seeds per deep model (default deep_forecast.DEFAULT_SEEDS)")
+    parser.add_argument("--fuzzy", action="store_true", help="Also score the fuzzy traffic-level classifier (60 min, both directions)")
     parser.add_argument("--alpha", type=float, default=0.05)
     args = parser.parse_args(argv)
 
     components = ["bqml"] if args.bqml_only else (["offline", "bqml"] if args.bqml else ["offline"])
     if args.joined:
         components.append("joined")
+    if args.deep:
+        components.append("deep")
+    if args.fuzzy:
+        components.append("fuzzy")
     run_dir = create_run_dir(components=components, run_id=args.run_id, runs_root=args.runs_root, exist_ok=args.reuse_run)
     manifest = new_manifest(components)
     written: List[Path] = []
@@ -226,6 +235,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         written.extend(paths)
         manifest["joined"] = meta
+
+    if "deep" in components:
+        import deep_forecast
+
+        seeds = tuple(args.deep_seeds) if args.deep_seeds else deep_forecast.DEFAULT_SEEDS
+        paths, meta = deep_forecast.deep_component(run_dir, project=args.project, seeds=seeds, alpha=args.alpha)
+        written.extend(paths)
+        manifest["deep"] = meta
+
+    if "fuzzy" in components:
+        import fuzzy_traffic
+
+        paths, meta = fuzzy_traffic.fuzzy_component(run_dir, project=args.project, alpha=args.alpha)
+        written.extend(paths)
+        manifest["fuzzy"] = meta
 
     write_manifest(run_dir, manifest)
     write_run_readme(run_dir, manifest)
