@@ -1,9 +1,9 @@
-> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble`.
+> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20260930T194805Z_offline-bqml-joined-deep-fuzzy-ensemble`.
 
-# Eval run `20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble`
+# Eval run `20260930T194805Z_offline-bqml-joined-deep-fuzzy-ensemble`
 
-Created (UTC): 2026-09-30T19:27:56Z. Schema v2.
-Git `9597e2099657` (dirty: False); code SHA-256 `012b8dc3bfc4`.
+Created (UTC): 2026-09-30T19:55:37Z. Schema v2.
+Git `b89bc4ede221` (dirty: False); code SHA-256 `47ba364c8c28`.
 
 ## offline
 
@@ -125,7 +125,7 @@ Figures:
 
 - **Horizon:** 30 min
 - **Window:** 2026-09-13 .. 2026-09-30
-- **Models:** persistence (y_persistence), maps_typical (Maps duration without traffic, same bin), ridge (median impute + indicators, standardised, alpha=1), xgb (XGBRegressor, seed 42), ensemble = mean(ridge, xgb)
+- **Models:** persistence (y_persistence), maps_typical (Maps duration without traffic, same bin), ridge (median impute + indicators, standardised, alpha=1), xgb (XGBRegressor, seed 42), ensemble = mean(ridge, xgb), camfc: camera-2701 queue forecast from Mar-Apr detections (camera_forecast.py), mpfc: same estimator fitted on each fold's Maps rows (control)
 
 | Candidate | Slice | n | MAE (min) | RMSE (min) |
 | --- | --- | --- | --- | --- |
@@ -137,6 +137,15 @@ Figures:
 | ridge[maps+weather] | both/all | 5184 | 2.511 | 3.573 |
 | xgb[maps+weather] | both/all | 5184 | 2.277 | 3.314 |
 | ensemble[maps+weather] | both/all | 5184 | 2.313 | 3.337 |
+| ridge[maps+camfc] | both/all | 5184 | 2.447 | 3.490 |
+| xgb[maps+camfc] | both/all | 5184 | 2.210 | 3.202 |
+| ensemble[maps+camfc] | both/all | 5184 | 2.229 | 3.222 |
+| ridge[maps+mpfc] | both/all | 5184 | 2.370 | 3.377 |
+| xgb[maps+mpfc] | both/all | 5184 | 2.216 | 3.210 |
+| ensemble[maps+mpfc] | both/all | 5184 | 2.223 | 3.205 |
+| ridge[maps+mpfc+camfc] | both/all | 5184 | 2.376 | 3.377 |
+| xgb[maps+mpfc+camfc] | both/all | 5184 | 2.242 | 3.261 |
+| ensemble[maps+mpfc+camfc] | both/all | 5184 | 2.232 | 3.225 |
 
 | Challenger | Reference | n | Mean AE diff | CI | DM p | Holm p | Decision |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -155,10 +164,30 @@ Figures:
 | xgb[maps+weather] (MY_TO_SG/all) | xgb[maps] | 2592 | 0.014 | [-0.013, 0.039] | 0.3034 | 1.0000 | not significant |
 | ridge[maps+weather] (MY_TO_SG/all) | ridge[maps] | 2592 | 0.007 | [-0.011, 0.030] | 0.4764 | 1.0000 | not significant |
 | ensemble[maps+weather] (MY_TO_SG/all) | xgb[maps+weather] | 2592 | 0.076 | [0.023, 0.134] | 0.0071 | 0.0638 | not significant |
+| xgb[maps+camfc] (both/all) | xgb[maps] | 5184 | -0.065 | [-0.107, -0.029] | 0.0015 | 0.0233 | challenger |
+| xgb[maps+camfc] (both/all) | xgb[maps+mpfc] | 5184 | -0.007 | [-0.045, 0.057] | 0.8370 | 1.0000 | not significant |
+| xgb[maps+mpfc+camfc] (both/all) | xgb[maps+mpfc] | 5184 | 0.026 | [-0.000, 0.049] | 0.1012 | 1.0000 | not significant |
+| ridge[maps+camfc] (both/all) | ridge[maps] | 5184 | -0.053 | [-0.077, -0.028] | 0.00028 | 0.0047 | challenger |
+| ridge[maps+camfc] (both/all) | ridge[maps+mpfc] | 5184 | 0.078 | [-0.005, 0.187] | 0.1934 | 1.0000 | not significant |
+| ridge[maps+mpfc+camfc] (both/all) | ridge[maps+mpfc] | 5184 | 0.006 | [0.001, 0.016] | 0.1324 | 1.0000 | not significant |
+| xgb[maps+camfc] (SG_TO_MY/all) | xgb[maps] | 2592 | -0.089 | [-0.153, -0.041] | 0.0030 | 0.0449 | challenger |
+| xgb[maps+camfc] (SG_TO_MY/all) | xgb[maps+mpfc] | 2592 | -0.041 | [-0.096, 0.068] | 0.4770 | 1.0000 | not significant |
+| xgb[maps+mpfc+camfc] (SG_TO_MY/all) | xgb[maps+mpfc] | 2592 | 0.046 | [0.005, 0.084] | 0.0938 | 1.0000 | not significant |
+| ridge[maps+camfc] (SG_TO_MY/all) | ridge[maps] | 2592 | -0.013 | [-0.027, 0.006] | 0.1264 | 1.0000 | not significant |
+| ridge[maps+camfc] (SG_TO_MY/all) | ridge[maps+mpfc] | 2592 | 0.034 | [-0.071, 0.200] | 0.7156 | 1.0000 | not significant |
+| ridge[maps+mpfc+camfc] (SG_TO_MY/all) | ridge[maps+mpfc] | 2592 | 0.005 | [-0.001, 0.013] | 0.2040 | 1.0000 | not significant |
+| xgb[maps+camfc] (MY_TO_SG/all) | xgb[maps] | 2592 | -0.042 | [-0.089, 0.016] | 0.1190 | 1.0000 | not significant |
+| xgb[maps+camfc] (MY_TO_SG/all) | xgb[maps+mpfc] | 2592 | 0.027 | [-0.033, 0.082] | 0.3500 | 1.0000 | not significant |
+| xgb[maps+mpfc+camfc] (MY_TO_SG/all) | xgb[maps+mpfc] | 2592 | 0.006 | [-0.017, 0.038] | 0.6977 | 1.0000 | not significant |
+| ridge[maps+camfc] (MY_TO_SG/all) | ridge[maps] | 2592 | -0.093 | [-0.141, -0.047] | 0.00013 | 0.0023 | challenger |
+| ridge[maps+camfc] (MY_TO_SG/all) | ridge[maps+mpfc] | 2592 | 0.122 | [-0.040, 0.241] | 0.1028 | 1.0000 | not significant |
+| ridge[maps+mpfc+camfc] (MY_TO_SG/all) | ridge[maps+mpfc] | 2592 | 0.007 | [-0.003, 0.023] | 0.3032 | 1.0000 | not significant |
 
 Figures:
 - `joined/joined-mae-diff.png`
 - `joined/joined-mae-by-feature-set.png`
+- `joined/camfc-mae-diff.png`
+- `joined/camfc-profiles.png`
 
 ## deep
 

@@ -77,7 +77,9 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 **Done (weather, offline):** [`eval/joined.py`](../eval/joined.py) joins fresh data.gov.sg rainfall and forecasts; no significant MAE gain on 13–30 Sep. The BigQuery views were not used: at run time the weather tables ended on 31 Aug (1–30 Sep was appended on 1 Oct, see [inventory.md](inventory.md)), camera tables end on 18 Jul, and both sit in a different location from `traffic_prediction`.
 
-**Remaining:** camera 2701 counts for 5–30 Sep (no Layer A output overlaps the Maps window; see [evaluation.md §7](evaluation.md#7-is-layer-a-output-a-meaningful-layer-b-input)) via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves.
+**Done (Layer A forecast):** a queue forecast learned from the Mar–Apr detections is scored as a Layer B input; its gain equals a Maps daily profile ([evaluation.md §7a](evaluation.md#7a-layer-a-forecast-as-a-layer-b-input-evalcamera_forecastpy-scored-in-evaljoinedpy)).
+
+**Remaining:** observed camera 2701 counts for 5–30 Sep (no Layer A output overlaps the Maps window) via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves.
 
 Camera 2702 has detections and no congestion view. Add that view before claiming both cameras feed the forecast. The dividing line for a live 2702 demo is a geometry change in `camdetect`, separate from the historical table.
 

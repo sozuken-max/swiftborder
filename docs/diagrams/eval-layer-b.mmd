@@ -24,5 +24,6 @@ flowchart LR
   OX --> SIG
   DL --> SIG
   FZ --> SIG
-  CAM["camera counts<br/>no overlap with Maps window"] -.->|"pending backfill"| JX
+  CAMFC["camera_forecast.py<br/>queue profile from Mar-Apr<br/>Layer A detections"] --> JX
+  CAM["observed camera counts<br/>no overlap with Maps window"] -.->|"pending backfill"| JX
   INTENT["24h horizon<br/>target, not served"] -.-> SRV

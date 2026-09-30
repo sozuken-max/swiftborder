@@ -2,7 +2,7 @@
 
 **Report section:** performance (methods, reasoning, scored results).
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
-**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `9597e20`, clean tree, `code_sha256` `012b8dc3…`); promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–3 are unchanged from the previous report run (same data, same code paths).
+**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T194805Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `b89bc4e`, clean tree, `code_sha256` `47ba364c…`); promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family).
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` are stale until regenerated ([diagrams/README.md](diagrams/README.md)).
 
@@ -60,7 +60,7 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 | Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
 | Deep learning (LSTM, GRU, patch Transformer) | [`eval/deep_forecast.py`](../eval/deep_forecast.py), [`eval/timeseries_transformer.py`](../eval/timeseries_transformer.py); same rows as offline XGB | Section 4 |
 | Fuzzy logic | Light / moderate / heavy traffic-level classifier with a learned fuzzy rule base ([`eval/fuzzy_traffic.py`](../eval/fuzzy_traffic.py)) | Section 5 |
-| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`) | Layer A scorer ready; results pending. As a Layer B input: section 7 |
+| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A scorer ready; results pending. As a Layer B input: section 7 |
 | Hybrid / ensemble | `ensemble_mean`; ridge + XGBoost; rolling LAD stack, rolling selection and a fuzzy-gated stack over BQML and daily-refit models; XGBoost regression defuzzified into traffic levels | Sections 1, 2, 5, 6 |
 
 ---
@@ -134,7 +134,8 @@ flowchart LR
   OX --> SIG
   DL --> SIG
   FZ --> SIG
-  CAM["camera counts<br/>no overlap with Maps window"] -.->|"pending backfill"| JX
+  CAMFC["camera_forecast.py<br/>queue profile from Mar-Apr<br/>Layer A detections"] --> JX
+  CAM["observed camera counts<br/>no overlap with Maps window"] -.->|"pending backfill"| JX
   INTENT["24h horizon<br/>target, not served"] -.-> SRV
 ```
 <!-- /mermaid:eval-layer-b -->
@@ -189,7 +190,7 @@ Plots: `eval/runs/report/bqml/mae-by-direction.png`, `bqml/mae-diff-ci.png` (for
 - **Maps features:** rebuilt in pandas from the `travel_times` export by [`eval/features.py`](../eval/features.py). The run compared them with the live `v_training_set` on 7,172 rows (through 2026-09-30 15:20 UTC); every compared column matched (largest difference 1.4e-14, `joined.dataset.parity_with_live_v_training_set`).
 - **Weather:** rainfall at station S210 (Woodlands Centre Road) and the Woodlands 2-hour forecast, fetched from data.gov.sg ([`Causeway/`](../Causeway/README.md)). The experiment reads these CSVs; at run time the BigQuery weather tables ended on 31 Aug SGT (the same rows were appended to BigQuery afterwards; see [inventory.md](inventory.md)).
 - **Causality:** rainfall readings stamped at or before the forecast origin; the forecast most recently **acquired by data.gov.sg** (`update_timestamp`) at or before the origin whose valid period covers the target time.
-- **Camera:** pending the backfill in [handoff-camera-pilot.md](handoff-camera-pilot.md). No Layer A output exists for this window (section 7).
+- **Camera:** observed counts pending the backfill in [handoff-camera-pilot.md](handoff-camera-pilot.md); no Layer A output exists for this window. A Layer A *forecast* is scored in section 7a.
 
 **Design:** rolling-origin daily folds, test days 13–30 Sep SGT (18 folds, 5,184 rows, same window as section 1). Each fold trains on rows whose label was observed before the test day. Models: ridge (median imputation + missing indicators) and XGBoost (seed 42); ensemble = their mean.
 
@@ -349,7 +350,7 @@ Plots: `eval/runs/report/ensemble/ensemble-30min-mae-diff.png`, `ensemble/ensemb
 
 ### 7. Is Layer A output a meaningful Layer B input?
 
-**Status: cannot be tested yet. No Layer A output overlaps the Maps label.** This was checked with read-only queries on 2026-10-01:
+**Observed camera counts cannot be tested yet: no Layer A output overlaps the Maps label.** A Layer A **forecast** can be, and is (below). Checked with read-only queries on 2026-10-01:
 
 | Data | Range | Overlap with `travel_times` (from 2026-09-05 17:53 UTC) |
 | --- | --- | --- |
@@ -359,9 +360,57 @@ Plots: `eval/runs/report/ensemble/ensemble-30min-mae-diff.png`, `ensemble/ensemb
 | data.gov.sg traffic-images history (backfill source) | on request | frames only; needs billed Roboflow inference |
 | `swiftbackend` live calls | not persisted | none |
 
-So the answer depends on the camera backfill ([handoff-camera-pilot.md](handoff-camera-pilot.md)). Once it has run, the "Maps + weather + camera" arm of section 2 answers the question with the same folds and the same significance rules.
 
-**What the current data does say:**
+#### 7a. Layer A forecast as a Layer B input (`eval/camera_forecast.py`, scored in `eval/joined.py`)
+
+To get around the missing overlap, Layer B gets a **forecast of the camera count** instead of the observed count. The forecast is a model trained on the Layer A output that does exist.
+
+- **Layer A forecaster:** trained on the camera-2701 detections in `v_congestion_index_10min` (13 Mar–22 Apr 2026). Days with fewer than 40 bins in a direction are dropped (5,631 → 5,400 rows, 28 days per direction). Per direction, it is a ridge regression of the 10-minute vehicle count on time-of-day Fourier terms × weekend. The number of harmonics was chosen by 5-fold leave-days-out CV (K = 8).
+- **How good is it** (CV MAE in vehicles per frame, `MY_TO_SG` / `SG_TO_MY`): direction mean 43.8 / 8.9; hour × day-type mean 35.1 / 6.9; Fourier K=8 **34.5 / 6.8**.
+- **Features:** `camfc_now` (expected count at the origin) and `camfc_30` (at the label bin). `camfc_delta` is the expected queue build-up or clearing over the next 30 minutes. The forecast depends only on the calendar, so it is known in advance for every Maps row, and it was fitted on data months before the window.
+- **Control:** `mpfc`, the same estimator fitted inside each fold on the Maps training rows (current travel time). It asks whether a gain is camera information or just time-of-day shape.
+- **Design:** the same 18 rolling daily folds and 5,184 rows as section 2. These comparisons are their own Holm family (18 comparisons), so section 2's family is unchanged.
+
+| Candidate | MAE both | `SG_TO_MY` | `MY_TO_SG` | RMSE both |
+| --- | --- | --- | --- | --- |
+| XGBoost [Maps] | 2.275 | 2.399 | 2.150 | 3.311 |
+| XGBoost [Maps + camera forecast] | 2.210 | 2.311 | 2.108 | 3.202 |
+| XGBoost [Maps + Maps profile] (control) | 2.216 | 2.352 | 2.081 | 3.210 |
+| XGBoost [Maps + Maps profile + camera forecast] | 2.242 | 2.398 | 2.087 | 3.261 |
+| Ridge [Maps] | 2.500 | 2.523 | 2.478 | 3.553 |
+| Ridge [Maps + camera forecast] | 2.447 | 2.510 | 2.385 | 3.490 |
+| Ridge [Maps + Maps profile] (control) | 2.370 | 2.476 | 2.263 | 3.377 |
+
+| Challenger | Reference | Mean diff (both) | CI | Decision |
+| --- | --- | --- | --- | --- |
+| XGBoost [+ camera forecast] | XGBoost [Maps] | −0.065 | [−0.107, −0.029] | challenger (also `SG_TO_MY`: −0.089) |
+| Ridge [+ camera forecast] | Ridge [Maps] | −0.053 | [−0.077, −0.028] | challenger (also `MY_TO_SG`: −0.093) |
+| XGBoost [+ camera forecast] | XGBoost [+ Maps profile] | −0.007 | [−0.045, +0.057] | not significant |
+| XGBoost [+ Maps profile + camera forecast] | XGBoost [+ Maps profile] | +0.026 | [−0.000, +0.049] | not significant |
+| Ridge [+ camera forecast] | Ridge [+ Maps profile] | +0.078 | [−0.005, +0.187] | not significant |
+
+By regime (observed 30-min change of more than 5 min; diagnostic), XGBoost MAE:
+
+| Regime | [Maps] | [+ camera forecast] | [+ Maps profile] |
+| --- | --- | --- | --- |
+| rising | 5.324 | 4.859 | 4.607 |
+| steady | 1.650 | 1.639 | 1.741 |
+| falling | 5.566 | 5.366 | 4.644 |
+
+**Finding:** the Layer A queue forecast is a **meaningful input**. It reduces 30-minute MAE significantly for both model types, most at queue onsets (−0.47 min when traffic is rising). The gain is the same as a Maps-derived daily profile, however, and adding the camera forecast on top of that profile adds nothing. What transfers from March–April camera data is **the shape of the daily queue cycle**: when queues build and clear, which Layer B does not get from its time-of-day features alone. It is not information the Maps series lacks. The camera forecast does have one practical property: it is fixed from a separate sensor and period and needs no Maps history. Testing whether **observed** counts add information beyond that profile still needs the backfill.
+
+Caveats:
+- The congestion view drops frames with zero vehicles, so night counts are biased up.
+- March and April differ from September in school terms and holidays.
+- The forecast is a prior, not a live sensor, so it cannot see today's incidents.
+
+Plots: `eval/runs/report/joined/camfc-mae-diff.png`, `joined/camfc-profiles.png`.
+
+#### 7b. Observed counts (pending)
+
+Observed counts depend on the camera backfill ([handoff-camera-pilot.md](handoff-camera-pilot.md)). Once it has run, the "Maps + weather + camera" arm of section 2 answers the question with the same folds and the same significance rules. The test should be against `maps+mpfc`, not `maps`, so a time-of-day prior is not credited to the camera.
+
+**What the current data says about observed counts:**
 
 - **Where it could help.** Camera counts measure the queue now, and Layer B already sees the travel time now and its lags. A camera can only add information where the Maps lags do not anticipate the change, which is the onset and clearing of queues. Those rows (16.5% of rows, observed change above 5 minutes) carry 39% of `xgb[maps]`'s error (section 6). If a camera input removed all of it, 30-minute MAE would fall by at most about 0.9 min (0.39 × 2.275). A realistic gain is a fraction of that.
 - **How small a gain is detectable.** Nested-feature comparisons are precise. Adding weather to `xgb[maps]` gave a 95% CI of [−0.015, +0.022] min (section 2). With full camera coverage of 13–30 Sep, a gain of a few hundredths of a minute would be detectable. Partial coverage widens the interval, and below 60% of test rows the arm is reported as insufficient.
