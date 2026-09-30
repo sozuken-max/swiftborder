@@ -1,2 +1,3 @@
-requests
-backports.zoneinfo; python_version < "3.9"
+requests==2.34.2
+google-cloud-bigquery==3.45.2
+backports.zoneinfo==0.2.1; python_version < "3.9"
