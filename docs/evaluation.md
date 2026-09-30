@@ -2,7 +2,7 @@
 
 **Report section:** performance (methods, reasoning, scored results).
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
-**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T175104Z_offline-bqml-joined` (schema v2). It was made from committed code (`provenance.git_sha` `15f094b`, clean tree, `code_sha256` `e735477a…`); promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet.
+**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `9597e20`, clean tree, `code_sha256` `012b8dc3…`); promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–3 are unchanged from the previous report run (same data, same code paths).
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` are stale until regenerated ([diagrams/README.md](diagrams/README.md)).
 
@@ -31,6 +31,7 @@ The product intent is a Woodlands-only forecast of causeway crossing time, up to
 | `lin_h30` | The model `v_forecast_recent` calls |
 | `xgb_h30` | Trained, not served |
 | Ensemble | Mean of two models; tests the hybrid/ensemble category |
+| **Served** (`model_registry` choice per direction) | What `v_forecast_recent` publishes: `lin_h30` for `SG_TO_MY`, persistence for `MY_TO_SG` (section 6) |
 
 ### Layer A cannot carry the product metric
 
@@ -57,9 +58,10 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 | --- | --- | --- |
 | Supervised learning | Roboflow labels; regression of future Maps duration | Layer B tables below; Layer A pending |
 | Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
-| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`) | Layer A scorer ready; results pending |
-| Hybrid / ensemble | `ensemble_mean` of `lin_h30` + `xgb_h30`; ridge + XGBoost in the joined experiment | Layer B tables below |
-| Deep learning (LSTM, Transformer) | [`eval/timeseries_lstm.py`](../eval/timeseries_lstm.py), same rows as offline XGB | Not scored in `report/`; assessed and not recommended at this data size ([deep-learning-assessment.md](deep-learning-assessment.md)) |
+| Deep learning (LSTM, GRU, patch Transformer) | [`eval/deep_forecast.py`](../eval/deep_forecast.py), [`eval/timeseries_transformer.py`](../eval/timeseries_transformer.py); same rows as offline XGB | Section 4 |
+| Fuzzy logic | Light / moderate / heavy traffic-level classifier with a learned fuzzy rule base ([`eval/fuzzy_traffic.py`](../eval/fuzzy_traffic.py)) | Section 5 |
+| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`) | Layer A scorer ready; results pending. As a Layer B input: section 7 |
+| Hybrid / ensemble | `ensemble_mean`; ridge + XGBoost; rolling LAD stack, rolling selection and a fuzzy-gated stack over BQML and daily-refit models; XGBoost regression defuzzified into traffic levels | Sections 1, 2, 5, 6 |
 
 ---
 
@@ -120,10 +122,19 @@ flowchart LR
 
   subgraph OFF["Offline, in eval/"]
     JX["joined.py<br/>rolling daily folds<br/>Maps vs +weather vs +camera"]
+    EN["ensemble.py<br/>served, stack, selection<br/>fuzzy-gated stack"]
     OX["timeseries_xgb.py<br/>60 min jb_to_woodlands"]
+    DL["deep_forecast.py<br/>LSTM GRU patch Transformer<br/>same rows as XGB"]
+    FZ["fuzzy_traffic.py<br/>light moderate heavy<br/>rule base, XGB to fuzzy"]
   end
+  HAR --> EN
+  JX --> EN
   JX --> SIG
+  EN --> SIG
   OX --> SIG
+  DL --> SIG
+  FZ --> SIG
+  CAM["camera counts<br/>no overlap with Maps window"] -.->|"pending backfill"| JX
   INTENT["24h horizon<br/>target, not served"] -.-> SRV
 ```
 <!-- /mermaid:eval-layer-b -->
@@ -178,7 +189,7 @@ Plots: `eval/runs/report/bqml/mae-by-direction.png`, `bqml/mae-diff-ci.png` (for
 - **Maps features:** rebuilt in pandas from the `travel_times` export by [`eval/features.py`](../eval/features.py). The run compared them with the live `v_training_set` on 7,172 rows (through 2026-09-30 15:20 UTC); every compared column matched (largest difference 1.4e-14, `joined.dataset.parity_with_live_v_training_set`).
 - **Weather:** rainfall at station S210 (Woodlands Centre Road) and the Woodlands 2-hour forecast, fetched from data.gov.sg ([`Causeway/`](../Causeway/README.md)). The experiment reads these CSVs; at run time the BigQuery weather tables ended on 31 Aug SGT (the same rows were appended to BigQuery afterwards; see [inventory.md](inventory.md)).
 - **Causality:** rainfall readings stamped at or before the forecast origin; the forecast most recently **acquired by data.gov.sg** (`update_timestamp`) at or before the origin whose valid period covers the target time.
-- **Camera:** pending the backfill in [handoff-camera-pilot.md](handoff-camera-pilot.md) (BigQuery camera tables end on 18 Jul).
+- **Camera:** pending the backfill in [handoff-camera-pilot.md](handoff-camera-pilot.md). No Layer A output exists for this window (section 7).
 
 **Design:** rolling-origin daily folds, test days 13–30 Sep SGT (18 folds, 5,184 rows, same window as section 1). Each fold trains on rows whose label was observed before the test day. Models: ridge (median imputation + missing indicators) and XGBoost (seed 42); ensemble = their mean.
 
@@ -227,6 +238,135 @@ Backtest days are full days after the split. These numbers replace the 2026-09-2
 
 Plots: `eval/runs/report/offline/backtest-mae.png`, `offline/holdout-sample.png`, `offline/holdout-mae-diff.png`.
 
+### 4. Deep sequence models, 60 minutes, one route (`eval/deep_forecast.py`)
+
+**Question:** do recurrent or attention models beat XGBoost on the same rows as section 3?
+
+**Design:** the same 1,428 test rows and training rows as section 3 (asserted in code). Each model sees the 36-step (3 h) window of 9 channels ending at the origin. All models share one protocol: inputs standardised on the fit rows; the last 15% of training rows (by time) for early stopping; the target is the change from the value at the origin (persistence-anchored), standardised; Huber loss, AdamW (weight decay 1e-4), learning rate halved on plateaus, best weights restored. Three seeds per model; the scored forecast is the seed mean.
+
+- **LSTM(64)** and **GRU(64)**, each followed by dropout and Dense(32) → Dense(1): 21,057 and 16,513 weights.
+- **Patch Transformer** ([`timeseries_transformer.py`](../eval/timeseries_transformer.py), 19,297 weights): the window is cut into six 30-minute patches, each projected to 32 dimensions, plus a learned position embedding; two pre-LayerNorm encoder blocks (4-head self-attention, GELU feed-forward of width 64, dropout 0.1); final LayerNorm, flatten, one linear output. The parameter budget matches the LSTM so the comparison is about architecture, not size.
+- **Ablation:** the same Transformer trained on the raw duration instead of the anchored change.
+
+| Candidate | MAE (min), seed mean forecast | MAE by seed | RMSE (min) |
+| --- | --- | --- | --- |
+| XGBoost (section 3) | 3.469 | — | 4.958 |
+| LSTM(64), anchored | 3.970 | 4.120 / 3.972 / 4.347 | 5.423 |
+| GRU(64), anchored | 4.030 | 4.194 / 4.074 / 3.975 | 5.433 |
+| Patch Transformer, anchored | 4.192 | 4.528 / 4.325 / 4.161 | 5.772 |
+| Patch Transformer, raw target | 4.491 | 4.753 / 4.883 / 4.599 | 6.222 |
+| Persistence T-60 | 4.677 | — | 6.386 |
+
+Paired differences (Holm over 10 comparisons): LSTM −0.707 [−1.313, −0.211], GRU −0.647 [−0.899, −0.346] and the anchored Transformer −0.485 [−1.000, +0.003] min against persistence; against XGBoost, +0.501, +0.561 and +0.723 min. Anchoring the Transformer's target changed its MAE by −0.298 [−0.604, −0.003]. **Every decision is "insufficient data"** (5 day-blocks, below 10).
+
+**Finding:** all three deep models point to an improvement over persistence, and none gets close to XGBoost; the Transformer is the weakest of the three. Anchoring on the current value is what makes the sequence models competitive at all. Reasons and when to revisit: [deep-learning-assessment.md](deep-learning-assessment.md).
+
+Plots: `eval/runs/report/deep/deep-mae-by-seed.png`, `deep/deep-mae-diff.png`.
+
+### 5. Fuzzy traffic level, 60 minutes, both directions (`eval/fuzzy_traffic.py`)
+
+**Question:** can the forecast be stated as a traffic level (light / moderate / heavy), and does a fuzzy classifier predict that level better than carrying the current level forward?
+
+**Levels:** on Maps travel time at the target time, fixed before scoring and shared by both directions: light < 20 min ≤ moderate < 35 min ≤ heavy (free flow is about 10–13 min, so roughly 1.5× and 2.5× free flow). Trapezoidal memberships sum to 1 and cross at 0.5 exactly at the cut points, so the level with the highest membership is the crisp level, and values near a boundary get graded membership.
+
+**Classifiers:** trained per direction on the offline split of section 3, applied to both routes (1,428 test rows each, 2,856 in total).
+
+- **Persistence level:** the level of the travel time at the origin.
+- **Fuzzy rule base:** five fuzzy inputs, all known at the origin:
+  - travel time now (light/moderate/heavy)
+  - 30-minute trend (falling/steady/rising)
+  - time of day at the target (night/morning/midday/evening)
+  - workday or not
+  - the travel time one day earlier at the target time
+
+  All 216 antecedent combinations are candidate rules. Each rule's consequent and certainty factor are learned from training compatibilities (Ishibuchi-style). Rules with a non-positive certainty or too little support are dropped: 155 and 158 of 216 are kept. Inference uses a single winning rule; the persistence level is used when no rule fires.
+- **XGB forecast → fuzzy level (hybrid):** the section 3 XGBoost regressor per direction, with its 60-minute forecast fuzzified by the same partition.
+
+| Classifier | Accuracy | Macro-F1 | Recall light / moderate / heavy | Severe errors (light↔heavy) | RPS |
+| --- | --- | --- | --- | --- | --- |
+| Majority level (train) | 0.470 | 0.213 | 0 / 1 / 0 | 0.000 | — |
+| Persistence level | 0.690 | 0.678 | 0.773 / 0.675 / 0.585 | 0.0056 | 0.120 |
+| Fuzzy rule base | 0.718 | 0.698 | 0.839 / 0.710 / 0.534 | 0.0025 | 0.116 |
+| XGB forecast → fuzzy level | **0.785** | **0.770** | 0.787 / 0.849 / 0.631 | 0.0007 | **0.082** |
+
+RPS is the ranked probability score of the normalised class degrees (ordinal, lower is better). Significance uses the 0/1 misclassification loss, so the difference is in error rate (Holm over 3 comparisons; 10 day-blocks, two directions × 5 days):
+
+| Challenger | Reference | Error-rate difference | CI | Decision |
+| --- | --- | --- | --- | --- |
+| Fuzzy rule base | Persistence level | −0.028 | [−0.075, +0.017] | not significant |
+| XGB → fuzzy level | Persistence level | −0.096 | [−0.113, −0.067] | challenger |
+| Fuzzy rule base | XGB → fuzzy level | +0.067 | [+0.021, +0.105] | reference (the hybrid is better) |
+
+**Finding:** the learned rule base is readable (for example, "IF now is heavy AND trend is rising AND time is evening AND workday AND yesterday heavy THEN heavy", CF 0.85). It halves severe errors against persistence, but its accuracy gain is not significant. The hybrid, a regression forecast followed by fuzzy level assignment, is significantly better than both. Heavy traffic on `MY_TO_SG` is the weak spot for every classifier (recall 0.38–0.47). Per-direction rows and the top rules are in `run.json` (`fuzzy`).
+
+Plots: `eval/runs/report/fuzzy/fuzzy-memberships.png`, `fuzzy/fuzzy-confusion.png`.
+
+### 6. Ensembles and hybrids of the Layer B models (`eval/ensemble.py`)
+
+**Question:** does combining the existing forecasters beat the best single one, and how much would the served forecast gain?
+
+**Pool (30 min, both directions, 13–30 Sep):** the BQML models of section 1 and the daily-refit Maps-only models of section 2, joined on (direction, bin) with identical labels (5,184 of 5,184 rows matched), plus persistence. Every combiner uses only earlier days of the window. A row counts as earlier once its label has been observed (bin + 40 min) before the test day starts. The first two days use equal weights.
+
+- **Equal mean** of the four models (`lin_h30`, `xgb_h30`, `ridge[maps]`, `xgb[maps]`).
+- **Rolling LAD stack:** convex weights per direction over the five pool members, fitted by least absolute deviation on all earlier days.
+- **Rolling selection:** per direction, the member with the lowest MAE over the previous three days (a rolling version of the registry).
+- **Fuzzy-gated stack (hybrid):** one set of stack weights per traffic level of the current travel time (section 5 partition). Each set is fitted with membership-weighted LAD, and the forecast is blended by membership.
+
+| Candidate | MAE both | `SG_TO_MY` | `MY_TO_SG` | RMSE both |
+| --- | --- | --- | --- | --- |
+| Persistence | 2.640 | 2.777 | 2.504 | 3.894 |
+| **Served** (registry) | 2.542 | 2.580 | 2.504 | 3.705 |
+| `ensemble_mean` (`lin_h30` + `xgb_h30`) | 2.459 | 2.468 | 2.450 | 3.526 |
+| `xgb[maps]` (daily refit, best single) | 2.275 | 2.399 | 2.150 | **3.311** |
+| Equal mean of 4 models | 2.358 | 2.400 | 2.316 | 3.389 |
+| Rolling LAD stack | **2.253** | **2.366** | **2.140** | 3.359 |
+| Rolling selection | 2.291 | 2.379 | 2.204 | 3.378 |
+| Fuzzy-gated stack | 2.268 | 2.389 | 2.146 | 3.376 |
+
+Significance (Holm over 9 comparisons, both directions):
+
+| Challenger | Reference | Mean diff | CI | Decision |
+| --- | --- | --- | --- | --- |
+| Served | Persistence | −0.099 | [−0.169, −0.040] | not significant (Holm p = 0.074) |
+| Equal mean of 4 | `xgb[maps]` | +0.083 | [+0.030, +0.152] | not significant (Holm p = 0.074) |
+| Rolling LAD stack | `xgb[maps]` | −0.021 | [−0.074, +0.042] | not significant |
+| Rolling selection | `xgb[maps]` | +0.016 | [−0.042, +0.090] | not significant |
+| Fuzzy-gated stack | `xgb[maps]` | −0.007 | [−0.063, +0.060] | not significant |
+| Fuzzy-gated stack | Rolling LAD stack | +0.015 | [−0.003, +0.038] | not significant |
+| `xgb[maps]` | Served | −0.267 | [−0.371, −0.146] | challenger |
+| Rolling LAD stack | Served | −0.288 | [−0.349, −0.199] | challenger |
+| Fuzzy-gated stack | Served | −0.274 | [−0.341, −0.177] | challenger |
+
+On 30 Sep the stack put about 0.61 of its weight on `xgb[maps]`, 0.24 on persistence, 0.13–0.15 on `xgb_h30` and none on either linear model (`weights_30min` in `run.json`).
+
+**Where the error is:** rows are split by the observed 30-minute change (diagnostic only, it uses the label). Changes of more than 5 minutes up ("rising", 8.5% of rows) or down ("falling", 8.0%) carry 39% of `xgb[maps]`'s absolute error (MAE 5.32 and 5.57 min, against 1.65 min when steady). The stack is better than `xgb[maps]` in steady traffic (1.44 min) and worse at onsets (6.76 min rising): it shrinks toward persistence, which is what the stack is for, and that is also why it gains nothing overall.
+
+**60 minutes, one route:** the equal mean of XGBoost and the three deep models scored 3.655 min, the deep-only mean 3.929 and a rolling stack 3.561, all against XGBoost's 3.469. Every decision is "insufficient data" (5 blocks).
+
+**Finding:** ensembling and hybridising add nothing measurable over the best single model. The daily-refit `xgb[maps]` is within 0.02 min of every combiner, and the equal mean is worse. The gain available now is from **what is served**: replacing the registry choice with `xgb[maps]` or the stack would cut 30-minute MAE by about 0.27–0.29 min (significant). The served choice itself is not significantly better than persistence on this window. Changing the serve path is an approved deploy (a daily retrain job and a `v_forecast_recent` change), not something the harness does.
+
+Plots: `eval/runs/report/ensemble/ensemble-30min-mae-diff.png`, `ensemble/ensemble-60min-mae-diff.png`.
+
+### 7. Is Layer A output a meaningful Layer B input?
+
+**Status: cannot be tested yet. No Layer A output overlaps the Maps label.** This was checked with read-only queries on 2026-10-01:
+
+| Data | Range | Overlap with `travel_times` (from 2026-09-05 17:53 UTC) |
+| --- | --- | --- |
+| `cam2701.Cam2701` detections (Layer A output) and view `v_congestion_index_10min` | 2026-03-13 to 2026-04-22 (33 days, 3,513 frames) | none |
+| `cam2702.Cam2702` detections | 2026-03-13 to 2026-04-22 (33 days) | none |
+| `traffic_images.metadata` frames for 2701 (raw images, no detections) | to 2026-09-11 23:55, about 144 per day in Sep | frames only, 6–11 Sep |
+| data.gov.sg traffic-images history (backfill source) | on request | frames only; needs billed Roboflow inference |
+| `swiftbackend` live calls | not persisted | none |
+
+So the answer depends on the camera backfill ([handoff-camera-pilot.md](handoff-camera-pilot.md)). Once it has run, the "Maps + weather + camera" arm of section 2 answers the question with the same folds and the same significance rules.
+
+**What the current data does say:**
+
+- **Where it could help.** Camera counts measure the queue now, and Layer B already sees the travel time now and its lags. A camera can only add information where the Maps lags do not anticipate the change, which is the onset and clearing of queues. Those rows (16.5% of rows, observed change above 5 minutes) carry 39% of `xgb[maps]`'s error (section 6). If a camera input removed all of it, 30-minute MAE would fall by at most about 0.9 min (0.39 × 2.275). A realistic gain is a fraction of that.
+- **How small a gain is detectable.** Nested-feature comparisons are precise. Adding weather to `xgb[maps]` gave a 95% CI of [−0.015, +0.022] min (section 2). With full camera coverage of 13–30 Sep, a gain of a few hundredths of a minute would be detectable. Partial coverage widens the interval, and below 60% of test rows the arm is reported as insufficient.
+- **The direction mapping and causality are in place.** `features.add_camera` takes the last frame at or before bin + 10 min and at most 30 minutes old, maps SG-MY / MY-SG to the Layer B directions, and records a scored frame with no vehicles as 0 and a missing frame as missing.
+
 ### Do not combine
 
 Do not put the 60-minute one-route numbers and the 30-minute two-direction numbers in one headline. The 30-minute production window (section 1) is the headline for the served system.
@@ -240,10 +380,13 @@ The report run used the cached Maps export `eval/data/causeway_gdata.csv` (its S
 ```bash
 cd eval
 pip install -r requirements-dev.txt
-python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined
+pip install -r requirements-notebook.txt     # TensorFlow, for --deep
+python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined --deep --fuzzy --ensemble
 python promote_report_run.py --check
 python promote_report_run.py <run_id>
 ```
+
+The deep component takes about 10–15 minutes on CPU. With the same TensorFlow build it reproduces the per-seed MAEs exactly; other builds can differ in the last digits.
 
 Adding `--refresh-bq` downloads a newer export: that extends the data and is a new result, not a reproduction. `--allow-dirty` on promotion is only for a recorded reason.
 

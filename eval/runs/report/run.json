@@ -3,13 +3,16 @@
   "components": [
     "offline",
     "bqml",
-    "joined"
+    "joined",
+    "deep",
+    "fuzzy",
+    "ensemble"
   ],
   "provenance": {
-    "git_sha": "15f094bfba3ea07e3b3ee7b5305601a55110f9d9",
+    "git_sha": "9597e2099657a7c03cad84b809837d0a78940eba",
     "git_branch": "eval-integrity-overhaul",
     "git_dirty": false,
-    "code_sha256": "e735477a0ade0e30170756bc96a2599fdb356b4b2132fd2c9df091a0bd54c2a5",
+    "code_sha256": "012b8dc3bfc4ba785d676f3ed3a71bd315f1df2cbb0181af1d1ce372d84d9a3e",
     "python": "3.11.9",
     "packages": {
       "numpy": "2.4.6",
@@ -4248,6 +4251,3768 @@
       "joined/joined-mae-by-feature-set.png"
     ]
   },
-  "run_id": "20260930T175104Z_offline-bqml-joined",
-  "created_at_utc": "2026-09-30T17:51:54Z"
+  "deep": {
+    "dataset": {
+      "source": "swiftborder.causeway.travel_times",
+      "cache": {
+        "path": "eval/data/causeway_gdata.csv",
+        "sha256": "13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07",
+        "bytes": 3484144
+      },
+      "route_id": "jb_to_woodlands",
+      "route_scope": "JB -> SG (jb_to_woodlands only)",
+      "supervised_rows": {
+        "train": 5710,
+        "test": 1428
+      },
+      "sequence_channels": [
+        "duration_in_traffic_sec",
+        "duration_sec",
+        "hour",
+        "minute",
+        "dayofweek",
+        "month",
+        "nonworkday",
+        "d1",
+        "d7"
+      ]
+    },
+    "window": {
+      "timezone": "Asia/Singapore",
+      "basis": "same rows as the offline component (target time; train labels < start <= test labels)",
+      "start": "2026-09-26 01:35:00",
+      "end": "2026-10-01 00:30:00"
+    },
+    "models": [
+      "LSTM(64), anchored",
+      "GRU(64), anchored",
+      "Patch Transformer, anchored",
+      "Patch Transformer, raw target (ablation)",
+      "XGB (sklearn)",
+      "Persistence T-60"
+    ],
+    "horizon_minutes": 60,
+    "config": {
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "fit": {
+        "epochs": 100,
+        "batch_size": 64,
+        "learning_rate": 0.001,
+        "weight_decay": 0.0001,
+        "huber_delta": 1.0,
+        "patience": 10,
+        "reduce_lr_patience": 4,
+        "val_fraction": 0.15
+      },
+      "recurrent": {
+        "units": 64,
+        "dropout": 0.1,
+        "head": "Dropout -> Dense(32, relu) -> Dense(1)"
+      },
+      "transformer": {
+        "patch_len": 6,
+        "d_model": 32,
+        "n_heads": 4,
+        "n_layers": 2,
+        "ff_dim": 64,
+        "dropout": 0.1,
+        "attention_dropout": 0.1,
+        "head_dropout": 0.1,
+        "seed": 42
+      },
+      "window_size": 36,
+      "xgb_seed": 42
+    },
+    "seed_summary": {
+      "lstm": {
+        "label": "LSTM(64), anchored",
+        "anchor": true,
+        "params": 21057,
+        "mae_by_seed": [
+          4.120297144570785,
+          3.9715094310122807,
+          4.347162989658642
+        ],
+        "mae_seed_mean_min": 4.146323188413903,
+        "mae_seed_sd_min": 0.1891742985965898,
+        "seed_mean_prediction_mae_min": 3.9702667096062187,
+        "runs": [
+          {
+            "seed": 0,
+            "params": 21057,
+            "epochs_run": 12,
+            "best_epoch": 2,
+            "best_val_loss": 0.18300412595272064,
+            "train_seconds": 34.2,
+            "mae_min": 4.120297144570785
+          },
+          {
+            "seed": 1,
+            "params": 21057,
+            "epochs_run": 26,
+            "best_epoch": 16,
+            "best_val_loss": 0.165280282497406,
+            "train_seconds": 75.0,
+            "mae_min": 3.9715094310122807
+          },
+          {
+            "seed": 2,
+            "params": 21057,
+            "epochs_run": 14,
+            "best_epoch": 4,
+            "best_val_loss": 0.2016281634569168,
+            "train_seconds": 70.7,
+            "mae_min": 4.347162989658642
+          }
+        ]
+      },
+      "gru": {
+        "label": "GRU(64), anchored",
+        "anchor": true,
+        "params": 16513,
+        "mae_by_seed": [
+          4.194476897106702,
+          4.074022281122238,
+          3.974685779594435
+        ],
+        "mae_seed_mean_min": 4.081061652607791,
+        "mae_seed_sd_min": 0.11006451924896822,
+        "seed_mean_prediction_mae_min": 4.029983736485025,
+        "runs": [
+          {
+            "seed": 0,
+            "params": 16513,
+            "epochs_run": 13,
+            "best_epoch": 3,
+            "best_val_loss": 0.17825910449028015,
+            "train_seconds": 29.1,
+            "mae_min": 4.194476897106702
+          },
+          {
+            "seed": 1,
+            "params": 16513,
+            "epochs_run": 12,
+            "best_epoch": 2,
+            "best_val_loss": 0.17416802048683167,
+            "train_seconds": 33.3,
+            "mae_min": 4.074022281122238
+          },
+          {
+            "seed": 2,
+            "params": 16513,
+            "epochs_run": 12,
+            "best_epoch": 2,
+            "best_val_loss": 0.17338036000728607,
+            "train_seconds": 32.7,
+            "mae_min": 3.974685779594435
+          }
+        ]
+      },
+      "transformer": {
+        "label": "Patch Transformer, anchored",
+        "anchor": true,
+        "params": 19297,
+        "mae_by_seed": [
+          4.528190732481573,
+          4.325416397297081,
+          4.161371505268468
+        ],
+        "mae_seed_mean_min": 4.338326211682374,
+        "mae_seed_sd_min": 0.1837500580786354,
+        "seed_mean_prediction_mae_min": 4.192396071817931,
+        "runs": [
+          {
+            "seed": 0,
+            "params": 19297,
+            "epochs_run": 27,
+            "best_epoch": 17,
+            "best_val_loss": 0.2210802435874939,
+            "train_seconds": 61.0,
+            "mae_min": 4.528190732481573
+          },
+          {
+            "seed": 1,
+            "params": 19297,
+            "epochs_run": 16,
+            "best_epoch": 6,
+            "best_val_loss": 0.23401257395744324,
+            "train_seconds": 39.0,
+            "mae_min": 4.325416397297081
+          },
+          {
+            "seed": 2,
+            "params": 19297,
+            "epochs_run": 17,
+            "best_epoch": 7,
+            "best_val_loss": 0.19277049601078033,
+            "train_seconds": 43.0,
+            "mae_min": 4.161371505268468
+          }
+        ]
+      },
+      "transformer_raw": {
+        "label": "Patch Transformer, raw target (ablation)",
+        "anchor": false,
+        "params": 19297,
+        "mae_by_seed": [
+          4.7534403212375445,
+          4.883104365301622,
+          4.598586560987513
+        ],
+        "mae_seed_mean_min": 4.745043749175561,
+        "mae_seed_sd_min": 0.14244462804796973,
+        "seed_mean_prediction_mae_min": 4.490796905004677,
+        "runs": [
+          {
+            "seed": 0,
+            "params": 19297,
+            "epochs_run": 39,
+            "best_epoch": 29,
+            "best_val_loss": 0.08004460483789444,
+            "train_seconds": 81.0,
+            "mae_min": 4.7534403212375445
+          },
+          {
+            "seed": 1,
+            "params": 19297,
+            "epochs_run": 25,
+            "best_epoch": 15,
+            "best_val_loss": 0.10723841935396194,
+            "train_seconds": 56.0,
+            "mae_min": 4.883104365301622
+          },
+          {
+            "seed": 2,
+            "params": 19297,
+            "epochs_run": 18,
+            "best_epoch": 8,
+            "best_val_loss": 0.09813723713159561,
+            "train_seconds": 41.5,
+            "mae_min": 4.598586560987513
+          }
+        ]
+      }
+    },
+    "metrics": [
+      {
+        "candidate": "Persistence T-60",
+        "slice": "holdout",
+        "n": 1428,
+        "mae_min": 4.676984126984126,
+        "rmse_min": 6.385776623917372
+      },
+      {
+        "candidate": "XGB (sklearn)",
+        "slice": "holdout",
+        "n": 1428,
+        "mae_min": 3.4693692710441923,
+        "rmse_min": 4.957617924585301
+      },
+      {
+        "candidate": "LSTM(64), anchored",
+        "slice": "holdout seed 0",
+        "n": 1428,
+        "mae_min": 4.120297144570785,
+        "rmse_min": 5.556461582621485
+      },
+      {
+        "candidate": "LSTM(64), anchored",
+        "slice": "holdout seed 1",
+        "n": 1428,
+        "mae_min": 3.9715094310122807,
+        "rmse_min": 5.707269057375681
+      },
+      {
+        "candidate": "LSTM(64), anchored",
+        "slice": "holdout seed 2",
+        "n": 1428,
+        "mae_min": 4.347162989658642,
+        "rmse_min": 5.952637637996836
+      },
+      {
+        "candidate": "LSTM(64), anchored, seed mean",
+        "slice": "holdout",
+        "n": 1428,
+        "mae_min": 3.9702667096062187,
+        "rmse_min": 5.423471237303823
+      },
+      {
+        "candidate": "GRU(64), anchored",
+        "slice": "holdout seed 0",
+        "n": 1428,
+        "mae_min": 4.194476897106702,
+        "rmse_min": 5.536035376518752
+      },
+      {
+        "candidate": "GRU(64), anchored",
+        "slice": "holdout seed 1",
+        "n": 1428,
+        "mae_min": 4.074022281122238,
+        "rmse_min": 5.459999146432611
+      },
+      {
+        "candidate": "GRU(64), anchored",
+        "slice": "holdout seed 2",
+        "n": 1428,
+        "mae_min": 3.974685779594435,
+        "rmse_min": 5.463729872077383
+      },
+      {
+        "candidate": "GRU(64), anchored, seed mean",
+        "slice": "holdout",
+        "n": 1428,
+        "mae_min": 4.029983736485025,
+        "rmse_min": 5.432595494839925
+      },
+      {
+        "candidate": "Patch Transformer, anchored",
+        "slice": "holdout seed 0",
+        "n": 1428,
+        "mae_min": 4.528190732481573,
+        "rmse_min": 6.227742611244914
+      },
+      {
+        "candidate": "Patch Transformer, anchored",
+        "slice": "holdout seed 1",
+        "n": 1428,
+        "mae_min": 4.325416397297081,
+        "rmse_min": 6.00077445455364
+      },
+      {
+        "candidate": "Patch Transformer, anchored",
+        "slice": "holdout seed 2",
+        "n": 1428,
+        "mae_min": 4.161371505268468,
+        "rmse_min": 5.694736876153694
+      },
+      {
+        "candidate": "Patch Transformer, anchored, seed mean",
+        "slice": "holdout",
+        "n": 1428,
+        "mae_min": 4.192396071817931,
+        "rmse_min": 5.772199737683869
+      },
+      {
+        "candidate": "Patch Transformer, raw target (ablation)",
+        "slice": "holdout seed 0",
+        "n": 1428,
+        "mae_min": 4.7534403212375445,
+        "rmse_min": 6.6251427301787436
+      },
+      {
+        "candidate": "Patch Transformer, raw target (ablation)",
+        "slice": "holdout seed 1",
+        "n": 1428,
+        "mae_min": 4.883104365301622,
+        "rmse_min": 6.743693876837164
+      },
+      {
+        "candidate": "Patch Transformer, raw target (ablation)",
+        "slice": "holdout seed 2",
+        "n": 1428,
+        "mae_min": 4.598586560987513,
+        "rmse_min": 6.284003126097251
+      },
+      {
+        "candidate": "Patch Transformer, raw target (ablation), seed mean",
+        "slice": "holdout",
+        "n": 1428,
+        "mae_min": 4.490796905004677,
+        "rmse_min": 6.222284337220527
+      }
+    ],
+    "significance": [
+      {
+        "label_challenger": "LSTM(64), anchored, seed mean",
+        "label_reference": "Persistence T-60",
+        "n": 1428,
+        "mean_ae_diff_min": -0.7067174173779077,
+        "paired_t_pvalue": 2.690954211867637e-16,
+        "bootstrap_ci_low_min": -1.312872986602291,
+        "bootstrap_ci_high_min": -0.21107226325367912,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": -2.7633857725768696,
+        "dm_pvalue": 0.0028970085118706387,
+        "dm_pvalue_reference": 0.9971029914881293,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.0521461532136715,
+        "holm_adjusted_p_reference": 0.0521461532136715,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.0057940170237412774,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "LSTM(64), anchored, seed mean",
+        "label_reference": "XGB (sklearn)",
+        "n": 1428,
+        "mean_ae_diff_min": 0.5008973700862518,
+        "paired_t_pvalue": 1.4031449876148993e-08,
+        "bootstrap_ci_low_min": -0.16002160964899195,
+        "bootstrap_ci_high_min": 0.9871252741457489,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 1.7698299266432127,
+        "dm_pvalue": 0.9615155050976818,
+        "dm_pvalue_reference": 0.0384844949023182,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.2309069694139092,
+        "holm_adjusted_p_reference": 0.2309069694139092,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.0769689898046364,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "GRU(64), anchored, seed mean",
+        "label_reference": "Persistence T-60",
+        "n": 1428,
+        "mean_ae_diff_min": -0.6470003904991021,
+        "paired_t_pvalue": 1.06962562712224e-25,
+        "bootstrap_ci_low_min": -0.8989676564215977,
+        "bootstrap_ci_high_min": -0.34614435708068464,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": -3.8847300349242735,
+        "dm_pvalue": 5.356695772655475e-05,
+        "dm_pvalue_reference": 0.9999464330422735,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.0010713391545310949,
+        "holm_adjusted_p_reference": 0.0010713391545310949,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.0001071339154531095,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "GRU(64), anchored, seed mean",
+        "label_reference": "XGB (sklearn)",
+        "n": 1428,
+        "mean_ae_diff_min": 0.5606143969650575,
+        "paired_t_pvalue": 1.9340387170535722e-13,
+        "bootstrap_ci_low_min": 0.07325488818242451,
+        "bootstrap_ci_high_min": 0.996217347208526,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 2.4894704690990483,
+        "dm_pvalue": 0.9935467413295113,
+        "dm_pvalue_reference": 0.006453258670488737,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.1032521387278198,
+        "holm_adjusted_p_reference": 0.1032521387278198,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.012906517340977475,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "Patch Transformer, anchored, seed mean",
+        "label_reference": "Persistence T-60",
+        "n": 1428,
+        "mean_ae_diff_min": -0.48458805516619574,
+        "paired_t_pvalue": 3.381442837041552e-08,
+        "bootstrap_ci_low_min": -0.9995961366456263,
+        "bootstrap_ci_high_min": 0.0025331104398194477,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": -2.0464742143191086,
+        "dm_pvalue": 0.02044632013646764,
+        "dm_pvalue_reference": 0.9795536798635324,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.20446320136467638,
+        "holm_adjusted_p_reference": 0.20446320136467638,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.04089264027293528,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "Patch Transformer, anchored, seed mean",
+        "label_reference": "XGB (sklearn)",
+        "n": 1428,
+        "mean_ae_diff_min": 0.7230267322979638,
+        "paired_t_pvalue": 4.840537826421148e-16,
+        "bootstrap_ci_low_min": -0.01324591222315121,
+        "bootstrap_ci_high_min": 1.3840197340231788,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 2.1380222869716174,
+        "dm_pvalue": 0.9836578038226794,
+        "dm_pvalue_reference": 0.01634219617732062,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.19610635412784744,
+        "holm_adjusted_p_reference": 0.19610635412784744,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.03268439235464124,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "Patch Transformer, raw target (ablation), seed mean",
+        "label_reference": "Persistence T-60",
+        "n": 1428,
+        "mean_ae_diff_min": -0.18618687367906747,
+        "paired_t_pvalue": 0.0920352905293462,
+        "bootstrap_ci_low_min": -0.7528284040997779,
+        "bootstrap_ci_high_min": 0.502492721804272,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": -0.6260268333855792,
+        "dm_pvalue": 0.2656987287052127,
+        "dm_pvalue_reference": 0.7343012712947873,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.5313974574104254,
+        "holm_adjusted_p_reference": 0.5313974574104254,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.5313974574104254,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "Patch Transformer, raw target (ablation), seed mean",
+        "label_reference": "XGB (sklearn)",
+        "n": 1428,
+        "mean_ae_diff_min": 1.0214279137850921,
+        "paired_t_pvalue": 6.115594369585553e-25,
+        "bootstrap_ci_low_min": 0.17372607598451698,
+        "bootstrap_ci_high_min": 1.9198673828687778,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 2.3672133732741676,
+        "dm_pvalue": 0.9909723038925249,
+        "dm_pvalue_reference": 0.009027696107475143,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.126387745504652,
+        "holm_adjusted_p_reference": 0.126387745504652,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.018055392214950287,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "Patch Transformer, anchored",
+        "label_reference": "Patch Transformer, raw target",
+        "n": 1428,
+        "mean_ae_diff_min": -0.2984011814871284,
+        "paired_t_pvalue": 1.2629243884281382e-05,
+        "bootstrap_ci_low_min": -0.6040257850845123,
+        "bootstrap_ci_high_min": -0.003147784677504186,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": -1.9280566894324789,
+        "dm_pvalue": 0.027023148470217546,
+        "dm_pvalue_reference": 0.9729768515297824,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.21618518776174037,
+        "holm_adjusted_p_reference": 0.21618518776174037,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.05404629694043509,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      },
+      {
+        "label_challenger": "Patch Transformer, anchored",
+        "label_reference": "LSTM(64), anchored",
+        "n": 1428,
+        "mean_ae_diff_min": 0.22212936221171192,
+        "paired_t_pvalue": 8.966446128176136e-05,
+        "bootstrap_ci_low_min": -0.1440783828808041,
+        "bootstrap_ci_high_min": 0.5099306094178359,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 1.3992489631968723,
+        "dm_pvalue": 0.9190221685243531,
+        "dm_pvalue_reference": 0.08097783147564684,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.32391132590258737,
+        "holm_adjusted_p_reference": 0.32391132590258737,
+        "family_size": 10,
+        "dm_pvalue_two_sided": 0.16195566295129368,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data"
+      }
+    ],
+    "artifacts": [
+      "deep/deep-mae-by-seed.png",
+      "deep/deep-mae-diff.png"
+    ]
+  },
+  "fuzzy": {
+    "dataset": {
+      "source": "swiftborder.causeway.travel_times",
+      "cache": {
+        "path": "eval/data/causeway_gdata.csv",
+        "sha256": "13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07",
+        "bytes": 3484144
+      },
+      "routes": {
+        "jb_to_woodlands": {
+          "direction": "MY_TO_SG",
+          "supervised_rows": {
+            "train": 5710,
+            "test": 1428
+          },
+          "boundary": "2026-09-26 01:35:00",
+          "test_end": "2026-10-01 00:30:00",
+          "train_level_share": [
+            0.36,
+            0.441,
+            0.199
+          ],
+          "test_level_share": [
+            0.321,
+            0.526,
+            0.153
+          ],
+          "majority_level": "moderate",
+          "rules_kept": 155,
+          "rules_possible": 216,
+          "top_rules": [
+            {
+              "rule": "IF now is light AND trend is steady AND time is night AND day is workday AND yesterday is light THEN light",
+              "cf": 0.971,
+              "support": 590.5
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is midday AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.39,
+              "support": 218.0
+            },
+            {
+              "rule": "IF now is light AND trend is steady AND time is midday AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.16,
+              "support": 180.0
+            },
+            {
+              "rule": "IF now is heavy AND trend is rising AND time is evening AND day is workday AND yesterday is heavy THEN heavy",
+              "cf": 0.851,
+              "support": 169.8
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is evening AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.585,
+              "support": 148.8
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is morning AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.626,
+              "support": 140.9
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is night AND day is workday AND yesterday is moderate THEN light",
+              "cf": 0.005,
+              "support": 126.5
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is night AND day is workday AND yesterday is light THEN light",
+              "cf": 0.673,
+              "support": 125.7
+            },
+            {
+              "rule": "IF now is light AND trend is steady AND time is night AND day is non-workday AND yesterday is light THEN light",
+              "cf": 0.999,
+              "support": 124.6
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is midday AND day is workday AND yesterday is light THEN moderate",
+              "cf": 0.198,
+              "support": 123.5
+            }
+          ]
+        },
+        "mandai_to_shell_jb": {
+          "direction": "SG_TO_MY",
+          "supervised_rows": {
+            "train": 5709,
+            "test": 1428
+          },
+          "boundary": "2026-09-26 01:35:00",
+          "test_end": "2026-10-01 00:30:00",
+          "train_level_share": [
+            0.388,
+            0.401,
+            0.211
+          ],
+          "test_level_share": [
+            0.345,
+            0.414,
+            0.242
+          ],
+          "majority_level": "moderate",
+          "rules_kept": 158,
+          "rules_possible": 216,
+          "top_rules": [
+            {
+              "rule": "IF now is light AND trend is steady AND time is night AND day is workday AND yesterday is light THEN light",
+              "cf": 0.965,
+              "support": 656.9
+            },
+            {
+              "rule": "IF now is light AND trend is steady AND time is morning AND day is workday AND yesterday is light THEN light",
+              "cf": 0.807,
+              "support": 389.0
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is evening AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.467,
+              "support": 207.2
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is night AND day is workday AND yesterday is light THEN light",
+              "cf": 0.304,
+              "support": 149.2
+            },
+            {
+              "rule": "IF now is light AND trend is steady AND time is morning AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.112,
+              "support": 132.5
+            },
+            {
+              "rule": "IF now is light AND trend is steady AND time is night AND day is non-workday AND yesterday is light THEN light",
+              "cf": 0.851,
+              "support": 120.6
+            },
+            {
+              "rule": "IF now is light AND trend is falling AND time is night AND day is workday AND yesterday is light THEN light",
+              "cf": 0.891,
+              "support": 118.4
+            },
+            {
+              "rule": "IF now is moderate AND trend is rising AND time is evening AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.459,
+              "support": 117.5
+            },
+            {
+              "rule": "IF now is moderate AND trend is steady AND time is night AND day is workday AND yesterday is moderate THEN moderate",
+              "cf": 0.37,
+              "support": 105.6
+            },
+            {
+              "rule": "IF now is heavy AND trend is rising AND time is midday AND day is workday AND yesterday is heavy THEN heavy",
+              "cf": 0.737,
+              "support": 104.0
+            }
+          ]
+        }
+      }
+    },
+    "window": {
+      "timezone": "Asia/Singapore",
+      "basis": "offline split per route (target time; train labels < start <= test labels)",
+      "start": "2026-09-26 01:35:00",
+      "end": "2026-10-01 00:30:00"
+    },
+    "models": [
+      "Persistence level",
+      "Majority level (train)",
+      "Fuzzy rule base",
+      "XGB forecast -> fuzzy level"
+    ],
+    "horizon_minutes": 60,
+    "config": {
+      "levels_min": {
+        "light": "< 20.0",
+        "moderate": "20.0-35.0",
+        "heavy": ">= 35.0"
+      },
+      "partition": {
+        "light_max": 20.0,
+        "heavy_min": 35.0,
+        "half_width": 5.0
+      },
+      "inputs": {
+        "now": [
+          "light",
+          "moderate",
+          "heavy"
+        ],
+        "trend": [
+          "falling",
+          "steady",
+          "rising"
+        ],
+        "time": [
+          "night",
+          "morning",
+          "midday",
+          "evening"
+        ],
+        "day": [
+          "workday",
+          "non-workday"
+        ],
+        "yesterday": [
+          "light",
+          "moderate",
+          "heavy"
+        ]
+      },
+      "min_support": 2.0,
+      "t_norm": "product",
+      "inference": "single winner (compatibility x CF); persistence level when no rule fires",
+      "xgb_seed": 42
+    },
+    "loss_for_significance": "0/1 misclassification; mean_ae_diff_min is an error-rate difference",
+    "confusion_labels": [
+      "light",
+      "moderate",
+      "heavy"
+    ],
+    "confusion": {
+      "Persistence level": [
+        [
+          734,
+          209,
+          7
+        ],
+        [
+          209,
+          906,
+          227
+        ],
+        [
+          9,
+          225,
+          330
+        ]
+      ],
+      "Majority level (train)": [
+        [
+          0,
+          950,
+          0
+        ],
+        [
+          0,
+          1342,
+          0
+        ],
+        [
+          0,
+          564,
+          0
+        ]
+      ],
+      "Fuzzy rule base": [
+        [
+          797,
+          152,
+          1
+        ],
+        [
+          209,
+          953,
+          180
+        ],
+        [
+          6,
+          257,
+          301
+        ]
+      ],
+      "XGB forecast -> fuzzy level": [
+        [
+          748,
+          201,
+          1
+        ],
+        [
+          78,
+          1139,
+          125
+        ],
+        [
+          1,
+          207,
+          356
+        ]
+      ]
+    },
+    "metrics": [
+      {
+        "candidate": "Persistence level",
+        "slice": "holdout",
+        "n": 2856,
+        "accuracy": 0.6897759103641457,
+        "macro_f1": 0.6775135777521416,
+        "severe_error_rate": 0.0056022408963585435,
+        "recall_light": 0.7726315789473684,
+        "recall_moderate": 0.6751117734724292,
+        "recall_heavy": 0.5851063829787234,
+        "rps": 0.11984919176003736
+      },
+      {
+        "candidate": "Persistence level",
+        "slice": "holdout MY_TO_SG",
+        "n": 1428,
+        "accuracy": 0.6862745098039216,
+        "macro_f1": 0.6437681504121202,
+        "severe_error_rate": 0.004201680672268907,
+        "recall_light": 0.759825327510917,
+        "recall_moderate": 0.7057256990679095,
+        "recall_heavy": 0.4657534246575342,
+        "rps": 0.12396102552131963
+      },
+      {
+        "candidate": "Persistence level",
+        "slice": "holdout SG_TO_MY",
+        "n": 1428,
+        "accuracy": 0.6932773109243697,
+        "macro_f1": 0.6937063870856196,
+        "severe_error_rate": 0.0070028011204481795,
+        "recall_light": 0.7845528455284553,
+        "recall_moderate": 0.6362098138747885,
+        "recall_heavy": 0.6608695652173913,
+        "rps": 0.11573735799875506
+      },
+      {
+        "candidate": "Majority level (train)",
+        "slice": "holdout",
+        "n": 2856,
+        "accuracy": 0.4698879551820728,
+        "macro_f1": 0.21311735747181196,
+        "severe_error_rate": 0.0,
+        "recall_light": 0.0,
+        "recall_moderate": 1.0,
+        "recall_heavy": 0.0
+      },
+      {
+        "candidate": "Majority level (train)",
+        "slice": "holdout MY_TO_SG",
+        "n": 1428,
+        "accuracy": 0.5259103641456583,
+        "macro_f1": 0.22976900718984247,
+        "severe_error_rate": 0.0,
+        "recall_light": 0.0,
+        "recall_moderate": 1.0,
+        "recall_heavy": 0.0
+      },
+      {
+        "candidate": "Majority level (train)",
+        "slice": "holdout SG_TO_MY",
+        "n": 1428,
+        "accuracy": 0.41386554621848737,
+        "macro_f1": 0.19514611193660228,
+        "severe_error_rate": 0.0,
+        "recall_light": 0.0,
+        "recall_moderate": 1.0,
+        "recall_heavy": 0.0
+      },
+      {
+        "candidate": "Fuzzy rule base",
+        "slice": "holdout",
+        "n": 2856,
+        "accuracy": 0.7181372549019608,
+        "macro_f1": 0.6976145863082488,
+        "severe_error_rate": 0.0024509803921568627,
+        "recall_light": 0.8389473684210527,
+        "recall_moderate": 0.710134128166915,
+        "recall_heavy": 0.5336879432624113,
+        "rps": 0.11634050745856697
+      },
+      {
+        "candidate": "Fuzzy rule base",
+        "slice": "holdout MY_TO_SG",
+        "n": 1428,
+        "accuracy": 0.7121848739495799,
+        "macro_f1": 0.6554315929537166,
+        "severe_error_rate": 0.0035014005602240898,
+        "recall_light": 0.7947598253275109,
+        "recall_moderate": 0.7523302263648469,
+        "recall_heavy": 0.4018264840182648,
+        "rps": 0.11336612104928163
+      },
+      {
+        "candidate": "Fuzzy rule base",
+        "slice": "holdout SG_TO_MY",
+        "n": 1428,
+        "accuracy": 0.7240896358543417,
+        "macro_f1": 0.7185370452465148,
+        "severe_error_rate": 0.0014005602240896359,
+        "recall_light": 0.8800813008130082,
+        "recall_moderate": 0.6565143824027073,
+        "recall_heavy": 0.6173913043478261,
+        "rps": 0.1193148938678523
+      },
+      {
+        "candidate": "XGB forecast -> fuzzy level",
+        "slice": "holdout",
+        "n": 2856,
+        "accuracy": 0.7853641456582633,
+        "macro_f1": 0.7703549294038203,
+        "severe_error_rate": 0.0007002801120448179,
+        "recall_light": 0.7873684210526316,
+        "recall_moderate": 0.8487332339791356,
+        "recall_heavy": 0.6312056737588653,
+        "rps": 0.08219145442239503
+      },
+      {
+        "candidate": "XGB forecast -> fuzzy level",
+        "slice": "holdout MY_TO_SG",
+        "n": 1428,
+        "accuracy": 0.7605042016806722,
+        "macro_f1": 0.6931152407037481,
+        "severe_error_rate": 0.0007002801120448179,
+        "recall_light": 0.7751091703056768,
+        "recall_moderate": 0.8628495339547271,
+        "recall_heavy": 0.3789954337899543,
+        "rps": 0.0909050194548018
+      },
+      {
+        "candidate": "XGB forecast -> fuzzy level",
+        "slice": "holdout SG_TO_MY",
+        "n": 1428,
+        "accuracy": 0.8102240896358543,
+        "macro_f1": 0.8121575218656862,
+        "severe_error_rate": 0.0007002801120448179,
+        "recall_light": 0.7987804878048781,
+        "recall_moderate": 0.8307952622673435,
+        "recall_heavy": 0.7913043478260869,
+        "rps": 0.07347788938998827
+      }
+    ],
+    "significance": [
+      {
+        "label_challenger": "Fuzzy rule base",
+        "label_reference": "Persistence level",
+        "n": 2856,
+        "mean_ae_diff_min": -0.028361344537815126,
+        "paired_t_pvalue": 0.0031842949800668305,
+        "bootstrap_ci_low_min": -0.07457983193277311,
+        "bootstrap_ci_high_min": 0.01680672268907563,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": -1.252387311230248,
+        "dm_pvalue": 0.10526567318594451,
+        "dm_pvalue_reference": 0.8947343268140555,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 10,
+        "holm_adjusted_p": 0.21053134637188903,
+        "holm_adjusted_p_reference": 0.21053134637188903,
+        "family_size": 3,
+        "dm_pvalue_two_sided": 0.21053134637188903,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "not significant"
+      },
+      {
+        "label_challenger": "XGB forecast -> fuzzy level",
+        "label_reference": "Persistence level",
+        "n": 2856,
+        "mean_ae_diff_min": -0.09558823529411764,
+        "paired_t_pvalue": 5.551632026213099e-27,
+        "bootstrap_ci_low_min": -0.1134453781512605,
+        "bootstrap_ci_high_min": -0.06722689075630252,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": -6.912457978415757,
+        "dm_pvalue": 2.9262798157871348e-12,
+        "dm_pvalue_reference": 0.9999999999970737,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 10,
+        "holm_adjusted_p": 1.755767889472281e-11,
+        "holm_adjusted_p_reference": 1.755767889472281e-11,
+        "family_size": 3,
+        "dm_pvalue_two_sided": 5.8525596315742696e-12,
+        "challenger_better_at_alpha": true,
+        "reference_better_at_alpha": false,
+        "decision": "challenger"
+      },
+      {
+        "label_challenger": "Fuzzy rule base",
+        "label_reference": "XGB forecast -> fuzzy level",
+        "n": 2856,
+        "mean_ae_diff_min": 0.06722689075630252,
+        "paired_t_pvalue": 2.0642132863944513e-16,
+        "bootstrap_ci_low_min": 0.021358543417366947,
+        "bootstrap_ci_high_min": 0.1053921568627451,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 3.1308545827123355,
+        "dm_pvalue": 0.9991196948469447,
+        "dm_pvalue_reference": 0.0008803051530552536,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 10,
+        "holm_adjusted_p": 0.0035212206122210146,
+        "holm_adjusted_p_reference": 0.0035212206122210146,
+        "family_size": 3,
+        "dm_pvalue_two_sided": 0.0017606103061105073,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": true,
+        "decision": "reference"
+      }
+    ],
+    "artifacts": [
+      "fuzzy/fuzzy-memberships.png",
+      "fuzzy/fuzzy-confusion.png"
+    ]
+  },
+  "ensemble": {
+    "dataset": {
+      "pool_30min": {
+        "bqml_rows": 5184,
+        "joined_rows": 5184,
+        "matched_rows": 5184,
+        "label_max_abs_diff": 0.0,
+        "days": [
+          "2026-09-13",
+          "2026-09-14",
+          "2026-09-15",
+          "2026-09-16",
+          "2026-09-17",
+          "2026-09-18",
+          "2026-09-19",
+          "2026-09-20",
+          "2026-09-21",
+          "2026-09-22",
+          "2026-09-23",
+          "2026-09-24",
+          "2026-09-25",
+          "2026-09-26",
+          "2026-09-27",
+          "2026-09-28",
+          "2026-09-29",
+          "2026-09-30"
+        ],
+        "members": [
+          "Persistence",
+          "lin_h30",
+          "xgb_h30",
+          "ridge[maps]",
+          "xgb[maps]"
+        ],
+        "registry": {
+          "SG_TO_MY": "lin_h30",
+          "MY_TO_SG": "Persistence"
+        }
+      },
+      "pool_60min": {
+        "rows": 1428,
+        "members": [
+          "XGB (sklearn)",
+          "LSTM(64), anchored",
+          "GRU(64), anchored",
+          "Patch Transformer, anchored"
+        ],
+        "stack_weights": [
+          {
+            "direction": "MY_TO_SG",
+            "day": "2026-09-26",
+            "fit_days": 0,
+            "weights": [
+              [
+                0.25,
+                0.25,
+                0.25,
+                0.25
+              ]
+            ]
+          },
+          {
+            "direction": "MY_TO_SG",
+            "day": "2026-09-27",
+            "fit_days": 1,
+            "weights": [
+              [
+                0.966,
+                0.034,
+                0.0,
+                0.0
+              ]
+            ]
+          },
+          {
+            "direction": "MY_TO_SG",
+            "day": "2026-09-28",
+            "fit_days": 2,
+            "weights": [
+              [
+                0.685,
+                0.0,
+                0.315,
+                0.0
+              ]
+            ]
+          },
+          {
+            "direction": "MY_TO_SG",
+            "day": "2026-09-29",
+            "fit_days": 3,
+            "weights": [
+              [
+                0.535,
+                0.465,
+                0.0,
+                0.0
+              ]
+            ]
+          },
+          {
+            "direction": "MY_TO_SG",
+            "day": "2026-09-30",
+            "fit_days": 4,
+            "weights": [
+              [
+                0.685,
+                0.315,
+                0.0,
+                0.0
+              ]
+            ]
+          },
+          {
+            "direction": "MY_TO_SG",
+            "day": "2026-10-01",
+            "fit_days": 5,
+            "weights": [
+              [
+                0.719,
+                0.281,
+                0.0,
+                0.0
+              ]
+            ]
+          }
+        ],
+        "days": [
+          "2026-09-26",
+          "2026-09-27",
+          "2026-09-28",
+          "2026-09-29",
+          "2026-09-30",
+          "2026-10-01"
+        ]
+      }
+    },
+    "window": {
+      "timezone": "Asia/Singapore",
+      "basis": "rolling daily origin inside the scored window; weights use earlier days only",
+      "start": "2026-09-13",
+      "end": "2026-09-30"
+    },
+    "models": [
+      "Persistence",
+      "Served (registry)",
+      "lin_h30",
+      "xgb_h30",
+      "ensemble_mean (lin_h30 + xgb_h30)",
+      "ridge[maps] (daily refit)",
+      "xgb[maps] (daily refit)",
+      "Equal mean of 4 models",
+      "Rolling LAD stack",
+      "Rolling best-model selection",
+      "Fuzzy-gated stack (hybrid)"
+    ],
+    "horizon_minutes": 30,
+    "config": {
+      "min_fit_days": 2,
+      "select_days": 3,
+      "fit": "convex LAD (scipy linprog / HiGHS)",
+      "gate": "fuzzy_traffic.LevelPartition on current travel time"
+    },
+    "weights_30min": {
+      "stack": [
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-13",
+          "fit_days": 0,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-14",
+          "fit_days": 1,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-15",
+          "fit_days": 2,
+          "weights": [
+            [
+              0.155,
+              0.0,
+              0.401,
+              0.105,
+              0.338
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-16",
+          "fit_days": 3,
+          "weights": [
+            [
+              0.136,
+              0.0,
+              0.298,
+              0.0,
+              0.566
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-17",
+          "fit_days": 4,
+          "weights": [
+            [
+              0.331,
+              0.0,
+              0.44,
+              0.0,
+              0.229
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-18",
+          "fit_days": 5,
+          "weights": [
+            [
+              0.309,
+              0.0,
+              0.407,
+              0.0,
+              0.284
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-19",
+          "fit_days": 6,
+          "weights": [
+            [
+              0.258,
+              0.0,
+              0.358,
+              0.0,
+              0.384
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-20",
+          "fit_days": 7,
+          "weights": [
+            [
+              0.323,
+              0.0,
+              0.261,
+              0.0,
+              0.416
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-21",
+          "fit_days": 8,
+          "weights": [
+            [
+              0.331,
+              0.0,
+              0.292,
+              0.0,
+              0.376
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-22",
+          "fit_days": 9,
+          "weights": [
+            [
+              0.318,
+              0.0,
+              0.281,
+              0.0,
+              0.402
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-23",
+          "fit_days": 10,
+          "weights": [
+            [
+              0.299,
+              0.0,
+              0.264,
+              0.0,
+              0.437
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-24",
+          "fit_days": 11,
+          "weights": [
+            [
+              0.28,
+              0.0,
+              0.238,
+              0.0,
+              0.482
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-25",
+          "fit_days": 12,
+          "weights": [
+            [
+              0.255,
+              0.0,
+              0.232,
+              0.0,
+              0.513
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-26",
+          "fit_days": 13,
+          "weights": [
+            [
+              0.232,
+              0.0,
+              0.24,
+              0.0,
+              0.528
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-27",
+          "fit_days": 14,
+          "weights": [
+            [
+              0.266,
+              0.0,
+              0.172,
+              0.0,
+              0.562
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-28",
+          "fit_days": 15,
+          "weights": [
+            [
+              0.283,
+              0.0,
+              0.144,
+              0.0,
+              0.573
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-29",
+          "fit_days": 16,
+          "weights": [
+            [
+              0.262,
+              0.0,
+              0.145,
+              0.0,
+              0.593
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-30",
+          "fit_days": 17,
+          "weights": [
+            [
+              0.24,
+              0.0,
+              0.151,
+              0.0,
+              0.609
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-13",
+          "fit_days": 0,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-14",
+          "fit_days": 1,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-15",
+          "fit_days": 2,
+          "weights": [
+            [
+              0.451,
+              0.096,
+              0.397,
+              0.0,
+              0.056
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-16",
+          "fit_days": 3,
+          "weights": [
+            [
+              0.375,
+              0.0,
+              0.351,
+              0.0,
+              0.275
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-17",
+          "fit_days": 4,
+          "weights": [
+            [
+              0.33,
+              0.0,
+              0.431,
+              0.0,
+              0.239
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-18",
+          "fit_days": 5,
+          "weights": [
+            [
+              0.254,
+              0.058,
+              0.445,
+              0.0,
+              0.243
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-19",
+          "fit_days": 6,
+          "weights": [
+            [
+              0.336,
+              0.078,
+              0.293,
+              0.0,
+              0.294
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-20",
+          "fit_days": 7,
+          "weights": [
+            [
+              0.365,
+              0.016,
+              0.207,
+              0.0,
+              0.412
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-21",
+          "fit_days": 8,
+          "weights": [
+            [
+              0.371,
+              0.0,
+              0.196,
+              0.0,
+              0.434
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-22",
+          "fit_days": 9,
+          "weights": [
+            [
+              0.357,
+              0.0,
+              0.195,
+              0.0,
+              0.448
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-23",
+          "fit_days": 10,
+          "weights": [
+            [
+              0.342,
+              0.0,
+              0.163,
+              0.0,
+              0.495
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-24",
+          "fit_days": 11,
+          "weights": [
+            [
+              0.328,
+              0.0,
+              0.171,
+              0.0,
+              0.5
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-25",
+          "fit_days": 12,
+          "weights": [
+            [
+              0.286,
+              0.0,
+              0.192,
+              0.0,
+              0.521
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-26",
+          "fit_days": 13,
+          "weights": [
+            [
+              0.337,
+              0.0,
+              0.158,
+              0.0,
+              0.505
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-27",
+          "fit_days": 14,
+          "weights": [
+            [
+              0.297,
+              0.0,
+              0.155,
+              0.0,
+              0.548
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-28",
+          "fit_days": 15,
+          "weights": [
+            [
+              0.277,
+              0.0,
+              0.147,
+              0.0,
+              0.576
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-29",
+          "fit_days": 16,
+          "weights": [
+            [
+              0.258,
+              0.0,
+              0.13,
+              0.0,
+              0.612
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-30",
+          "fit_days": 17,
+          "weights": [
+            [
+              0.25,
+              0.0,
+              0.127,
+              0.0,
+              0.623
+            ]
+          ]
+        }
+      ],
+      "select": [
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-13",
+          "choice": "Persistence"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-14",
+          "choice": "xgb_h30"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-15",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-16",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-17",
+          "choice": "xgb_h30"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-18",
+          "choice": "xgb_h30"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-19",
+          "choice": "xgb_h30"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-20",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-21",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-22",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-23",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-24",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-25",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-26",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-27",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-28",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-29",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-30",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-13",
+          "choice": "Persistence"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-14",
+          "choice": "Persistence"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-15",
+          "choice": "xgb_h30"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-16",
+          "choice": "xgb_h30"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-17",
+          "choice": "xgb_h30"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-18",
+          "choice": "ridge[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-19",
+          "choice": "ridge[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-20",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-21",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-22",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-23",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-24",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-25",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-26",
+          "choice": "ridge[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-27",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-28",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-29",
+          "choice": "xgb[maps]"
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-30",
+          "choice": "xgb[maps]"
+        }
+      ],
+      "fuzzy stack": [
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-13",
+          "fit_days": 0,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-14",
+          "fit_days": 1,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-15",
+          "fit_days": 2,
+          "weights": [
+            [
+              0.464,
+              0.0,
+              0.0,
+              0.0,
+              0.536
+            ],
+            [
+              0.072,
+              0.017,
+              0.44,
+              0.133,
+              0.338
+            ],
+            [
+              0.195,
+              0.0,
+              0.47,
+              0.13,
+              0.205
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-16",
+          "fit_days": 3,
+          "weights": [
+            [
+              0.377,
+              0.0,
+              0.075,
+              0.0,
+              0.548
+            ],
+            [
+              0.001,
+              0.029,
+              0.436,
+              0.0,
+              0.535
+            ],
+            [
+              0.0,
+              0.0,
+              0.406,
+              0.174,
+              0.421
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-17",
+          "fit_days": 4,
+          "weights": [
+            [
+              0.504,
+              0.0,
+              0.232,
+              0.0,
+              0.264
+            ],
+            [
+              0.35,
+              0.0,
+              0.433,
+              0.0,
+              0.217
+            ],
+            [
+              0.0,
+              0.0,
+              0.406,
+              0.174,
+              0.421
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-18",
+          "fit_days": 5,
+          "weights": [
+            [
+              0.437,
+              0.0,
+              0.336,
+              0.0,
+              0.227
+            ],
+            [
+              0.342,
+              0.0,
+              0.443,
+              0.0,
+              0.215
+            ],
+            [
+              0.0,
+              0.0,
+              0.104,
+              0.0,
+              0.896
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-19",
+          "fit_days": 6,
+          "weights": [
+            [
+              0.417,
+              0.0,
+              0.272,
+              0.0,
+              0.311
+            ],
+            [
+              0.299,
+              0.0,
+              0.477,
+              0.0,
+              0.223
+            ],
+            [
+              0.0,
+              0.0,
+              0.192,
+              0.0,
+              0.808
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-20",
+          "fit_days": 7,
+          "weights": [
+            [
+              0.423,
+              0.0,
+              0.185,
+              0.0,
+              0.392
+            ],
+            [
+              0.349,
+              0.0,
+              0.391,
+              0.0,
+              0.26
+            ],
+            [
+              0.0,
+              0.0,
+              0.068,
+              0.006,
+              0.926
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-21",
+          "fit_days": 8,
+          "weights": [
+            [
+              0.434,
+              0.0,
+              0.172,
+              0.0,
+              0.394
+            ],
+            [
+              0.402,
+              0.0,
+              0.321,
+              0.0,
+              0.276
+            ],
+            [
+              0.0,
+              0.0,
+              0.264,
+              0.138,
+              0.598
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-22",
+          "fit_days": 9,
+          "weights": [
+            [
+              0.414,
+              0.0,
+              0.163,
+              0.0,
+              0.423
+            ],
+            [
+              0.355,
+              0.0,
+              0.326,
+              0.0,
+              0.319
+            ],
+            [
+              0.0,
+              0.0,
+              0.164,
+              0.267,
+              0.57
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-23",
+          "fit_days": 10,
+          "weights": [
+            [
+              0.344,
+              0.0,
+              0.201,
+              0.0,
+              0.455
+            ],
+            [
+              0.307,
+              0.0,
+              0.323,
+              0.0,
+              0.37
+            ],
+            [
+              0.0,
+              0.0,
+              0.162,
+              0.267,
+              0.57
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-24",
+          "fit_days": 11,
+          "weights": [
+            [
+              0.33,
+              0.0,
+              0.183,
+              0.0,
+              0.487
+            ],
+            [
+              0.27,
+              0.0,
+              0.326,
+              0.0,
+              0.403
+            ],
+            [
+              0.0,
+              0.0,
+              0.162,
+              0.267,
+              0.57
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-25",
+          "fit_days": 12,
+          "weights": [
+            [
+              0.291,
+              0.0,
+              0.204,
+              0.0,
+              0.504
+            ],
+            [
+              0.247,
+              0.0,
+              0.322,
+              0.0,
+              0.431
+            ],
+            [
+              0.0,
+              0.0,
+              0.14,
+              0.175,
+              0.685
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-26",
+          "fit_days": 13,
+          "weights": [
+            [
+              0.297,
+              0.0,
+              0.197,
+              0.0,
+              0.506
+            ],
+            [
+              0.225,
+              0.0,
+              0.33,
+              0.0,
+              0.445
+            ],
+            [
+              0.0,
+              0.0,
+              0.148,
+              0.065,
+              0.787
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-27",
+          "fit_days": 14,
+          "weights": [
+            [
+              0.296,
+              0.0,
+              0.2,
+              0.0,
+              0.503
+            ],
+            [
+              0.256,
+              0.0,
+              0.242,
+              0.0,
+              0.502
+            ],
+            [
+              0.15,
+              0.0,
+              0.042,
+              0.148,
+              0.659
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-28",
+          "fit_days": 15,
+          "weights": [
+            [
+              0.312,
+              0.0,
+              0.183,
+              0.0,
+              0.505
+            ],
+            [
+              0.291,
+              0.0,
+              0.197,
+              0.0,
+              0.513
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.289,
+              0.711
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-29",
+          "fit_days": 16,
+          "weights": [
+            [
+              0.309,
+              0.0,
+              0.168,
+              0.0,
+              0.522
+            ],
+            [
+              0.232,
+              0.0,
+              0.221,
+              0.0,
+              0.547
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.346,
+              0.654
+            ]
+          ]
+        },
+        {
+          "direction": "MY_TO_SG",
+          "day": "2026-09-30",
+          "fit_days": 17,
+          "weights": [
+            [
+              0.283,
+              0.0,
+              0.144,
+              0.0,
+              0.573
+            ],
+            [
+              0.212,
+              0.0,
+              0.244,
+              0.0,
+              0.544
+            ],
+            [
+              0.0,
+              0.0,
+              0.009,
+              0.277,
+              0.714
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-13",
+          "fit_days": 0,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-14",
+          "fit_days": 1,
+          "weights": [
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ],
+            [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.2
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-15",
+          "fit_days": 2,
+          "weights": [
+            [
+              0.476,
+              0.07,
+              0.25,
+              0.0,
+              0.205
+            ],
+            [
+              0.446,
+              0.065,
+              0.489,
+              0.0,
+              0.0
+            ],
+            [
+              0.988,
+              0.0,
+              0.012,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-16",
+          "fit_days": 3,
+          "weights": [
+            [
+              0.4,
+              0.0,
+              0.304,
+              0.0,
+              0.296
+            ],
+            [
+              0.372,
+              0.0,
+              0.364,
+              0.0,
+              0.264
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-17",
+          "fit_days": 4,
+          "weights": [
+            [
+              0.466,
+              0.0,
+              0.254,
+              0.041,
+              0.239
+            ],
+            [
+              0.135,
+              0.091,
+              0.547,
+              0.0,
+              0.228
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-18",
+          "fit_days": 5,
+          "weights": [
+            [
+              0.423,
+              0.0,
+              0.283,
+              0.058,
+              0.236
+            ],
+            [
+              0.157,
+              0.143,
+              0.468,
+              0.0,
+              0.232
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-19",
+          "fit_days": 6,
+          "weights": [
+            [
+              0.399,
+              0.008,
+              0.288,
+              0.055,
+              0.249
+            ],
+            [
+              0.302,
+              0.059,
+              0.208,
+              0.0,
+              0.431
+            ],
+            [
+              0.0,
+              0.35,
+              0.578,
+              0.0,
+              0.072
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-20",
+          "fit_days": 7,
+          "weights": [
+            [
+              0.426,
+              0.086,
+              0.195,
+              0.0,
+              0.294
+            ],
+            [
+              0.25,
+              0.0,
+              0.263,
+              0.0,
+              0.487
+            ],
+            [
+              0.238,
+              0.249,
+              0.0,
+              0.0,
+              0.513
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-21",
+          "fit_days": 8,
+          "weights": [
+            [
+              0.441,
+              0.0,
+              0.17,
+              0.045,
+              0.344
+            ],
+            [
+              0.257,
+              0.0,
+              0.219,
+              0.0,
+              0.524
+            ],
+            [
+              0.429,
+              0.0,
+              0.0,
+              0.0,
+              0.571
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-22",
+          "fit_days": 9,
+          "weights": [
+            [
+              0.423,
+              0.015,
+              0.15,
+              0.043,
+              0.369
+            ],
+            [
+              0.201,
+              0.0,
+              0.24,
+              0.0,
+              0.559
+            ],
+            [
+              0.406,
+              0.0,
+              0.024,
+              0.0,
+              0.57
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-23",
+          "fit_days": 10,
+          "weights": [
+            [
+              0.416,
+              0.0,
+              0.145,
+              0.053,
+              0.386
+            ],
+            [
+              0.201,
+              0.0,
+              0.216,
+              0.0,
+              0.583
+            ],
+            [
+              0.368,
+              0.0,
+              0.161,
+              0.0,
+              0.471
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-24",
+          "fit_days": 11,
+          "weights": [
+            [
+              0.393,
+              0.0,
+              0.155,
+              0.059,
+              0.393
+            ],
+            [
+              0.146,
+              0.0,
+              0.258,
+              0.0,
+              0.595
+            ],
+            [
+              0.344,
+              0.0,
+              0.0,
+              0.0,
+              0.656
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-25",
+          "fit_days": 12,
+          "weights": [
+            [
+              0.38,
+              0.084,
+              0.155,
+              0.002,
+              0.379
+            ],
+            [
+              0.148,
+              0.0,
+              0.258,
+              0.0,
+              0.595
+            ],
+            [
+              0.0,
+              0.452,
+              0.0,
+              0.0,
+              0.548
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-26",
+          "fit_days": 13,
+          "weights": [
+            [
+              0.37,
+              0.076,
+              0.16,
+              0.017,
+              0.376
+            ],
+            [
+              0.195,
+              0.0,
+              0.219,
+              0.0,
+              0.586
+            ],
+            [
+              0.0,
+              0.524,
+              0.0,
+              0.123,
+              0.353
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-27",
+          "fit_days": 14,
+          "weights": [
+            [
+              0.37,
+              0.059,
+              0.145,
+              0.032,
+              0.394
+            ],
+            [
+              0.15,
+              0.0,
+              0.197,
+              0.0,
+              0.654
+            ],
+            [
+              0.14,
+              0.205,
+              0.0,
+              0.11,
+              0.545
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-28",
+          "fit_days": 15,
+          "weights": [
+            [
+              0.38,
+              0.072,
+              0.129,
+              0.0,
+              0.419
+            ],
+            [
+              0.152,
+              0.0,
+              0.187,
+              0.0,
+              0.661
+            ],
+            [
+              0.195,
+              0.0,
+              0.019,
+              0.171,
+              0.615
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-29",
+          "fit_days": 16,
+          "weights": [
+            [
+              0.379,
+              0.08,
+              0.107,
+              0.002,
+              0.432
+            ],
+            [
+              0.135,
+              0.0,
+              0.166,
+              0.0,
+              0.7
+            ],
+            [
+              0.151,
+              0.049,
+              0.076,
+              0.125,
+              0.599
+            ]
+          ]
+        },
+        {
+          "direction": "SG_TO_MY",
+          "day": "2026-09-30",
+          "fit_days": 17,
+          "weights": [
+            [
+              0.364,
+              0.035,
+              0.093,
+              0.06,
+              0.449
+            ],
+            [
+              0.122,
+              0.0,
+              0.173,
+              0.0,
+              0.706
+            ],
+            [
+              0.214,
+              0.0,
+              0.069,
+              0.035,
+              0.682
+            ]
+          ]
+        }
+      ],
+      "pool": [
+        "Persistence",
+        "lin_h30",
+        "xgb_h30",
+        "ridge[maps]",
+        "xgb[maps]"
+      ],
+      "gate_levels": [
+        "light",
+        "moderate",
+        "heavy"
+      ]
+    },
+    "error_regimes_30min": {
+      "threshold_min": 5.0,
+      "row_share": {
+        "steady": 0.8353,
+        "rising": 0.0849,
+        "falling": 0.0799
+      },
+      "error_share": {
+        "Persistence": {
+          "falling": 0.2329,
+          "rising": 0.2634,
+          "steady": 0.5036
+        },
+        "Served (registry)": {
+          "falling": 0.2252,
+          "rising": 0.24,
+          "steady": 0.5348
+        },
+        "xgb[maps] (daily refit)": {
+          "falling": 0.1954,
+          "rising": 0.1987,
+          "steady": 0.6059
+        },
+        "Rolling LAD stack": {
+          "falling": 0.2133,
+          "rising": 0.2546,
+          "steady": 0.5322
+        }
+      }
+    },
+    "metrics": [
+      {
+        "candidate": "Persistence",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.640478716563786,
+        "rmse_min": 3.893824939017439
+      },
+      {
+        "candidate": "Served (registry)",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.541652248107933,
+        "rmse_min": 3.7050375683064805
+      },
+      {
+        "candidate": "lin_h30",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.776921239649154,
+        "rmse_min": 3.7766747179554114
+      },
+      {
+        "candidate": "xgb_h30",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.4931902341146035,
+        "rmse_min": 3.6779740936054344
+      },
+      {
+        "candidate": "ensemble_mean (lin_h30 + xgb_h30)",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.45890427344069,
+        "rmse_min": 3.52626159873608
+      },
+      {
+        "candidate": "ridge[maps] (daily refit)",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.5004097143981836,
+        "rmse_min": 3.5525184514817774
+      },
+      {
+        "candidate": "xgb[maps] (daily refit)",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.274719167712294,
+        "rmse_min": 3.3109556049784032
+      },
+      {
+        "candidate": "Equal mean of 4 models",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.358189285982483,
+        "rmse_min": 3.3894776384329894
+      },
+      {
+        "candidate": "Rolling LAD stack",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.253415329716136,
+        "rmse_min": 3.3589103763905612
+      },
+      {
+        "candidate": "Rolling best-model selection",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.291160698385858,
+        "rmse_min": 3.3777312728914644
+      },
+      {
+        "candidate": "Fuzzy-gated stack (hybrid)",
+        "slice": "30min both/all",
+        "n": 5184,
+        "mae_min": 2.2679295180907264,
+        "rmse_min": 3.376124776379109
+      },
+      {
+        "candidate": "Persistence",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.503703703703704,
+        "rmse_min": 3.7359784013100064
+      },
+      {
+        "candidate": "Served (registry)",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.503703703703704,
+        "rmse_min": 3.7359784013100064
+      },
+      {
+        "candidate": "lin_h30",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.9742416867861463,
+        "rmse_min": 3.8767862593154714
+      },
+      {
+        "candidate": "xgb_h30",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.333465934829947,
+        "rmse_min": 3.4611028768260916
+      },
+      {
+        "candidate": "ensemble_mean (lin_h30 + xgb_h30)",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.45000303580582,
+        "rmse_min": 3.439813066463403
+      },
+      {
+        "candidate": "ridge[maps] (daily refit)",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.478037966386418,
+        "rmse_min": 3.4660933995800365
+      },
+      {
+        "candidate": "xgb[maps] (daily refit)",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.150017449664481,
+        "rmse_min": 3.1740411918509657
+      },
+      {
+        "candidate": "Equal mean of 4 models",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.3162701595996675,
+        "rmse_min": 3.2861978512109498
+      },
+      {
+        "candidate": "Rolling LAD stack",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.1404317792783902,
+        "rmse_min": 3.2111938451356523
+      },
+      {
+        "candidate": "Rolling best-model selection",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.2036969594258826,
+        "rmse_min": 3.274943658366662
+      },
+      {
+        "candidate": "Fuzzy-gated stack (hybrid)",
+        "slice": "30min MY_TO_SG/all",
+        "n": 2592,
+        "mae_min": 2.1464797150876715,
+        "rmse_min": 3.2254686156153887
+      },
+      {
+        "candidate": "Persistence",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.7772537294238684,
+        "rmse_min": 4.0455173583082615
+      },
+      {
+        "candidate": "Served (registry)",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.5796007925121622,
+        "rmse_min": 3.6738361626602143
+      },
+      {
+        "candidate": "lin_h30",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.5796007925121622,
+        "rmse_min": 3.6738361626602143
+      },
+      {
+        "candidate": "xgb_h30",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.65291453339926,
+        "rmse_min": 3.882750795826534
+      },
+      {
+        "candidate": "ensemble_mean (lin_h30 + xgb_h30)",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.4678055110755603,
+        "rmse_min": 3.6106409116982427
+      },
+      {
+        "candidate": "ridge[maps] (daily refit)",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.5227814624099487,
+        "rmse_min": 3.6368903257624736
+      },
+      {
+        "candidate": "xgb[maps] (daily refit)",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.399420885760107,
+        "rmse_min": 3.4424288734422834
+      },
+      {
+        "candidate": "Equal mean of 4 models",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.400108412365298,
+        "rmse_min": 3.489702137084351
+      },
+      {
+        "candidate": "Rolling LAD stack",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.3663988801538824,
+        "rmse_min": 3.5003988233073198
+      },
+      {
+        "candidate": "Rolling best-model selection",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.3786244373458336,
+        "rmse_min": 3.477482011206092
+      },
+      {
+        "candidate": "Fuzzy-gated stack (hybrid)",
+        "slice": "30min SG_TO_MY/all",
+        "n": 2592,
+        "mae_min": 2.389379321093781,
+        "rmse_min": 3.520339361630058
+      },
+      {
+        "candidate": "Persistence",
+        "slice": "30min both/regime=rising",
+        "n": 440,
+        "mae_min": 8.195511363636363,
+        "rmse_min": 8.709362352208727
+      },
+      {
+        "candidate": "Persistence",
+        "slice": "30min both/regime=steady",
+        "n": 4330,
+        "mae_min": 1.5920746728252504,
+        "rmse_min": 2.0534323050590437
+      },
+      {
+        "candidate": "Persistence",
+        "slice": "30min both/regime=falling",
+        "n": 414,
+        "mae_min": 7.701771336553946,
+        "rmse_min": 8.070645411890299
+      },
+      {
+        "candidate": "Served (registry)",
+        "slice": "30min both/regime=rising",
+        "n": 440,
+        "mae_min": 7.187228064734252,
+        "rmse_min": 7.884176097447246
+      },
+      {
+        "candidate": "Served (registry)",
+        "slice": "30min both/regime=steady",
+        "n": 4330,
+        "mae_min": 1.6272167144373177,
+        "rmse_min": 2.138334491060501
+      },
+      {
+        "candidate": "Served (registry)",
+        "slice": "30min both/regime=falling",
+        "n": 414,
+        "mae_min": 7.16834911158181,
+        "rmse_min": 7.615935524219503
+      },
+      {
+        "candidate": "xgb[maps] (daily refit)",
+        "slice": "30min both/regime=rising",
+        "n": 440,
+        "mae_min": 5.324218888716264,
+        "rmse_min": 6.27221985421987
+      },
+      {
+        "candidate": "xgb[maps] (daily refit)",
+        "slice": "30min both/regime=steady",
+        "n": 4330,
+        "mae_min": 1.6501976024930158,
+        "rmse_min": 2.2747226899435304
+      },
+      {
+        "candidate": "xgb[maps] (daily refit)",
+        "slice": "30min both/regime=falling",
+        "n": 414,
+        "mae_min": 5.565536800943518,
+        "rmse_min": 6.429532944335229
+      },
+      {
+        "candidate": "Rolling LAD stack",
+        "slice": "30min both/regime=rising",
+        "n": 440,
+        "mae_min": 6.758444078545569,
+        "rmse_min": 7.428362048931907
+      },
+      {
+        "candidate": "Rolling LAD stack",
+        "slice": "30min both/regime=steady",
+        "n": 4330,
+        "mae_min": 1.4356678811519874,
+        "rmse_min": 1.9279163183441015
+      },
+      {
+        "candidate": "Rolling LAD stack",
+        "slice": "30min both/regime=falling",
+        "n": 414,
+        "mae_min": 6.0182312785031264,
+        "rmse_min": 6.614629654197693
+      },
+      {
+        "candidate": "XGB (sklearn)",
+        "slice": "60min both/all",
+        "n": 1428,
+        "mae_min": 3.469369339519967,
+        "rmse_min": 4.957617775536385
+      },
+      {
+        "candidate": "LSTM(64), anchored",
+        "slice": "60min both/all",
+        "n": 1428,
+        "mae_min": 3.9702667096062187,
+        "rmse_min": 5.423471237303823
+      },
+      {
+        "candidate": "GRU(64), anchored",
+        "slice": "60min both/all",
+        "n": 1428,
+        "mae_min": 4.0299837364850255,
+        "rmse_min": 5.432595494839925
+      },
+      {
+        "candidate": "Patch Transformer, anchored",
+        "slice": "60min both/all",
+        "n": 1428,
+        "mae_min": 4.192396071817931,
+        "rmse_min": 5.772199737683868
+      },
+      {
+        "candidate": "mean[XGB+deep]",
+        "slice": "60min both/all",
+        "n": 1428,
+        "mae_min": 3.6548849120435536,
+        "rmse_min": 5.014095759864028
+      },
+      {
+        "candidate": "mean[deep]",
+        "slice": "60min both/all",
+        "n": 1428,
+        "mae_min": 3.9293691133211675,
+        "rmse_min": 5.336050414443032
+      },
+      {
+        "candidate": "stack[XGB+deep]",
+        "slice": "60min both/all",
+        "n": 1428,
+        "mae_min": 3.561111048943714,
+        "rmse_min": 4.985500414982415
+      }
+    ],
+    "significance": [
+      {
+        "label_challenger": "Served (registry)",
+        "label_reference": "Persistence",
+        "n": 5184,
+        "mean_ae_diff_min": -0.0988264684558529,
+        "paired_t_pvalue": 7.964128932996844e-10,
+        "bootstrap_ci_low_min": -0.16899790222983244,
+        "bootstrap_ci_high_min": -0.039833632242194446,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": -2.504323910966848,
+        "dm_pvalue": 0.006149520960814271,
+        "dm_pvalue_reference": 0.9938504790391858,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 0.07379425152977126,
+        "holm_adjusted_p_reference": 0.07379425152977126,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 0.012299041921628543,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "not significant",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "Equal mean of 4 models",
+        "label_reference": "xgb[maps] (daily refit)",
+        "n": 5184,
+        "mean_ae_diff_min": 0.08347011827018876,
+        "paired_t_pvalue": 2.656584872615603e-08,
+        "bootstrap_ci_low_min": 0.030238334358884695,
+        "bootstrap_ci_high_min": 0.15214846916092215,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": 2.4369452615257394,
+        "dm_pvalue": 0.9925773285986444,
+        "dm_pvalue_reference": 0.007422671401355543,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 0.07422671401355543,
+        "holm_adjusted_p_reference": 0.07422671401355543,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 0.014845342802711086,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "not significant",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "Rolling LAD stack",
+        "label_reference": "xgb[maps] (daily refit)",
+        "n": 5184,
+        "mean_ae_diff_min": -0.021303837996157954,
+        "paired_t_pvalue": 0.14863111310546798,
+        "bootstrap_ci_low_min": -0.07380937136766032,
+        "bootstrap_ci_high_min": 0.041540027194599594,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": -0.6807144240170995,
+        "dm_pvalue": 0.24804130765929902,
+        "dm_pvalue_reference": 0.751958692340701,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 1.0,
+        "holm_adjusted_p_reference": 1.0,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 0.49608261531859804,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "not significant",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "Rolling best-model selection",
+        "label_reference": "xgb[maps] (daily refit)",
+        "n": 5184,
+        "mean_ae_diff_min": 0.01644153067356415,
+        "paired_t_pvalue": 0.2996343969554578,
+        "bootstrap_ci_low_min": -0.041762950993544073,
+        "bootstrap_ci_high_min": 0.09018866907681754,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": 0.46030439958857944,
+        "dm_pvalue": 0.6773414731639849,
+        "dm_pvalue_reference": 0.32265852683601515,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 1.0,
+        "holm_adjusted_p_reference": 1.0,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 0.6453170536720303,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "not significant",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "Fuzzy-gated stack (hybrid)",
+        "label_reference": "xgb[maps] (daily refit)",
+        "n": 5184,
+        "mean_ae_diff_min": -0.006789649621568013,
+        "paired_t_pvalue": 0.6434488882668365,
+        "bootstrap_ci_low_min": -0.06251031065386237,
+        "bootstrap_ci_high_min": 0.06022191262809627,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": -0.2052725265447896,
+        "dm_pvalue": 0.4186836343651443,
+        "dm_pvalue_reference": 0.5813163656348557,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 1.0,
+        "holm_adjusted_p_reference": 1.0,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 0.8373672687302885,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "not significant",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "Fuzzy-gated stack (hybrid)",
+        "label_reference": "Rolling LAD stack",
+        "n": 5184,
+        "mean_ae_diff_min": 0.014514188374589943,
+        "paired_t_pvalue": 0.005150226251789227,
+        "bootstrap_ci_low_min": -0.0033157690745879713,
+        "bootstrap_ci_high_min": 0.03797437854119485,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": 1.4175111313384954,
+        "dm_pvalue": 0.9218031733577409,
+        "dm_pvalue_reference": 0.0781968266422591,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 0.6255746131380728,
+        "holm_adjusted_p_reference": 0.6255746131380728,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 0.1563936532845182,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "not significant",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "Rolling LAD stack",
+        "label_reference": "Served (registry)",
+        "n": 5184,
+        "mean_ae_diff_min": -0.28823691839179705,
+        "paired_t_pvalue": 3.427781278992333e-60,
+        "bootstrap_ci_low_min": -0.34877833183679324,
+        "bootstrap_ci_high_min": -0.19901574782563028,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": -7.208815813829514,
+        "dm_pvalue": 3.2277934509019883e-13,
+        "dm_pvalue_reference": 0.9999999999996773,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 5.810028211623579e-12,
+        "holm_adjusted_p_reference": 5.810028211623579e-12,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 6.455586901803977e-13,
+        "challenger_better_at_alpha": true,
+        "reference_better_at_alpha": false,
+        "decision": "challenger",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "Fuzzy-gated stack (hybrid)",
+        "label_reference": "Served (registry)",
+        "n": 5184,
+        "mean_ae_diff_min": -0.27372273001720715,
+        "paired_t_pvalue": 6.508840568645111e-50,
+        "bootstrap_ci_low_min": -0.34123517985503665,
+        "bootstrap_ci_high_min": -0.1770992788033659,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": -6.281607842992664,
+        "dm_pvalue": 1.8122205731385516e-10,
+        "dm_pvalue_reference": 0.999999999818778,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 2.8995529170216826e-09,
+        "holm_adjusted_p_reference": 2.8995529170216826e-09,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 3.624441146277103e-10,
+        "challenger_better_at_alpha": true,
+        "reference_better_at_alpha": false,
+        "decision": "challenger",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "xgb[maps] (daily refit)",
+        "label_reference": "Served (registry)",
+        "n": 5184,
+        "mean_ae_diff_min": -0.26693308039563907,
+        "paired_t_pvalue": 1.6092910263908038e-27,
+        "bootstrap_ci_low_min": -0.37149024669147096,
+        "bootstrap_ci_high_min": -0.1457432553582713,
+        "block_size": 144,
+        "alpha": 0.05,
+        "dm_stat": -4.4815248851178495,
+        "dm_pvalue": 3.7853766830368625e-06,
+        "dm_pvalue_reference": 0.999996214623317,
+        "hac_lag": 144,
+        "horizon_steps": 3,
+        "n_groups": 2,
+        "block": "day",
+        "blocks_per_resample": 36,
+        "holm_adjusted_p": 5.2995273562516075e-05,
+        "holm_adjusted_p_reference": 5.2995273562516075e-05,
+        "family_size": 9,
+        "dm_pvalue_two_sided": 7.570753366073725e-06,
+        "challenger_better_at_alpha": true,
+        "reference_better_at_alpha": false,
+        "decision": "challenger",
+        "family": "30min"
+      },
+      {
+        "label_challenger": "mean[XGB+deep]",
+        "label_reference": "XGB (sklearn)",
+        "n": 1428,
+        "mean_ae_diff_min": 0.18551557252358644,
+        "paired_t_pvalue": 0.0025657040119526865,
+        "bootstrap_ci_low_min": -0.23581640971274578,
+        "bootstrap_ci_high_min": 0.5916867477944678,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 0.9312182421592748,
+        "dm_pvalue": 0.824050901944228,
+        "dm_pvalue_reference": 0.17594909805577194,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.7037963922230878,
+        "holm_adjusted_p_reference": 0.7037963922230878,
+        "family_size": 3,
+        "dm_pvalue_two_sided": 0.3518981961115439,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data",
+        "family": "60min"
+      },
+      {
+        "label_challenger": "stack[XGB+deep]",
+        "label_reference": "XGB (sklearn)",
+        "n": 1428,
+        "mean_ae_diff_min": 0.09174170942374718,
+        "paired_t_pvalue": 0.012080154785890428,
+        "bootstrap_ci_low_min": -0.11246565787903041,
+        "bootstrap_ci_high_min": 0.2869738543962565,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 0.8715095371947305,
+        "dm_pvalue": 0.8081887009180485,
+        "dm_pvalue_reference": 0.1918112990819515,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.7037963922230878,
+        "holm_adjusted_p_reference": 0.7037963922230878,
+        "family_size": 3,
+        "dm_pvalue_two_sided": 0.383622598163903,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data",
+        "family": "60min"
+      },
+      {
+        "label_challenger": "mean[deep]",
+        "label_reference": "XGB (sklearn)",
+        "n": 1428,
+        "mean_ae_diff_min": 0.4599997738012001,
+        "paired_t_pvalue": 5.431245215996593e-09,
+        "bootstrap_ci_low_min": -0.11345952718957668,
+        "bootstrap_ci_high_min": 0.9707163272922906,
+        "block_size": 288,
+        "alpha": 0.05,
+        "dm_stat": 1.7445341873098565,
+        "dm_pvalue": 0.9593593629778687,
+        "dm_pvalue_reference": 0.04064063702213129,
+        "hac_lag": 288,
+        "horizon_steps": 12,
+        "n_groups": 1,
+        "block": "day",
+        "blocks_per_resample": 5,
+        "holm_adjusted_p": 0.24384382213278774,
+        "holm_adjusted_p_reference": 0.24384382213278774,
+        "family_size": 3,
+        "dm_pvalue_two_sided": 0.08128127404426258,
+        "challenger_better_at_alpha": false,
+        "reference_better_at_alpha": false,
+        "decision": "insufficient data",
+        "family": "60min"
+      }
+    ],
+    "artifacts": [
+      "ensemble/ensemble-30min-mae-diff.png",
+      "ensemble/ensemble-60min-mae-diff.png"
+    ]
+  },
+  "run_id": "20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble",
+  "created_at_utc": "2026-09-30T19:27:56Z"
 }

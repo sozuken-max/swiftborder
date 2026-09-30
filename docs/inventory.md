@@ -1,6 +1,6 @@
 # GCP inventory (dated copy)
 
-**Observed:** 2026-10-01 ~00:40 SGT (2026-09-30 16:38 UTC), read-only `gcloud` / `bq` queries of project `swiftborder`, plus model, view and horizon checks from the 2026-09-30 ~21:35 SGT pass. **One change since:** the weather tables were appended on 2026-10-01 ~01:50 SGT (requested by the team; see `rainfall` / `weatherforecast` below). No other resources or settings were changed. When this file and the project disagree, the project wins; re-query and update this file.
+**Observed:** 2026-10-01 ~00:40 SGT (2026-09-30 16:38 UTC), read-only `gcloud` / `bq` queries of project `swiftborder`, plus model, view and horizon checks from the 2026-09-30 ~21:35 SGT pass. **One change since:** the weather tables were appended on 2026-10-01 ~01:50 SGT (requested by the team; see `rainfall` / `weatherforecast` below). No other resources or settings were changed. Camera and image date ranges, and `model_registry`, were re-queried read-only on 2026-10-01 ~03:30 SGT. When this file and the project disagree, the project wins; re-query and update this file.
 
 ## Project metadata
 
@@ -16,12 +16,12 @@ Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, `weatherforecast`
 
 ### `cam2701`
 
-- **Table `Cam2701`** -- last modified **2026-07-18 10:54 SGT**; **298,137 rows**. Detection-style schema. Not receiving new rows.
-- **View `v_congestion_index_10min`** -- 10-minute vehicle counts from `Cam2701`. Directions `to_Woodlands` / `to_JB` map to `MY_TO_SG` / `SG_TO_MY`. **Not referenced by `v_training_set`.** Its per-frame counts come from detections only, so frames with zero vehicles are dropped.
+- **Table `Cam2701`** -- last modified **2026-07-18 10:54 SGT**; **298,137 rows**. One row per detection (`filename`, `date`, `time`, `label`, `direction`, `confidence`, boxes). **Frames dated 2026-03-13 to 2026-04-22 (33 days, 3,513 frames)**, queried 2026-10-01. No overlap with `causeway.travel_times`. Not receiving new rows.
+- **View `v_congestion_index_10min`** -- 10-minute vehicle counts from `Cam2701`. Directions `to_Woodlands` / `to_JB` map to `MY_TO_SG` / `SG_TO_MY`. **Not referenced by `v_training_set`.** Its per-frame counts come from detections only, so frames with zero vehicles are dropped. 5,631 rows, bins 2026-03-13 05:10 to 2026-04-22 03:30 UTC.
 
 ### `cam2702`
 
-- **Table `Cam2702`** -- last modified **2026-07-18 11:06 SGT**; **233,463 rows**. No congestion view.
+- **Table `Cam2702`** -- last modified **2026-07-18 11:06 SGT**; **233,463 rows**. Same schema plus `camera_id`; frames dated 2026-03-13 to 2026-04-22 (33 days, 3,507 frames). No congestion view.
 
 ### `causeway`
 
@@ -40,7 +40,7 @@ Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 20
 
 ### `traffic_images`
 
-- **`metadata`** -- **368,905 rows**; last modified **2026-09-13 04:29 SGT**.
+- **`metadata`** -- **368,905 rows**; last modified **2026-09-13 04:29 SGT**. Six cameras (2701, 2702, 2704, 4703, 4712, 4713), about 61.5k frames each, `capture_timestamp` 2025-06-30 23:55 to **2026-09-11 23:55**, images in `gs://sg-lta-traffic-cameras/`. Camera 2701 has 132–144 frames per day on 5–11 Sep (every ~10 min). Frames only; no detections are stored for them.
 - **`labels`** -- **0 rows** (labelling lives in Roboflow).
 - **`backfill_checkpoint`** -- 63,074 rows (2026-09-13 04:29 SGT). **`backfill_failures`** -- 0 rows.
 

@@ -12,8 +12,17 @@ flowchart LR
 
   subgraph OFF["Offline, in eval/"]
     JX["joined.py<br/>rolling daily folds<br/>Maps vs +weather vs +camera"]
+    EN["ensemble.py<br/>served, stack, selection<br/>fuzzy-gated stack"]
     OX["timeseries_xgb.py<br/>60 min jb_to_woodlands"]
+    DL["deep_forecast.py<br/>LSTM GRU patch Transformer<br/>same rows as XGB"]
+    FZ["fuzzy_traffic.py<br/>light moderate heavy<br/>rule base, XGB to fuzzy"]
   end
+  HAR --> EN
+  JX --> EN
   JX --> SIG
+  EN --> SIG
   OX --> SIG
+  DL --> SIG
+  FZ --> SIG
+  CAM["camera counts<br/>no overlap with Maps window"] -.->|"pending backfill"| JX
   INTENT["24h horizon<br/>target, not served"] -.-> SRV

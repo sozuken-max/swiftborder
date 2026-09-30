@@ -75,7 +75,7 @@ Cloud region layout / multi-region consolidation is **not** what this module sco
 | Graded surface | Where the draft lives |
 | --- | --- |
 | Final report: tools, design, models | [architecture.md](../architecture.md) |
-| Final report: performance | [evaluation.md](../evaluation.md) (30-min production models, joined weather experiment, offline 60-min XGB, all scored with Diebold–Mariano tests and Holm correction; Layer A pending) |
+| Final report: performance | [evaluation.md](../evaluation.md) (30-min production models, joined weather experiment, offline 60-min XGB, deep sequence models, fuzzy traffic level, ensembles and hybrids, all scored with Diebold–Mariano tests and Holm correction; Layer A pending) |
 | Final report: findings and discussion | [findings.md](../findings.md) |
 | Evidence appendix | [inventory.md](../inventory.md), a dated copy of project `swiftborder` |
 | Sequence of remaining work | [roadmap.md](../roadmap.md) |

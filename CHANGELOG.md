@@ -16,8 +16,12 @@ Branch `eval-integrity-overhaul` (PR #2). Work plan and task status: `docs/plan-
 - `eval/layer_b.py` rewritten: fixed window from 2026-09-13 SGT, refuses models trained inside the window, gap filters, direction × time-of-day / day type / day-night slices, `ensemble_mean`, headline and slice Holm families. `--holdout-days` is rejected with an error.
 - `eval/features.py` (causal feature table; parity with the live `v_training_set` recorded in `run.json`), `eval/joined.py` (rolling-origin joined experiment, Maps-typical baseline; forecasts joined by data.gov.sg acquisition time), `eval/layer_a.py` (+ fixtures), `eval/backfill_camera_counts.py` (budgeted, resumable, stops on quota).
 - Run manifest schema v2 (`run_artifacts.py`: provenance, data hashes, windows, metrics, significance, validation). `promote_report_run.py` refuses invalid runs, dirty trees (unless `--allow-dirty`) and runs whose code hash differs from the tree.
-- `eval/runs/report/` promoted from `20260930T175104Z_offline-bqml-joined` (offline + BQML fixed window + joined), made from committed code `15f094b` on a clean tree. `eval/runs/LATEST.json` is now a gitignored local pointer.
-- `docs/deep-learning-assessment.md`: LSTM and Transformer forecasting assessed; not recommended for the report at the current data size.
+- `eval/timeseries_transformer.py` (patch Transformer) and `eval/deep_forecast.py`: LSTM, GRU and patch Transformer (+ raw-target ablation) under one training protocol, three seeds, DM/Holm vs persistence and XGB (`--deep`). `build_recurrent_model` now respects `LSTMTrainConfig.seed`; `_require_keras()` no longer resets every model to seed 42.
+- `eval/fuzzy_traffic.py`: light / moderate / heavy traffic level 60 min ahead, both directions; Ruspini trapezoid partition, learned fuzzy rule-based classifier (certainty factors, single winner), XGB → fuzzy-level hybrid; accuracy, macro-F1, severe errors, RPS; DM on 0/1 loss (`--fuzzy`).
+- `eval/ensemble.py`: served (registry) forecast, equal mean, rolling convex LAD stack, rolling selection and fuzzy-gated stack over BQML and daily-refit 30-min models; error-by-regime diagnostic; optional 60-min XGB + deep pool (`--ensemble`). `layer_b.bqml_component`, `joined.joined_component` and `deep_forecast.deep_component` accept `keep=` to hand their out-of-sample rows on.
+- Manifest components `deep`, `fuzzy`, `ensemble`; classification metric rows validated (`FUZZY_METRIC_KEYS`) and tabulated in run READMEs. Forest plot clips degenerate CIs.
+- `eval/runs/report/` promoted from `20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble`, made from committed code `9597e20` on a clean tree (earlier components unchanged). `eval/runs/LATEST.json` is now a gitignored local pointer.
+- `docs/deep-learning-assessment.md`: design and scored results of the deep models; kept as a comparison, not served.
 
 ### Testing and dependencies
 
@@ -36,7 +40,7 @@ Branch `eval-integrity-overhaul` (PR #2). Work plan and task status: `docs/plan-
 ### Documentation
 
 - `docs/inventory.md` refreshed from a read-only query (1 Oct 00:40 SGT) plus the weather append: `swiftbackend` public exposure, plaintext key, unused `CACHE_BUCKET`, failed backfill runs, no Firebase APIs, model training dates and split, view parity, weather tables to 30 Sep, Windows gcloud note.
-- `docs/evaluation.md` and `docs/findings.md` rewritten from the promoted `run.json` (security risk entry, claims register); README headline, results, MVP runbook, testing and techniques; roadmap, grading and agent-deploy updated; camera pilot handoff for the Roboflow key holder (`docs/handoff-camera-pilot.md`).
+- `docs/evaluation.md` and `docs/findings.md` rewritten from the promoted `run.json` (security risk entry, claims register; sections 4–7: deep models, fuzzy traffic level, ensembles and hybrids, Layer A output as a Layer B input). Inventory camera facts corrected from a read-only query: detections cover 13 Mar–22 Apr 2026 (tables last modified 18 Jul), image frames run to 11 Sep, so no Layer A output overlaps the Maps label; README headline, results, MVP runbook, testing and techniques; roadmap, grading and agent-deploy updated; camera pilot handoff for the Roboflow key holder (`docs/handoff-camera-pilot.md`).
 - Diagrams: bucket `swiftborder_cloudbuild` (underscore), frame-cache edges dashed ("writer not in git"), `eval/` block, Layer A scorer present, weather tables appended manually. PNGs renamed `architecture-high-level.png` / `architecture-detailed.png`; all four deck PNGs are stale until regenerated.
 - Skills: mojibake and BOM removed (also in `AGENTS.md`); the diagram skill no longer instructs the hyphenated bucket; annotation panels vs topology rule reconciled; mirrors regenerated.
 

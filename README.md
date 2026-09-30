@@ -11,16 +11,17 @@ Woodlands-only causeway crossing-time forecasting (NUS-ISS Practice Module, Grou
 
 ## Results (13–30 Sep 2026, out-of-sample)
 
-30-minute MAE on the Maps series, both directions: persistence 2.64 min, `lin_h30` 2.78, `xgb_h30` 2.49, ensemble 2.46. `xgb_h30` and the ensemble are significantly better than persistence; `lin_h30` (the model currently served for some directions) is not significantly different from persistence across both directions. "Significant" means a Diebold–Mariano test (do two forecasts' errors differ more than chance?) with a Holm correction for testing several models at once, and confidence intervals from a bootstrap that resamples whole days so that correlated 5-minute errors are not counted as independent. Weather features gave no significant gain. Camera features and Layer A metrics are pending. Details, slices and caveats: [docs/evaluation.md](docs/evaluation.md); evidence bundle: [`eval/runs/report/`](eval/runs/report/).
+30-minute MAE on the Maps series, both directions: persistence 2.64 min, served forecast (registry) 2.54, `lin_h30` 2.78, `xgb_h30` 2.49, ensemble 2.46, daily-refit XGBoost 2.28. `xgb_h30` and the ensemble are significantly better than persistence; `lin_h30` (the model currently served for some directions) is not significantly different from persistence across both directions. "Significant" means a Diebold–Mariano test (do two forecasts' errors differ more than chance?) with a Holm correction for testing several models at once, and confidence intervals from a bootstrap that resamples whole days so that correlated 5-minute errors are not counted as independent. Weather features gave no significant gain. Stacking or gating the models adds nothing over the daily-refit XGBoost, which would beat the served forecast by about 0.27 min. At 60 minutes on one route, LSTM, GRU and a patch Transformer trail XGBoost. A fuzzy light / moderate / heavy forecast is best as a hybrid (XGBoost defuzzified into levels, 0.785 accuracy vs 0.690 for persistence). Camera features cannot be tested yet: no Layer A output overlaps the Maps window. Layer A metrics are pending. Details, slices and caveats: [docs/evaluation.md](docs/evaluation.md); evidence bundle: [`eval/runs/report/`](eval/runs/report/).
 
 ## Techniques (Practice Module)
 
 | Category | Where |
 | --- | --- |
-| Supervised learning | Roboflow-labelled YOLO; regression of future Maps duration (BQML, XGBoost, ridge) |
-| Machine learning / deep learning | YOLO; `lin_h30`, `xgb_h30`; offline XGBoost; LSTM code (unscored, see [deep-learning assessment](docs/deep-learning-assessment.md)) |
+| Supervised learning | Roboflow-labelled YOLO; regression of future Maps duration (BQML, XGBoost, ridge); traffic-level classification |
+| Machine learning / deep learning | YOLO; `lin_h30`, `xgb_h30`; offline XGBoost; LSTM, GRU and a patch Transformer (scored, [deep-learning assessment](docs/deep-learning-assessment.md)) |
 | Intelligent sensing | LTA frames -> directional occupancy with the camera 2701 dividing line |
-| Hybrid / ensemble | Mean of `lin_h30` + `xgb_h30`, ridge + XGBoost, scored against the single models |
+| Hybrid / ensemble | Mean of `lin_h30` + `xgb_h30`; ridge + XGBoost; rolling LAD stack, rolling selection and fuzzy-gated stack; XGBoost forecast defuzzified into traffic levels. All scored against the single models |
+| Fuzzy logic | Light / moderate / heavy partition and a learned fuzzy rule-based classifier |
 
 ## Run the MVP
 

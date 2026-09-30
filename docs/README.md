@@ -10,7 +10,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | Performance: methods, reasoning, result tables | [evaluation.md](evaluation.md) |
 | Findings and what may be claimed | [findings.md](findings.md) |
 | What remains, and the order to do it | [roadmap.md](roadmap.md) |
-| Should we use LSTM or Transformer forecasters? (deferred, with reasons) | [deep-learning-assessment.md](deep-learning-assessment.md) |
+| LSTM, GRU and Transformer forecasters: design, results, when to revisit | [deep-learning-assessment.md](deep-learning-assessment.md) |
 | Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
 | Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |
@@ -32,7 +32,7 @@ Design figures are **high-level** and **detailed** views of one system, not an a
 | `diagrams/architecture-detailed.mmd` | `architecture-detailed.png` | Detailed design |
 | `diagrams/eval-layer-a.mmd` | `eval-layer-a.png` | Performance: Layer A method |
 | `diagrams/eval-layer-b.mmd` | `eval-layer-b.png` | Performance: Layer B method |
-| — | `../eval/runs/report/{offline,bqml,joined}/*.png` | Performance: scored comparison plots (see [evaluation.md](evaluation.md)) |
+| — | `../eval/runs/report/{offline,bqml,joined,deep,fuzzy,ensemble}/*.png` | Performance: scored comparison plots (see [evaluation.md](evaluation.md)) |
 
 The four deck PNGs predate the 2026-10-01 fact pass and are **stale** until regenerated ([diagrams/README.md](diagrams/README.md#png-exports-are-stale-regenerate-before-the-deck)). The Mermaid sources are current. There is no as-is / to-be pair.
 

@@ -19,7 +19,8 @@ The report describes **one system at two depths** (high-level, then detailed). T
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
 - Layer B is scored and promoted to [`eval/runs/report/`](../eval/runs/report/): production models at 30 min on 13–30 Sep (`layer_b.py`), the joined weather experiment (`joined.py`), and offline 60-min XGBoost (`timeseries_xgb.py`), all with significance tests (Diebold–Mariano on error differences, Holm correction across models). Numbers are in [evaluation.md](evaluation.md).
-- Weather history for 5–30 Sep is fetched (`Causeway/`); weather gave no significant gain. The Layer A scorer exists (`eval/layer_a.py`); no export is scored.
+- Weather history for 5–30 Sep is fetched (`Causeway/`) and appended to BigQuery; weather gave no significant gain. The Layer A scorer exists (`eval/layer_a.py`); no export is scored.
+- Also scored in `report/`: LSTM, GRU and a patch Transformer at 60 min (none beats XGBoost), a fuzzy light / moderate / heavy forecast (the XGB → fuzzy hybrid is best), and ensembles / hybrids of the 30-min models (no gain over a daily-refit XGBoost, which beats the served forecast).
 - Report drafts exist: design, evaluation, findings, inventory (2026-10-01).
 
 ---
@@ -50,7 +51,7 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 1. Keep slide/report wording distinct: **60 min offline XGB (one route)** vs **30 min production serve (both directions)**.
 2. Before the final report, extend the window (more days, more rain events) and re-run `generate_comparison_plots.py --bqml --joined` from a clean tree, then promote (see [eval/README.md](../eval/README.md#reproduce-the-report-run)).
-3. Deep-learning forecasters (LSTM, Transformer) are deferred; see [deep-learning-assessment.md](deep-learning-assessment.md) for when to revisit.
+3. Deep-learning forecasters are scored and not served; see [deep-learning-assessment.md](deep-learning-assessment.md) for when to revisit.
 
 **Done when** the report cites data source, horizon, and persistence baseline for each table. Do not write "we beat Google." Maps is the label.
 
@@ -76,7 +77,7 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 **Done (weather, offline):** [`eval/joined.py`](../eval/joined.py) joins fresh data.gov.sg rainfall and forecasts; no significant MAE gain on 13–30 Sep. The BigQuery views were not used: at run time the weather tables ended on 31 Aug (1–30 Sep was appended on 1 Oct, see [inventory.md](inventory.md)), camera tables end on 18 Jul, and both sit in a different location from `traffic_prediction`.
 
-**Remaining:** camera 2701 counts for 5–30 Sep via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves.
+**Remaining:** camera 2701 counts for 5–30 Sep (no Layer A output overlaps the Maps window; see [evaluation.md §7](evaluation.md#7-is-layer-a-output-a-meaningful-layer-b-input)) via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves.
 
 Camera 2702 has detections and no congestion view. Add that view before claiming both cameras feed the forecast. The dividing line for a live 2702 demo is a geometry change in `camdetect`, separate from the historical table.
 
@@ -117,7 +118,7 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 | Firebase Hosting | Not in the project. The grade does not require a hosted UI if the demo runs. |
 | Holiday calendars | No calendar table yet. Add only if a residual error looks like a public holiday. |
 | ResNet | Optional third detector. It does not unblock Layer B. |
-| Serving the blended `lin_h30` + `xgb_h30` | Scored (better than persistence combined). Serving it needs a `v_forecast_recent` change, an approved write. |
+| Serving a better 30-min model | A daily-refit XGBoost (or the rolling stack) beats the served registry forecast by ~0.27 min on 13–30 Sep ([evaluation.md §6](evaluation.md#6-ensembles-and-hybrids-of-the-layer-b-models-evalensemblepy)); blending on top adds nothing. Serving it needs a daily retrain job and a `v_forecast_recent` change: an approved deploy. |
 | Region consolidation | Not graded. |
 
 ---

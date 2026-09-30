@@ -12,7 +12,11 @@ Evaluation harnesses for Layer A and Layer B. Nothing here deploys `swiftbackend
 | [`joined.py`](joined.py) | Offline joined-feature experiment at 30 min: rolling daily folds; Maps vs + weather vs + camera; ridge, XGBoost, ensemble; persistence and Maps-typical baselines |
 | [`features.py`](features.py) | Causal 10-min feature table: `v_training_set` logic in pandas (parity-checked against the live view), rainfall, 2-h forecast, camera counts |
 | [`timeseries_xgb.py`](timeseries_xgb.py) | Offline 60-min sklearn XGBoost, `jb_to_woodlands` only (JB → SG); causal inputs, raw labels, split on target time |
-| [`timeseries_lstm.py`](timeseries_lstm.py), [`train_lstm.py`](train_lstm.py) | LSTM variants on the same rows as offline XGB (unscored in `report/`; deferred, see [deep-learning assessment](../docs/deep-learning-assessment.md)) |
+| [`timeseries_lstm.py`](timeseries_lstm.py), [`train_lstm.py`](train_lstm.py) | Recurrent architectures and a tuning CLI on the same rows as offline XGB (seeded by `LSTMTrainConfig.seed`) |
+| [`timeseries_transformer.py`](timeseries_transformer.py) | Patch Transformer encoder (6 × 30-min patches, pre-LN, flatten head, about 19k weights) |
+| [`deep_forecast.py`](deep_forecast.py) | Scored deep component: LSTM, GRU, patch Transformer (+ raw-target ablation), one training protocol, 3 seeds, DM/Holm vs persistence and XGB ([assessment](../docs/deep-learning-assessment.md)) |
+| [`fuzzy_traffic.py`](fuzzy_traffic.py) | Light / moderate / heavy at 60 min, both directions: fuzzy partition, learned fuzzy rule base, XGB → fuzzy level hybrid; accuracy, macro-F1, severe errors, RPS; DM on 0/1 loss |
+| [`ensemble.py`](ensemble.py) | Ensembles and hybrids of Layer B models: served (registry), equal mean, rolling LAD stack, rolling selection, fuzzy-gated stack; error by regime; optional 60-min XGB + deep pool |
 | [`significance.py`](significance.py) | Diebold–Mariano test on loss differences (HAC variance, i.e. corrected for autocorrelation, with at least one day of lags; HLN small-sample correction), moving day-block bootstrap CIs within direction, Holm correction across comparisons |
 | [`layer_a.py`](layer_a.py) | Layer A scorer: mAP, precision/recall, count error (overall and per direction), day/night |
 | [`backfill_camera_counts.py`](backfill_camera_counts.py) | Camera 2701 counts per 10-min bin via `camdetect.detect_frame` (**billed Roboflow**) |
@@ -41,12 +45,13 @@ python ../Causeway/fetch_forecast_history.py --start-date 2026-09-05 --end-date 
 python ../Causeway/filter_station_history.py
 python ../Causeway/filter_area_forecast.py
 # all components into one run folder, then validate and promote
-python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined
+pip install -r requirements-notebook.txt   # TensorFlow for --deep
+python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined --deep --fuzzy --ensemble
 python promote_report_run.py --check
 python promote_report_run.py <run_id>
 ```
 
-The offline component reads the cached `data/causeway_gdata.csv`. Add `--refresh-bq` only when that cache is missing: it re-downloads `travel_times`, which now has rows past the report cut, so the offline split and its numbers will differ from the promoted run. The BQML window is pinned by `--window-end` either way. Promotion refuses a run made from a dirty tree unless `--allow-dirty` is given; do not use that for the report.
+`--ensemble` needs `--bqml` and `--joined` (it reuses their out-of-sample rows) and adds the 60-minute pool when `--deep` is given. The offline component reads the cached `data/causeway_gdata.csv`. Add `--refresh-bq` only when that cache is missing: it re-downloads `travel_times`, which now has rows past the report cut, so the offline split and its numbers will differ from the promoted run. The BQML window is pinned by `--window-end` either way. Promotion refuses a run made from a dirty tree unless `--allow-dirty` is given; do not use that for the report.
 
 Individual harnesses:
 

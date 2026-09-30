@@ -1,9 +1,9 @@
-> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20260930T175104Z_offline-bqml-joined`.
+> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble`.
 
-# Eval run `20260930T175104Z_offline-bqml-joined`
+# Eval run `20260930T191544Z_offline-bqml-joined-deep-fuzzy-ensemble`
 
-Created (UTC): 2026-09-30T17:51:54Z. Schema v2.
-Git `15f094bfba3e` (dirty: False); code SHA-256 `e735477a0ade`.
+Created (UTC): 2026-09-30T19:27:56Z. Schema v2.
+Git `9597e2099657` (dirty: False); code SHA-256 `012b8dc3bfc4`.
 
 ## offline
 
@@ -159,5 +159,87 @@ Figures:
 Figures:
 - `joined/joined-mae-diff.png`
 - `joined/joined-mae-by-feature-set.png`
+
+## deep
+
+- **Horizon:** 60 min
+- **Window:** 2026-09-26 01:35:00 .. 2026-10-01 00:30:00
+- **Models:** LSTM(64), anchored, GRU(64), anchored, Patch Transformer, anchored, Patch Transformer, raw target (ablation), XGB (sklearn), Persistence T-60
+
+| Candidate | Slice | n | MAE (min) | RMSE (min) |
+| --- | --- | --- | --- | --- |
+| Persistence T-60 | holdout | 1428 | 4.677 | 6.386 |
+| XGB (sklearn) | holdout | 1428 | 3.469 | 4.958 |
+| LSTM(64), anchored, seed mean | holdout | 1428 | 3.970 | 5.423 |
+| GRU(64), anchored, seed mean | holdout | 1428 | 4.030 | 5.433 |
+| Patch Transformer, anchored, seed mean | holdout | 1428 | 4.192 | 5.772 |
+| Patch Transformer, raw target (ablation), seed mean | holdout | 1428 | 4.491 | 6.222 |
+
+| Challenger | Reference | n | Mean AE diff | CI | DM p | Holm p | Decision |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| LSTM(64), anchored, seed mean | Persistence T-60 | 1428 | -0.707 | [-1.313, -0.211] | 0.0058 | 0.0521 | insufficient data |
+| LSTM(64), anchored, seed mean | XGB (sklearn) | 1428 | 0.501 | [-0.160, 0.987] | 0.0770 | 0.2309 | insufficient data |
+| GRU(64), anchored, seed mean | Persistence T-60 | 1428 | -0.647 | [-0.899, -0.346] | 0.00011 | 0.0011 | insufficient data |
+| GRU(64), anchored, seed mean | XGB (sklearn) | 1428 | 0.561 | [0.073, 0.996] | 0.0129 | 0.1033 | insufficient data |
+| Patch Transformer, anchored, seed mean | Persistence T-60 | 1428 | -0.485 | [-1.000, 0.003] | 0.0409 | 0.2045 | insufficient data |
+| Patch Transformer, anchored, seed mean | XGB (sklearn) | 1428 | 0.723 | [-0.013, 1.384] | 0.0327 | 0.1961 | insufficient data |
+| Patch Transformer, raw target (ablation), seed mean | Persistence T-60 | 1428 | -0.186 | [-0.753, 0.502] | 0.5314 | 0.5314 | insufficient data |
+| Patch Transformer, raw target (ablation), seed mean | XGB (sklearn) | 1428 | 1.021 | [0.174, 1.920] | 0.0181 | 0.1264 | insufficient data |
+| Patch Transformer, anchored | Patch Transformer, raw target | 1428 | -0.298 | [-0.604, -0.003] | 0.0540 | 0.2162 | insufficient data |
+| Patch Transformer, anchored | LSTM(64), anchored | 1428 | 0.222 | [-0.144, 0.510] | 0.1620 | 0.3239 | insufficient data |
+
+Figures:
+- `deep/deep-mae-by-seed.png`
+- `deep/deep-mae-diff.png`
+
+## fuzzy
+
+- **Horizon:** 60 min
+- **Window:** 2026-09-26 01:35:00 .. 2026-10-01 00:30:00
+- **Models:** Persistence level, Majority level (train), Fuzzy rule base, XGB forecast -> fuzzy level
+
+| Candidate | Slice | n | Accuracy | Macro-F1 | Severe errors | RPS |
+| --- | --- | --- | --- | --- | --- | --- |
+| Persistence level | holdout | 2856 | 0.690 | 0.678 | 0.006 | 0.120 |
+| Majority level (train) | holdout | 2856 | 0.470 | 0.213 | 0.000 | - |
+| Fuzzy rule base | holdout | 2856 | 0.718 | 0.698 | 0.002 | 0.116 |
+| XGB forecast -> fuzzy level | holdout | 2856 | 0.785 | 0.770 | 0.001 | 0.082 |
+
+Significance loss: 0/1 misclassification; mean_ae_diff_min is an error-rate difference.
+
+| Challenger | Reference | n | Mean AE diff | CI | DM p | Holm p | Decision |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Fuzzy rule base | Persistence level | 2856 | -0.028 | [-0.075, 0.017] | 0.2105 | 0.2105 | not significant |
+| XGB forecast -> fuzzy level | Persistence level | 2856 | -0.096 | [-0.113, -0.067] | 5.9e-12 | 1.8e-11 | challenger |
+| Fuzzy rule base | XGB forecast -> fuzzy level | 2856 | 0.067 | [0.021, 0.105] | 0.0018 | 0.0035 | reference |
+
+Figures:
+- `fuzzy/fuzzy-memberships.png`
+- `fuzzy/fuzzy-confusion.png`
+
+## ensemble
+
+- **Horizon:** 30 min
+- **Window:** 2026-09-13 .. 2026-09-30
+- **Models:** Persistence, Served (registry), lin_h30, xgb_h30, ensemble_mean (lin_h30 + xgb_h30), ridge[maps] (daily refit), xgb[maps] (daily refit), Equal mean of 4 models, Rolling LAD stack, Rolling best-model selection, Fuzzy-gated stack (hybrid)
+
+| Challenger | Reference | n | Mean AE diff | CI | DM p | Holm p | Decision |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Served (registry) | Persistence | 5184 | -0.099 | [-0.169, -0.040] | 0.0123 | 0.0738 | not significant |
+| Equal mean of 4 models | xgb[maps] (daily refit) | 5184 | 0.083 | [0.030, 0.152] | 0.0148 | 0.0742 | not significant |
+| Rolling LAD stack | xgb[maps] (daily refit) | 5184 | -0.021 | [-0.074, 0.042] | 0.4961 | 1.0000 | not significant |
+| Rolling best-model selection | xgb[maps] (daily refit) | 5184 | 0.016 | [-0.042, 0.090] | 0.6453 | 1.0000 | not significant |
+| Fuzzy-gated stack (hybrid) | xgb[maps] (daily refit) | 5184 | -0.007 | [-0.063, 0.060] | 0.8374 | 1.0000 | not significant |
+| Fuzzy-gated stack (hybrid) | Rolling LAD stack | 5184 | 0.015 | [-0.003, 0.038] | 0.1564 | 0.6256 | not significant |
+| Rolling LAD stack | Served (registry) | 5184 | -0.288 | [-0.349, -0.199] | 6.5e-13 | 5.8e-12 | challenger |
+| Fuzzy-gated stack (hybrid) | Served (registry) | 5184 | -0.274 | [-0.341, -0.177] | 3.6e-10 | 2.9e-09 | challenger |
+| xgb[maps] (daily refit) | Served (registry) | 5184 | -0.267 | [-0.371, -0.146] | 7.6e-06 | 5.3e-05 | challenger |
+| mean[XGB+deep] | XGB (sklearn) | 1428 | 0.186 | [-0.236, 0.592] | 0.3519 | 0.7038 | insufficient data |
+| stack[XGB+deep] | XGB (sklearn) | 1428 | 0.092 | [-0.112, 0.287] | 0.3836 | 0.7038 | insufficient data |
+| mean[deep] | XGB (sklearn) | 1428 | 0.460 | [-0.113, 0.971] | 0.0813 | 0.2438 | insufficient data |
+
+Figures:
+- `ensemble/ensemble-30min-mae-diff.png`
+- `ensemble/ensemble-60min-mae-diff.png`
 
 Machine-readable metadata: [`run.json`](run.json).

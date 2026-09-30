@@ -2,7 +2,7 @@
 
 **Owner:** the team member who holds the Roboflow workspace key (`chads-workspace-t3qcz`). **Not** run by the Evaluation & Risk owner or an agent: the key is not shared, and the run spends the team's free-tier credits.
 **Status:** code and tests done ([`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py)); pilot **not run**. Tracked as Task 9 in [plan-eval-integrity.md](plan-eval-integrity.md).
-**Why it matters:** the joined experiment ([evaluation.md §2](evaluation.md#2-joined-features-30-minutes-evaljoinedpy)) has a "Maps + weather + camera" row that stays `pending` until camera counts exist for 5–30 Sep. It is the only test of the proposal's claim that queue depth helps the forecast.
+**Why it matters:** the joined experiment ([evaluation.md §2](evaluation.md#2-joined-features-30-minutes-evaljoinedpy)) has a "Maps + weather + camera" row that stays `pending` until camera counts exist for 5–30 Sep. It is the only test of the proposal's claim that queue depth helps the forecast: the Layer A output already in BigQuery covers 13 Mar–22 Apr 2026 and does not overlap the Maps label ([evaluation.md §7](evaluation.md#7-is-layer-a-output-a-meaningful-layer-b-input)).
 
 ## What the script does
 
