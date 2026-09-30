@@ -155,6 +155,22 @@ def fit_sequence_model(
     return pred, info
 
 
+def _tensorflow_build() -> Dict[str, Any]:
+    """TensorFlow build facts that affect bit-for-bit reproducibility of the deep rows."""
+    import os
+
+    import tensorflow as tf
+
+    info = dict(tf.sysconfig.get_build_info())
+    return {
+        "version": tf.__version__,
+        "built_with_cuda": bool(tf.test.is_built_with_cuda()),
+        "devices": [d.device_type for d in tf.config.list_physical_devices()],
+        "build_info": {k: str(v) for k, v in info.items()},
+        "env": {k: os.environ.get(k) for k in ("TF_ENABLE_ONEDNN_OPTS", "TF_DISABLE_CUDNN_RNN", "TF_DETERMINISTIC_OPS")},
+    }
+
+
 def plot_seed_mae(summary: Dict[str, Dict[str, Any]], references: Dict[str, float], path: Path, title: str) -> Path:
     import matplotlib
 
@@ -324,6 +340,7 @@ def deep_component(
             "transformer": asdict(transformer_config),
             "window_size": config.window_size,
             "xgb_seed": XGB_SEED,
+            "tensorflow": _tensorflow_build(),
         },
         "seed_summary": summary,
         "metrics": metrics,

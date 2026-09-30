@@ -179,3 +179,35 @@ def test_promote_refuses_dirty_unless_allowed(tmp_path: Path):
     readme = (tmp_path / "report" / "README.md").read_text(encoding="utf-8")
     assert "uncommitted code" in readme
     assert json.loads((tmp_path / "report" / "SOURCE_RUN.json").read_text())["git_dirty"] is True
+
+
+def _sig(label, p, diff, lo, hi, decision, family="f"):
+    return {
+        "label_challenger": label, "label_reference": "ref", "n": 100, "mean_ae_diff_min": diff,
+        "bootstrap_ci_low_min": lo, "bootstrap_ci_high_min": hi, "dm_pvalue": p / 2,
+        "dm_pvalue_two_sided": p, "holm_adjusted_p": p, "alpha": 0.05, "decision": decision, "family": family,
+    }
+
+
+def test_multiplicity_summary_recomputes_decisions_over_the_whole_run():
+    manifest = {
+        "components": ["a", "b"],
+        "a": {"significance": [_sig("strong", 1e-6, -0.3, -0.4, -0.2, "challenger"), _sig("weak", 0.02, -0.1, -0.2, -0.01, "challenger")]},
+        "b": {"significance": [_sig("few", 0.001, -0.5, -0.9, -0.1, "insufficient data")] + [_sig(f"n{i}", 0.9, 0.0, -0.1, 0.1, "not significant") for i in range(4)]},
+    }
+    out = ra.multiplicity_summary(manifest)
+    assert out["n_comparisons"] == 7
+    changed = {c["challenger"]: c for c in out["changed"]}
+    assert set(changed) == {"weak"}  # 0.02 x 6 > 0.05 after run-wide Holm
+    assert changed["weak"]["decision_global"] == "not significant"
+    assert out["transitions"]["insufficient data -> insufficient data"] == 1
+
+
+def test_provenance_records_platform_and_full_environment():
+    prov = ra.provenance()
+    assert prov["platform"]["system"]
+    env = prov["environment"]
+    names = [d.split("==")[0].lower() for d in env["distributions"]]
+    assert names == sorted(names) and len(names) == len(set(names))
+    assert any(d.lower().startswith("numpy==") for d in env["distributions"])
+    assert len(env["sha256"]) == 64

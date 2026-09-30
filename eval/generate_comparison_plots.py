@@ -273,6 +273,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         written.extend(paths)
         manifest["ensemble"] = meta
 
+    from run_artifacts import multiplicity_summary
+
+    manifest["multiplicity"] = multiplicity_summary(manifest)
+    print(f"Multiplicity check (Holm over all {manifest['multiplicity']['n_comparisons']} comparisons):", manifest["multiplicity"]["transitions"])
+
     write_manifest(run_dir, manifest)
     write_run_readme(run_dir, manifest)
     update_latest_pointer(run_dir, manifest, runs_root=args.runs_root)

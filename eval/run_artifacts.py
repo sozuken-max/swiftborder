@@ -127,6 +127,7 @@ def provenance() -> Dict[str, Any]:
             packages[name] = metadata.version(name)
         except metadata.PackageNotFoundError:
             continue
+    env = installed_distributions()
     return {
         "git_sha": _git("rev-parse", "HEAD"),
         "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
@@ -134,6 +135,84 @@ def provenance() -> Dict[str, Any]:
         "code_sha256": code_fingerprint(),
         "python": platform.python_version(),
         "packages": packages,
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "python_implementation": platform.python_implementation(),
+        },
+        "environment": {
+            "distributions": env,
+            "sha256": hashlib.sha256("\n".join(env).encode("utf-8")).hexdigest(),
+            "lock_file": "requirements-lock-py311.txt",
+        },
+    }
+
+
+def installed_distributions() -> List[str]:
+    """Every installed distribution as ``name==version``, sorted (the full resolved environment)."""
+    seen = {}
+    for dist in metadata.distributions():
+        name = (dist.metadata.get("Name") or "").strip()
+        if name:
+            seen[name.lower()] = f"{name}=={dist.version}"
+    return [seen[k] for k in sorted(seen)]
+
+
+# --- multiplicity -----------------------------------------------------------------
+
+
+def multiplicity_summary(manifest: Dict[str, Any]) -> Dict[str, Any]:
+    """Sensitivity check: Holm over **every** significance row in the run, not per family.
+
+    The reported decisions use one Holm family per harness question. This recomputes each decision
+    with a single run-wide family (two-sided DM p-values, same CI and block rules) and lists the rows
+    whose decision would change.
+    """
+    from significance import holm_adjust
+
+    rows = []
+    for name in manifest.get("components", []):
+        for i, s in enumerate((manifest.get(name) or {}).get("significance") or []):
+            p = s.get("dm_pvalue_two_sided")
+            if p is None or p != p:  # missing or NaN
+                continue
+            rows.append((name, i, s))
+    adj = holm_adjust([s["dm_pvalue_two_sided"] for _, _, s in rows])
+    changed = []
+    counts: Dict[str, int] = {}
+    for (name, i, s), p in zip(rows, adj):
+        decision = s["decision"]
+        if decision != "insufficient data":
+            alpha = float(s.get("alpha", 0.05))
+            diff, lo, hi = s["mean_ae_diff_min"], s["bootstrap_ci_low_min"], s["bootstrap_ci_high_min"]
+            if p < alpha and diff < 0 and hi < 0:
+                decision = "challenger"
+            elif p < alpha and diff > 0 and lo > 0:
+                decision = "reference"
+            else:
+                decision = "not significant"
+        key = f"{s['decision']} -> {decision}"
+        counts[key] = counts.get(key, 0) + 1
+        if decision != s["decision"]:
+            changed.append(
+                {
+                    "component": name,
+                    "family": s.get("family", name),
+                    "challenger": s["label_challenger"],
+                    "reference": s["label_reference"],
+                    "family_holm_p": s.get("holm_adjusted_p"),
+                    "global_holm_p": p,
+                    "decision": s["decision"],
+                    "decision_global": decision,
+                }
+            )
+    return {
+        "method": "Holm over all significance rows in the run (two-sided DM p), same CI and block rules",
+        "n_comparisons": len(rows),
+        "transitions": counts,
+        "changed": changed,
     }
 
 
@@ -290,6 +369,20 @@ def write_run_readme(run_dir: Path, manifest: Dict[str, Any]) -> Path:
             lines.append("Figures:")
             lines.extend(f"- `{a}`" for a in arts)
             lines.append("")
+    mult = manifest.get("multiplicity")
+    if mult:
+        lines.extend(
+            [
+                "## Multiplicity check",
+                "",
+                f"Holm over all {mult['n_comparisons']} comparisons in the run (instead of per family) changes "
+                f"{len(mult['changed'])} decision(s):",
+                "",
+            ]
+        )
+        for c in mult["changed"]:
+            lines.append(f"- {c['challenger']} vs {c['reference']}: {c['decision']} -> {c['decision_global']} (global Holm p {_p(c['global_holm_p'])})")
+        lines.append("")
     lines.append("Machine-readable metadata: [`run.json`](run.json).")
     path = run_dir / "README.md"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
