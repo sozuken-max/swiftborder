@@ -200,13 +200,17 @@ def joined_component(
     alpha: float = 0.05,
     n_bootstrap: int = 4999,
     inputs: Optional[Dict[str, Any]] = None,
+    keep: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Path], Dict[str, Any]]:
+    """``keep``: optional dict that receives the out-of-fold frame (``keep["oof"]``) for reuse."""
     from plots import plot_mae_diff_forest
     from run_artifacts import artifact_relpath, subdir
     from significance import format_comparison_table
 
     data = scorable(frame)
     oof = run_folds(data, start, end)
+    if keep is not None:
+        keep["oof"] = oof
     candidates = list(BASELINES) + [c for c in oof.columns if "[" in c]
     metrics = _metrics(oof, candidates)
     comps, notes = significance(oof, alpha=alpha, n_bootstrap=n_bootstrap)

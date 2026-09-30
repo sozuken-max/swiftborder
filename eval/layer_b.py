@@ -458,7 +458,9 @@ def bqml_component(
     alpha: float = 0.05,
     source: Optional[Source] = None,
     n_bootstrap: int = 4999,
+    keep: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Path], Dict[str, Any]]:
+    """``keep``: optional dict that receives the raw harness result (``keep["result"]``) for reuse."""
     from run_artifacts import artifact_relpath
 
     result = run_harness(
@@ -468,6 +470,8 @@ def bqml_component(
         alpha=alpha,
         n_bootstrap=n_bootstrap,
     )
+    if keep is not None:
+        keep["result"] = result
     print_report(result)
     paths = _plot(run_dir, result)
     return paths, component_from_result(result, project, [artifact_relpath(run_dir, p) for p in paths])

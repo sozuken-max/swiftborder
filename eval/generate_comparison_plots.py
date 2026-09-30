@@ -8,6 +8,7 @@ Writes one run folder under eval/runs/<run_id>/ with a schema-v2 run.json (see r
     python generate_comparison_plots.py --bqml          # offline + BQML fixed window
     python generate_comparison_plots.py --deep          # + LSTM / GRU / patch Transformer (TensorFlow)
     python generate_comparison_plots.py --fuzzy         # + fuzzy light / moderate / heavy classifier
+    python generate_comparison_plots.py --bqml --joined --ensemble   # + ensembles / hybrids of Layer B models
 """
 
 from __future__ import annotations
@@ -184,8 +185,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--deep", action="store_true", help="Also score LSTM / GRU / patch Transformer on the offline split (needs TensorFlow)")
     parser.add_argument("--deep-seeds", type=int, nargs="+", default=None, help="seeds per deep model (default deep_forecast.DEFAULT_SEEDS)")
     parser.add_argument("--fuzzy", action="store_true", help="Also score the fuzzy traffic-level classifier (60 min, both directions)")
+    parser.add_argument("--ensemble", action="store_true", help="Also score ensembles / hybrids of the Layer B models (needs --bqml and --joined; uses --deep if given)")
     parser.add_argument("--alpha", type=float, default=0.05)
     args = parser.parse_args(argv)
+    if args.ensemble and not (args.bqml and args.joined):
+        parser.error("--ensemble needs --bqml and --joined (it reuses their out-of-sample rows)")
 
     components = ["bqml"] if args.bqml_only else (["offline", "bqml"] if args.bqml else ["offline"])
     if args.joined:
@@ -194,9 +198,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         components.append("deep")
     if args.fuzzy:
         components.append("fuzzy")
+    if args.ensemble:
+        components.append("ensemble")
     run_dir = create_run_dir(components=components, run_id=args.run_id, runs_root=args.runs_root, exist_ok=args.reuse_run)
     manifest = new_manifest(components)
     written: List[Path] = []
+    kept: Dict[str, Dict[str, Any]] = {"bqml": {}, "joined": {}, "deep": {}}
 
     if "offline" in components:
         try:
@@ -211,7 +218,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         from layer_b import bqml_component
 
         paths, meta = bqml_component(
-            run_dir, project=args.project, window_start=args.window_start, window_end=args.window_end, alpha=args.alpha
+            run_dir, project=args.project, window_start=args.window_start, window_end=args.window_end, alpha=args.alpha,
+            keep=kept["bqml"],
         )
         written.extend(paths)
         manifest["bqml"] = meta
@@ -232,6 +240,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             end=args.joined_end or joined.DEFAULT_TEST_END,
             alpha=args.alpha,
             inputs=info,
+            keep=kept["joined"],
         )
         written.extend(paths)
         manifest["joined"] = meta
@@ -240,7 +249,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         import deep_forecast
 
         seeds = tuple(args.deep_seeds) if args.deep_seeds else deep_forecast.DEFAULT_SEEDS
-        paths, meta = deep_forecast.deep_component(run_dir, project=args.project, seeds=seeds, alpha=args.alpha)
+        paths, meta = deep_forecast.deep_component(run_dir, project=args.project, seeds=seeds, alpha=args.alpha, keep=kept["deep"])
         written.extend(paths)
         manifest["deep"] = meta
 
@@ -250,6 +259,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         paths, meta = fuzzy_traffic.fuzzy_component(run_dir, project=args.project, alpha=args.alpha)
         written.extend(paths)
         manifest["fuzzy"] = meta
+
+    if "ensemble" in components:
+        import ensemble
+
+        paths, meta = ensemble.ensemble_component(
+            run_dir,
+            bqml_result=kept["bqml"]["result"],
+            joined_oof=kept["joined"]["oof"],
+            deep_keep=kept["deep"] or None,
+            alpha=args.alpha,
+        )
+        written.extend(paths)
+        manifest["ensemble"] = meta
 
     write_manifest(run_dir, manifest)
     write_run_readme(run_dir, manifest)

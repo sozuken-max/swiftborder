@@ -193,7 +193,9 @@ def deep_component(
     recurrent_units: int = 64,
     recurrent_dropout: float = 0.1,
     transformer_config=None,
+    keep: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Path], Dict[str, Any]]:
+    """``keep``: optional dict that receives per-row test predictions (seconds) for reuse by ``ensemble``."""
     try:
         import tensorflow  # noqa: F401
     except ImportError as exc:  # pragma: no cover - depends on the environment
@@ -248,7 +250,7 @@ def deep_component(
             metrics.append(metric_row(spec.label, f"holdout seed {seed}", len(y), info["mae_min"], tsx.rmse_minutes(y, pred)))
             print(f"{spec.label} seed {seed}: MAE {info['mae_min']:.3f} min ({info['epochs_run']} epochs, {info['train_seconds']} s)")
         mean_pred = np.mean(preds, axis=0)
-        ensemble[name] = mean_pred
+        ensemble[name] = mean_pred  # seed average for this architecture
         maes = [r["mae_min"] for r in runs]
         metrics.append(metric_row(f"{spec.label}, seed mean", "holdout", len(y), tsx.mae_minutes(y, mean_pred), tsx.rmse_minutes(y, mean_pred)))
         summary[name] = {
@@ -264,6 +266,11 @@ def deep_component(
 
     scale = 1.0 / 60.0
     timestamps = list(split.test_target_ts)
+    if keep is not None:
+        keep["y"] = y * scale
+        keep["timestamps"] = timestamps
+        keep["xgb_label"] = xgb_label
+        keep["preds"] = {xgb_label: xgb_pred * scale, **{MODEL_SPECS[n].label: ensemble[n] * scale for n in models}}
 
     def cmp(ch: np.ndarray, ref: np.ndarray, lc: str, lr: str):
         return compare_absolute_errors(
