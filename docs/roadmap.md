@@ -26,6 +26,8 @@ The promoted offline 60-minute one-route split stays at 5 day-blocks unless that
 
 ### Frozen-window run plan (proposed 2026-10-03; the team confirms before 19 Oct 23:59 SGT)
 
+**After the run:** set `SERVED_SELECTION` in `forecastapi/main.py` by the ADR 0004 rule and push to `main`; Cloud Build tests, deploys a candidate, smoke-tests it and promotes it.
+
 These choices are written down before any October label is scored, so the frozen run tests them rather than fitting them. Re-running the 13–30 Sep window would change nothing: three report runs on it gave identical numbers.
 
 **0. Local only.** BigQuery ML is not part of the evaluation. Its two models are represented by local replicas with the same features, settings and training rows. The replicas forecast as well as BQML on 13–30 Sep, inside ±0.5 min ([evaluation.md §1a](evaluation.md#1a-local-replicas-of-the-bqml-models-evalbqml_paritypy)). The replicas come in two forms: `lin_bq` / `xgb_bq` **[frozen]** are trained once on BQML's 12 Sep rows; **[daily]** refit the same models every day. The served registry mix is rebuilt from the frozen replicas (`Served (registry, local replica)`). BQML and `v_forecast_recent` are no longer maintained; serving moves to local models ([ADR 0004](adr/0004-serve-local-models.md)).
@@ -69,7 +71,7 @@ python promote_report_run.py <run_B_id> --target report-confirm
 
 Neither run uses `--bqml`, so the ensemble pool is local (`ensemble.pool_30_local`). An explicit `--joined-end` past the cutoff is refused. `run.json` records the cutoff (`data_cutoff`).
 
-Team sign-off: local only ☐ windows ☐ claims C1–C8 ☐ threshold ☐ test groups ☐ 60-minute design ☐ ADR 0004 ☐. By ______ on ______.
+**Signed off by the team on 2026-10-03** (local only, windows, claims C1–C8, threshold, test groups, 60-minute design, ADR 0004). The 0.5-minute threshold governs the report's "product-relevant" wording; the served selection follows the ADR 0004 significance rule.
 
 **After 19 Oct 23:59 SGT:** no new feature arms, no new model families, no expansion to a 24-hour horizon. Run the [frozen-window plan](#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt) (Runs A and B), fill [evaluation.md](evaluation.md) and [findings.md](findings.md) from that run, and finish the deck and video.
 

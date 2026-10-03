@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-10-03). The team accepts or changes it before the frozen run. The model selection itself waits for that run (on or after 20 Oct).
+Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemented in `forecastapi/` with CI/CD in `forecastapi/cloudbuild.yaml`; see [runbooks/forecast-api.md](../runbooks/forecast-api.md). The `served` selection is interim until the frozen run (on or after 20 Oct).
 
 ## Context
 
@@ -25,7 +25,7 @@ Proposed (2026-10-03). The team accepts or changes it before the frozen run. The
 | Image size | Adds scikit-learn, XGBoost and pandas (a few hundred MB) | Same in the service, plus the job image | Smallest service |
 | Fits the timeline (deploy before 31 Oct) | Yes: one service change | Tight | Tight, over-built |
 
-## Decision (proposed)
+## Decision
 
 **Option A.** It serves the model the evaluation scored, with no new GCP resources, and it matches the daily-refit policy by construction. Option B is the upgrade path if the service ever needs explicit artifact versions or faster cold starts.
 
@@ -43,7 +43,15 @@ Proposed (2026-10-03). The team accepts or changes it before the frozen run. The
 
 **Selection rule for `served`** (fixed before the frozen run): for each direction, serve the local model that beats persistence in Run A and is confirmed in Run B, both significant under the run-wide Holm check. Otherwise serve persistence.
 
-**Open question for the team:** the 0.5-minute practical threshold in the frozen-run plan was written for "change what is served". On 13–30 Sep no 30-minute model beat persistence by 0.5 min (`xgb[maps]` −0.37). Applied literally, the threshold would keep persistence in both directions. Decide before the run whether it applies to this selection, or only to the report's "product-relevant" wording.
+**Threshold (settled at sign-off):** the 0.5-minute practical threshold governs the report's "product-relevant" wording only. The served selection uses the significance rule above. On 13–30 Sep no 30-minute model beat persistence by 0.5 min (`xgb[maps]` −0.37), so applying the threshold here would have kept persistence everywhere.
+
+**Implemented (2026-10-03):**
+- `forecastapi/local_models.py` holds the six local models.
+- `main.py` has the `served` selection (`SERVED_SELECTION`, interim: `lin_bq[frozen]` for `SG_TO_MY`, `persistence` for `MY_TO_SG`, the 12 Sep registry rebuilt locally), the versions, `model_meta`, and `commit`.
+- BigQuery ML ids and SQL are removed.
+- `eval/tests/test_forecastapi_models.py` proves that a service fit equals the harness prediction.
+- Cloud Build: test, build, deploy a no-traffic candidate, smoke-test it, promote.
+- A live read-only run on 2026-10-03 took about 13 s cold and 3 s warm.
 
 ## Consequences
 

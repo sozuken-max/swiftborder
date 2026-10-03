@@ -52,9 +52,16 @@ The redeploy does not change authentication. The service stays public until item
 
 ## 1b. `forecast-api` first deploy (on merge to `main`)
 
-The merge commit adds `forecastapi/**`, which starts Cloud Build trigger `forecast-api` (`949ff029`). That trigger runs pytest, builds the image and **creates** Cloud Run `forecast-api` in `asia-southeast1` (`--no-allow-unauthenticated`). Merging therefore deploys two services. This one is new, so there is no earlier revision to roll back to. Full detail: [runbooks/forecast-api.md](runbooks/forecast-api.md).
+The merge commit adds `forecastapi/**`, which starts Cloud Build trigger `forecast-api` (`949ff029`). The build:
 
-**After the build succeeds**
+1. runs the `forecastapi` tests and the harness equivalence test;
+2. builds the image;
+3. **creates** Cloud Run `forecast-api` in `asia-southeast1` (private, serving local models, ADR 0004);
+4. runs a smoke test inside the build.
+
+Merging therefore deploys two services. Later builds deploy a no-traffic candidate and move traffic only after the smoke test passes. The first deploy has no earlier revision, so it takes traffic directly. Full detail: [runbooks/forecast-api.md](runbooks/forecast-api.md).
+
+**After the build succeeds.** The build's `Smoke` step already checked: no token gives 403, `list=models` 200, `model=served` 200 or 503, `model=lstm` 400. Then, by hand:
 
 1. The service exists, is private and runs as `forecast-api@`:
    ```powershell
