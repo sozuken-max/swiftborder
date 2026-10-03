@@ -1,7 +1,7 @@
 # CI/CD for Cloud Run service forecast-api (ADR 0004): test, build, deploy as a no-traffic candidate,
 # smoke-test the candidate, then move traffic. Not swiftbackend. Not trigger 76bbca35. No keys.
 # Trigger 949ff029 runs this on a push to ^main$ that touches forecastapi/**.
-# Images are pinned by digest (resolved 2026-10-03: python:3.11, pack:latest, buildpacks builder:latest,
+# Images are pinned by digest (resolved 2026-10-03: python:3.11, pack:latest, buildpacks builder:google-22,
 # cloud-sdk:slim) so a rebuild of the same commit uses the same toolchain. Refresh the digests deliberately.
 # In bash below, $$ escapes a shell variable from Cloud Build substitution.
 
@@ -24,7 +24,9 @@ steps:
     args:
       - build
       - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - --builder=gcr.io/buildpacks/builder@sha256:ee028b481db027435142c27caeb3b4b37738e0665722f72a3f6734ef7ea2a7a9
+      # google-22 (Ubuntu 22.04): the newest builder that still ships Python 3.11. builder:latest is google-24,
+      # which only offers 3.13 and 3.14 (first main build a8600413 failed on GOOGLE_PYTHON_VERSION=3.11).
+      - --builder=gcr.io/buildpacks/builder:google-22@sha256:8201b9de682ba74cd5552128b81940e233d3afaec27412d14dd8a8d2dc572368
       - --network=cloudbuild
       - --publish
       - --path=forecastapi
@@ -32,7 +34,7 @@ steps:
       - --env=GOOGLE_PYTHON_VERSION
     env:
       - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
-      - GOOGLE_PYTHON_VERSION=3.11
+      - GOOGLE_PYTHON_VERSION=3.11.x
 
   - id: Deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
@@ -78,8 +80,22 @@ steps:
             print(svc["status"]["url"])
         PY
         )
-        echo "smoke target: $$url"
-        token=$$(gcloud auth print-identity-token --audiences="$$url")
+        base=$$(python3 -c 'import json; print(json.load(open("/workspace/service.json"))["status"]["url"])')
+        echo "smoke target: $$url (token audience $$base)"
+        # Cloud Build's gcloud cannot mint an ID token (build 363590b1) and its metadata identity endpoint
+        # returns 404 (build 2b76a1c3). Mint one through the IAM Credentials API instead. The build SA needs
+        # roles/iam.serviceAccountOpenIdTokenCreator on itself. The audience is the service URL, which
+        # Cloud Run accepts on every URL of the service, tags included.
+        sa=$$(curl -sf -H "Metadata-Flavor: Google" \
+          "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email")
+        curl -sS -X POST -o /workspace/idtoken.json -w '%{http_code}\n' \
+          -H "Authorization: Bearer $$(gcloud auth print-access-token)" -H "Content-Type: application/json" \
+          -d "{\"audience\": \"$$base\", \"includeEmail\": true}" \
+          "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/$$sa:generateIdToken" > /workspace/idtoken.code
+        test "$$(cat /workspace/idtoken.code)" = "200" || { echo "generateIdToken for $$sa failed:"; cat /workspace/idtoken.json; exit 1; }
+        token=$$(python3 -c 'import json; print(json.load(open("/workspace/idtoken.json"))["token"])')
+        rm -f /workspace/idtoken.json
+        test -n "$$token" || { echo "empty identity token"; exit 1; }
         code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$$url/?list=models")
         test "$$code" = "403" || { echo "expected 403 without a token, got $$code"; exit 1; }
         code=$$(curl -s -o /workspace/list.json -w '%{http_code}' --max-time 60 -H "Authorization: Bearer $$token" "$$url/?list=models")
