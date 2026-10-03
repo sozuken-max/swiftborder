@@ -1,7 +1,7 @@
 # CI/CD for Cloud Run service forecast-api (ADR 0004): test, build, deploy as a no-traffic candidate,
 # smoke-test the candidate, then move traffic. Not swiftbackend. Not trigger 76bbca35. No keys.
 # Trigger 949ff029 runs this on a push to ^main$ that touches forecastapi/**.
-# Images are pinned by digest (resolved 2026-10-03: python:3.11, pack:latest, buildpacks builder:latest,
+# Images are pinned by digest (resolved 2026-10-03: python:3.11, pack:latest, buildpacks builder:google-22,
 # cloud-sdk:slim) so a rebuild of the same commit uses the same toolchain. Refresh the digests deliberately.
 # In bash below, $$ escapes a shell variable from Cloud Build substitution.
 
@@ -24,7 +24,9 @@ steps:
     args:
       - build
       - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - --builder=gcr.io/buildpacks/builder@sha256:ee028b481db027435142c27caeb3b4b37738e0665722f72a3f6734ef7ea2a7a9
+      # google-22 (Ubuntu 22.04): the newest builder that still ships Python 3.11. builder:latest is google-24,
+      # which only offers 3.13 and 3.14 (first main build a8600413 failed on GOOGLE_PYTHON_VERSION=3.11).
+      - --builder=gcr.io/buildpacks/builder:google-22@sha256:8201b9de682ba74cd5552128b81940e233d3afaec27412d14dd8a8d2dc572368
       - --network=cloudbuild
       - --publish
       - --path=forecastapi
@@ -32,7 +34,7 @@ steps:
       - --env=GOOGLE_PYTHON_VERSION
     env:
       - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
-      - GOOGLE_PYTHON_VERSION=3.11
+      - GOOGLE_PYTHON_VERSION=3.11.x
 
   - id: Deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
