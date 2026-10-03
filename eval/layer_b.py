@@ -438,10 +438,10 @@ def _plot(run_dir: Path, result: Dict[str, Any]) -> List[Path]:
     start = result["holdout"].window_start.astimezone(SGT).strftime("%d %b")
     end = result["holdout"].window_end.astimezone(SGT).strftime("%d %b")
     return [
-        plot_bqml_mae_comparison(
+        *plot_bqml_mae_comparison(
             slices_by_candidate, out / "mae-by-direction.png", title=f"BQML 30 min ({start} - {end} SGT): MAE by direction"
         ),
-        plot_mae_diff_forest(
+        *plot_mae_diff_forest(
             result["families"]["headline"],
             out / "mae-diff-ci.png",
             title="BQML 30 min: paired MAE difference (day-block CI; Holm headline family)",

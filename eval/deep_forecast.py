@@ -30,6 +30,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from plots import write_series_csv
+
 CACHE = Path(__file__).resolve().parent / "data" / "causeway_gdata.csv"
 DEFAULT_SEEDS: Tuple[int, ...] = (0, 1, 2)
 XGB_SEED = 42  # same as generate_comparison_plots.XGB_SEED, so the XGB row matches the offline component
@@ -171,7 +173,7 @@ def _tensorflow_build() -> Dict[str, Any]:
     }
 
 
-def plot_seed_mae(summary: Dict[str, Dict[str, Any]], references: Dict[str, float], path: Path, title: str) -> Path:
+def plot_seed_mae(summary: Dict[str, Dict[str, Any]], references: Dict[str, float], path: Path, title: str) -> List[Path]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -191,10 +193,31 @@ def plot_seed_mae(summary: Dict[str, Dict[str, Any]], references: Dict[str, floa
     ax.set_title(title, fontsize=10)
     ax.legend(fontsize=8)
     fig.tight_layout()
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    rows: List[Dict[str, Any]] = []
+    for i, name in enumerate(names):
+        s = summary[name]
+        rows.append(
+            {
+                "kind": "bar",
+                "model_index": i,
+                "model": s["label"],
+                "seed": "",
+                "mae_min": s["seed_mean_prediction_mae_min"],
+            }
+        )
+        seeds = [r.get("seed", j) for j, r in enumerate(s.get("runs") or [])]
+        if len(seeds) != len(s["mae_by_seed"]):
+            seeds = list(range(len(s["mae_by_seed"])))
+        for seed, mae in zip(seeds, s["mae_by_seed"]):
+            rows.append({"kind": "seed", "model_index": i, "model": s["label"], "seed": seed, "mae_min": mae})
+    for label, value in references.items():
+        rows.append({"kind": "reference", "model_index": "", "model": label, "seed": "", "mae_min": value})
+    csv_path = write_series_csv(path, rows, ("kind", "model_index", "model", "seed", "mae_min"))
     fig.savefig(path, dpi=130)
     plt.close(fig)
-    return path
+    return [path, csv_path]
 
 
 def deep_component(
@@ -308,13 +331,13 @@ def deep_component(
     print(format_comparison_table(comparisons))
 
     written = [
-        plot_seed_mae(
+        *plot_seed_mae(
             summary,
             {persist_label: tsx.mae_minutes(y, persist), xgb_label: tsx.mae_minutes(y, xgb_pred)},
             out / "deep-mae-by-seed.png",
             title=f"Offline 60 min, {tsx.OFFLINE_ROUTE_LABEL}: seed-mean MAE (bars) and per-seed MAE (dots)",
         ),
-        plot_mae_diff_forest(comparisons, out / "deep-mae-diff.png", title="Deep models: paired MAE difference (day-block bootstrap CI)"),
+        *plot_mae_diff_forest(comparisons, out / "deep-mae-diff.png", title="Deep models: paired MAE difference (day-block bootstrap CI)"),
     ]
     meta: Dict[str, Any] = {
         "dataset": {

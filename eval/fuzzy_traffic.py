@@ -49,6 +49,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from plots import write_series_csv
+
 CACHE = Path(__file__).resolve().parent / "data" / "causeway_gdata.csv"
 LEVELS: Tuple[str, ...] = ("light", "moderate", "heavy")
 ROUTES: Tuple[str, ...] = ("jb_to_woodlands", "mandai_to_shell_jb")
@@ -382,7 +384,7 @@ def _metric_row(candidate: str, slice_: str, m: Dict[str, Any]) -> Dict[str, Any
     return row
 
 
-def plot_memberships(partition: LevelPartition, path: Path) -> Path:
+def plot_memberships(partition: LevelPartition, path: Path) -> List[Path]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -400,13 +402,30 @@ def plot_memberships(partition: LevelPartition, path: Path) -> Path:
     ax.set_title("Traffic-level fuzzy partition (crossings at the crisp cut points)", fontsize=10)
     ax.legend(fontsize=8)
     fig.tight_layout()
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "travel_time_min": float(minutes),
+            "membership_light": float(mu[i, 0]),
+            "membership_moderate": float(mu[i, 1]),
+            "membership_heavy": float(mu[i, 2]),
+            "light_max_min": partition.light_max,
+            "heavy_min_min": partition.heavy_min,
+        }
+        for i, minutes in enumerate(x)
+    ]
+    csv_path = write_series_csv(
+        path,
+        rows,
+        ("travel_time_min", "membership_light", "membership_moderate", "membership_heavy", "light_max_min", "heavy_min_min"),
+    )
     fig.savefig(path, dpi=130)
     plt.close(fig)
-    return path
+    return [path, csv_path]
 
 
-def plot_confusions(confusions: Dict[str, np.ndarray], path: Path) -> Path:
+def plot_confusions(confusions: Dict[str, np.ndarray], path: Path) -> List[Path]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -426,10 +445,17 @@ def plot_confusions(confusions: Dict[str, np.ndarray], path: Path) -> Path:
         ax.set_title(label, fontsize=8)
     fig.suptitle("60-min traffic level, both directions, hold-out (counts; shade = row share)", fontsize=9)
     fig.tight_layout()
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for label, cm in confusions.items():
+        for i, actual in enumerate(LEVELS):
+            for j, predicted in enumerate(LEVELS):
+                rows.append({"model": label, "actual": actual, "predicted": predicted, "count": int(cm[i, j])})
+    csv_path = write_series_csv(path, rows, ("model", "actual", "predicted", "count"))
     fig.savefig(path, dpi=130)
     plt.close(fig)
-    return path
+    return [path, csv_path]
 
 
 def fuzzy_component(
@@ -476,8 +502,8 @@ def fuzzy_component(
     print(format_comparison_table(comparisons))
 
     written = [
-        plot_memberships(partition, out_dir / "fuzzy-memberships.png"),
-        plot_confusions({CANDIDATES[k]: confusions[CANDIDATES[k]] for k in ("persist", "rules", "xgb")}, out_dir / "fuzzy-confusion.png"),
+        *plot_memberships(partition, out_dir / "fuzzy-memberships.png"),
+        *plot_confusions({CANDIDATES[k]: confusions[CANDIDATES[k]] for k in ("persist", "rules", "xgb")}, out_dir / "fuzzy-confusion.png"),
     ]
     info = s["routes_info"]
     meta: Dict[str, Any] = {

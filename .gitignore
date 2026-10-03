@@ -11,6 +11,8 @@ htmlcov/
 
 # Local data extracts and logs
 **/*.csv
+# Figure series replayed from the cited eval run.json (not a data extract).
+!eval/runs/replay-20261003T035807Z/*/*.csv
 **/*.log
 # Test fixtures are small, hand-built, and must be committed
 !**/tests/fixtures/**

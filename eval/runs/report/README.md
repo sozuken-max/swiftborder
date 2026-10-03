@@ -1,5 +1,11 @@
 > **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble`.
 
+Each figure PNG from a harness run has a CSV of the same stem beside it (the plotted series: `offline/holdout-sample.csv` next to `offline/holdout-sample.png`, and the same pattern under `bqml/`, `joined/`, `deep/`, `fuzzy/`, and `ensemble/`). This snapshot was not regenerated, so the files listed below are the PNGs only. The snapshot numbers are unchanged.
+
+Figure CSVs for this snapshot were replayed from `run.json` (no model fit, no BigQuery) into [`../replay-20261003T035807Z/`](../replay-20261003T035807Z/). `offline/holdout-sample` is absent there: that tail was never stored.
+
+This folder stays the citation target. `replay_series.py` refuses to write into this directory. A fresh `generate_comparison_plots.py` on the same setup would not keep these numbers: newer `causeway.travel_times` rows past this cache, the 2026-10-19 23:59 SGT cutoff, wavelet code that this run left off (`use_dwt` false), plot writers added after this snapshot, TensorFlow nondeterminism, and promotion refusing a dirty tree or a `code_sha256` mismatch. Every other figure can be rebuilt from the MAE, CI, seed, profile, and confusion fields already in `run.json`. Older schema-v2 promotions (`20260930T202959Z`, `20260930T194805Z`, `20260930T191544Z`, `20260930T175104Z`) replay the same way from the `run.json` in the commit that promoted them. `20260926T073406Z` is schema v1 and is not replayable.
+
 # Eval run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble`
 
 Created (UTC): 2026-10-03T04:08:12Z. Schema v2.

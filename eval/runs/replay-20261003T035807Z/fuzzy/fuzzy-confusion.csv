@@ -1,0 +1,28 @@
+model,actual,predicted,count
+Persistence level,light,light,734
+Persistence level,light,moderate,209
+Persistence level,light,heavy,7
+Persistence level,moderate,light,209
+Persistence level,moderate,moderate,906
+Persistence level,moderate,heavy,227
+Persistence level,heavy,light,9
+Persistence level,heavy,moderate,225
+Persistence level,heavy,heavy,330
+Fuzzy rule base,light,light,797
+Fuzzy rule base,light,moderate,152
+Fuzzy rule base,light,heavy,1
+Fuzzy rule base,moderate,light,209
+Fuzzy rule base,moderate,moderate,953
+Fuzzy rule base,moderate,heavy,180
+Fuzzy rule base,heavy,light,6
+Fuzzy rule base,heavy,moderate,257
+Fuzzy rule base,heavy,heavy,301
+XGB forecast -> fuzzy level,light,light,748
+XGB forecast -> fuzzy level,light,moderate,201
+XGB forecast -> fuzzy level,light,heavy,1
+XGB forecast -> fuzzy level,moderate,light,78
+XGB forecast -> fuzzy level,moderate,moderate,1139
+XGB forecast -> fuzzy level,moderate,heavy,125
+XGB forecast -> fuzzy level,heavy,light,1
+XGB forecast -> fuzzy level,heavy,moderate,207
+XGB forecast -> fuzzy level,heavy,heavy,356

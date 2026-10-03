@@ -1,0 +1,10 @@
+display_rank,challenger,reference,n,mean_ae_diff_min,bootstrap_ci_low_min,bootstrap_ci_high_min,decision
+0,Served (registry),Persistence,5184,-0.0988264684558529,-0.16899790222983244,-0.039833632242194446,not significant
+1,Equal mean of 4 models,xgb[maps] (daily refit),5184,0.08347011827018876,0.030238334358884695,0.15214846916092215,not significant
+2,Rolling LAD stack,xgb[maps] (daily refit),5184,-0.021303837996157954,-0.07380937136766032,0.041540027194599594,not significant
+3,Rolling best-model selection,xgb[maps] (daily refit),5184,0.01644153067356415,-0.041762950993544073,0.09018866907681754,not significant
+4,Fuzzy-gated stack (hybrid),xgb[maps] (daily refit),5184,-0.006789649621568013,-0.06251031065386237,0.06022191262809627,not significant
+5,Fuzzy-gated stack (hybrid),Rolling LAD stack,5184,0.014514188374589943,-0.0033157690745879713,0.03797437854119485,not significant
+6,Rolling LAD stack,Served (registry),5184,-0.28823691839179705,-0.34877833183679324,-0.19901574782563028,challenger
+7,Fuzzy-gated stack (hybrid),Served (registry),5184,-0.27372273001720715,-0.34123517985503665,-0.1770992788033659,challenger
+8,xgb[maps] (daily refit),Served (registry),5184,-0.26693308039563907,-0.37149024669147096,-0.1457432553582713,challenger

@@ -3,3 +3,8 @@
 !README.md
 !report/
 !report/**
+# Series CSVs replayed from the cited run.json. No run.json, no PNGs.
+!replay-20261003T035807Z/
+replay-20261003T035807Z/*
+!replay-20261003T035807Z/*/
+!replay-20261003T035807Z/*/*.csv

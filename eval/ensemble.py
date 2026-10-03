@@ -324,7 +324,7 @@ def ensemble_component(
     print("Ensemble / hybrid, 30 min (Holm over this family):")
     print(format_comparison_table(comps))
     sig = [dict(c.to_dict(), family="30min") for c in comps]
-    written = [plot_mae_diff_forest(comps, out_dir / "ensemble-30min-mae-diff.png", title="30 min, both directions: ensembles and hybrids (day-block CI; Holm)")]
+    written = [*plot_mae_diff_forest(comps, out_dir / "ensemble-30min-mae-diff.png", title="30 min, both directions: ensembles and hybrids (day-block CI; Holm)")]
     meta_60: Dict[str, Any] = {}
     if deep_keep is not None:
         f60 = pool_60(deep_keep)
@@ -338,7 +338,7 @@ def ensemble_component(
         print("Ensemble, 60 min offline (Holm over this family):")
         print(format_comparison_table(comps60))
         sig += [dict(c.to_dict(), family="60min") for c in comps60]
-        written.append(plot_mae_diff_forest(comps60, out_dir / "ensemble-60min-mae-diff.png", title="60 min offline, JB -> SG: XGB + deep ensembles (5 day-blocks)"))
+        written.extend(plot_mae_diff_forest(comps60, out_dir / "ensemble-60min-mae-diff.png", title="60 min offline, JB -> SG: XGB + deep ensembles (5 day-blocks)"))
         meta_60 = {"rows": int(len(f60)), "members": [deep_keep["xgb_label"], *members], "stack_weights": logs60["stack"], "days": sorted(f60["date_sgt"].unique())}
     meta = {
         "dataset": {

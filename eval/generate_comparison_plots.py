@@ -103,14 +103,14 @@ def offline_component(
 
     written: List[Path] = []
     if not scores.empty:
-        written.append(
+        written.extend(
             plot_backtest_method_means(
                 scores,
                 out / "backtest-mae.png",
                 title=f"Offline 60 min: mean MAE by method ({days[0]} .. {days[-1]}, after split)",
             )
         )
-    written.append(
+    written.extend(
         plot_holdout_forecast_sample(
             list(test["target_ts"]),
             y / 60.0,
@@ -120,7 +120,7 @@ def offline_component(
             max_points=288,
         )
     )
-    written.append(
+    written.extend(
         plot_mae_diff_forest(
             comparisons,
             out / "holdout-mae-diff.png",

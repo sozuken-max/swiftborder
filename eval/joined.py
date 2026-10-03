@@ -39,6 +39,7 @@ import pandas as pd
 
 import camera_forecast as cf
 import features as fx
+from plots import write_series_csv
 
 SGT = "Asia/Singapore"
 DEFAULT_TEST_START = "2026-09-13"
@@ -262,13 +263,13 @@ def joined_component(
 
     out = subdir(run_dir, "joined")
     written = [
-        plot_mae_diff_forest(comps, out / "joined-mae-diff.png", title="Joined features, 30 min: paired MAE difference (day-block CI; Holm)"),
-        _plot_mae_bars(metrics, out / "joined-mae-by-feature-set.png"),
+        *plot_mae_diff_forest(comps, out / "joined-mae-diff.png", title="Joined features, 30 min: paired MAE difference (day-block CI; Holm)"),
+        *_plot_mae_bars(metrics, out / "joined-mae-by-feature-set.png"),
     ]
     if camfc_comps:
-        written.append(plot_mae_diff_forest(camfc_comps, out / "camfc-mae-diff.png", title="Layer A queue forecast as input, 30 min: paired MAE difference (Holm within family)"))
+        written.extend(plot_mae_diff_forest(camfc_comps, out / "camfc-mae-diff.png", title="Layer A queue forecast as input, 30 min: paired MAE difference (Holm within family)"))
     if cam_info.get("curves"):
-        written.append(cf.plot_profiles(cam_info["curves"], None, out / "camfc-profiles.png"))
+        written.extend(cf.plot_profiles(cam_info["curves"], None, out / "camfc-profiles.png"))
     sig = []
     for c in comps:
         d = c.to_dict()
@@ -334,7 +335,7 @@ def regime_metrics(oof: pd.DataFrame, candidates: Sequence[str], threshold: floa
     return out
 
 
-def _plot_mae_bars(metrics: List[dict], path: Path) -> Path:
+def _plot_mae_bars(metrics: List[dict], path: Path) -> List[Path]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -350,10 +351,19 @@ def _plot_mae_bars(metrics: List[dict], path: Path) -> Path:
     ax.set_title("Joined features, 30 min: MAE by candidate")
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path = write_series_csv(
+        path,
+        [
+            {"order_from_bottom": i, "candidate": m["candidate"], "slice": m["slice"], "mae_min": m["mae_min"]}
+            for i, m in enumerate(rows)
+        ],
+        ("order_from_bottom", "candidate", "slice", "mae_min"),
+    )
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    return path
+    return [path, csv_path]
 
 
 def load_inputs(refresh_bq: bool = False) -> Tuple[pd.DataFrame, Dict[str, Any]]:

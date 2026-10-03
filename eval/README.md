@@ -22,8 +22,9 @@ Evaluation harnesses for Layer A and Layer B. Nothing here deploys `swiftbackend
 | [`layer_a.py`](layer_a.py) | Layer A scorer: mAP, precision/recall, count error (overall and per direction), day/night |
 | [`backfill_camera_counts.py`](backfill_camera_counts.py) | Camera 2701 counts per 10-min bin via `camdetect.detect_frame` (**billed Roboflow**) |
 | [`generate_comparison_plots.py`](generate_comparison_plots.py) | One run folder with offline + BQML + joined components and figures |
+| [`replay_series.py`](replay_series.py) | Write figure CSVs from an existing `run.json` (no fit, no BigQuery); refuses `runs/report/` |
 | [`run_artifacts.py`](run_artifacts.py), [`promote_report_run.py`](promote_report_run.py) | Schema-v2 `run.json` (provenance, windows, metrics, significance), validation, promotion to `runs/report/` |
-| [`plots.py`](plots.py), [`metrics.py`](metrics.py) | Figures and MAE/RMSE helpers |
+| [`plots.py`](plots.py), [`metrics.py`](metrics.py) | Figures and MAE/RMSE helpers. Each PNG is written with a same-stem CSV of the plotted series |
 
 ## Setup and tests
 
@@ -53,6 +54,16 @@ python promote_report_run.py <run_id>
 ```
 
 `--ensemble` needs `--bqml` and `--joined` (it reuses their out-of-sample rows) and adds the 60-minute pool when `--deep` is given. The offline component reads the cached `data/causeway_gdata.csv`. Add `--refresh-bq` only when that cache is missing: it re-downloads `travel_times`, which now has rows past the report cut, so the offline split and its numbers will differ from the promoted run. The BQML window is pinned by `--window-end` either way. Promotion refuses a run made from a dirty tree unless `--allow-dirty` is given; do not use that for the report.
+
+Each figure PNG has a CSV of the same stem beside it (`offline/holdout-sample.png` and `offline/holdout-sample.csv`, and the same pattern for `bqml/`, `joined/` including `camfc-profiles`, `deep/`, `fuzzy/`, and `ensemble/`). The CSV header is the series that figure plots. A figure that exists only with `--bqml`, `--joined`, `--deep`, `--fuzzy`, or `--ensemble` gets its CSV in that same branch. `run.json` lists both paths under the component `artifacts`, relative to the run folder.
+
+The committed snapshot in [`runs/report/`](runs/report/) stays as cited. Its numbers are unchanged. Figure CSVs for that snapshot were replayed from its `run.json` (no model fit, no BigQuery) into [`runs/replay-20261003T035807Z/`](runs/replay-20261003T035807Z/). Do not refit the snapshot to add them. A fresh `generate_comparison_plots.py` on the same window and flags would move the numbers: `causeway.travel_times` now has rows past that run's cache, the report cutoff is 2026-10-19 23:59 SGT, the wavelet ablation is not the snapshot model (`use_dwt` is false there), plot writers added after the snapshot change `code_sha256`, TensorFlow training is not bit-stable, and promotion refuses a dirty tree or a `code_sha256` mismatch. Series for every figure except `offline/holdout-sample` are already in `run.json` (MAE, bootstrap CIs, seeds, profile curves, confusion counts, fuzzy cuts). Replay them with no model fit and no BigQuery:
+
+```bash
+python replay_series.py path/to/run_dir --output-dir path/to/csv_dir
+```
+
+That command writes the CSVs only and refuses `runs/report/`. Omit `--output-dir` to write next to the source `run.json` when that directory is not the snapshot. Older schema-v2 promotions (`20260930T202959Z`, `20260930T194805Z`, `20260930T191544Z`, `20260930T175104Z`) replay the same way from the `run.json` in the commit that promoted them. `20260926T073406Z` is schema v1 and is not replayable. The hold-out tail (timestamps, actual minutes, and the XGB and persistence traces) was never stored, so `offline/holdout-sample` is absent from the replay and that one CSV needs a new run.
 
 Individual harnesses:
 

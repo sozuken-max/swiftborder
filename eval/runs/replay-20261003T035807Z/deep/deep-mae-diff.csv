@@ -1,0 +1,11 @@
+display_rank,challenger,reference,n,mean_ae_diff_min,bootstrap_ci_low_min,bootstrap_ci_high_min,decision
+0,"LSTM(64), anchored, seed mean",Persistence T-60,1428,-0.7067174173779077,-1.312872986602291,-0.21107226325367912,insufficient data
+1,"LSTM(64), anchored, seed mean",XGB (sklearn),1428,0.5008973700862518,-0.16002160964899195,0.9871252741457489,insufficient data
+2,"GRU(64), anchored, seed mean",Persistence T-60,1428,-0.6470003909008489,-0.8989676249903563,-0.3461443698167546,insufficient data
+3,"GRU(64), anchored, seed mean",XGB (sklearn),1428,0.5606143965633105,0.07325486604094464,0.9962173206200043,insufficient data
+4,"Patch Transformer, anchored, seed mean",Persistence T-60,1428,-0.48458805516619574,-0.9995961366456263,0.0025331104398194477,insufficient data
+5,"Patch Transformer, anchored, seed mean",XGB (sklearn),1428,0.7230267322979638,-0.01324591222315121,1.3840197340231788,insufficient data
+6,"Patch Transformer, raw target (ablation), seed mean",Persistence T-60,1428,-0.18618687367906747,-0.7528284040997779,0.502492721804272,insufficient data
+7,"Patch Transformer, raw target (ablation), seed mean",XGB (sklearn),1428,1.0214279137850921,0.17372607598451698,1.9198673828687778,insufficient data
+8,"Patch Transformer, anchored","Patch Transformer, raw target",1428,-0.2984011814871284,-0.6040257850845123,-0.003147784677504186,insufficient data
+9,"Patch Transformer, anchored","LSTM(64), anchored",1428,0.22212936221171192,-0.1440783828808041,0.5099306094178359,insufficient data

@@ -38,6 +38,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from plots import write_series_csv
+
 EVAL_ROOT = Path(__file__).resolve().parent
 HISTORY_CSV = EVAL_ROOT / "data" / "cam2701_congestion_10min.csv"
 HISTORY_VIEW = "cam2701.v_congestion_index_10min"
@@ -250,7 +252,7 @@ def profile_curves(profile, step_min: int = 10) -> Dict[str, Any]:
     return out
 
 
-def plot_profiles(curves: Dict[str, Any], maps_curves: Optional[Dict[str, Any]], path: Path) -> Path:
+def plot_profiles(curves: Dict[str, Any], maps_curves: Optional[Dict[str, Any]], path: Path) -> List[Path]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -271,7 +273,29 @@ def plot_profiles(curves: Dict[str, Any], maps_curves: Optional[Dict[str, Any]],
             ax2.set_ylabel("Maps travel time (min)", color="#E45756")
         ax.legend(fontsize=7, loc="upper left")
     fig.tight_layout()
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for d in DIRECTIONS:
+        for label in ("weekday", "weekend"):
+            camera = curves[f"{d}/{label}"]
+            maps = None if not maps_curves else maps_curves[f"{d}/{label}"]
+            for i, tod in enumerate(curves["tod_min"]):
+                rows.append(
+                    {
+                        "tod_min": tod,
+                        "hour_sgt": float(tod) / 60.0,
+                        "direction": d,
+                        "day_type": label,
+                        "camera_forecast_vehicles": camera[i],
+                        "maps_travel_time_min": "" if maps is None else maps[i],
+                    }
+                )
+    csv_path = write_series_csv(
+        path,
+        rows,
+        ("tod_min", "hour_sgt", "direction", "day_type", "camera_forecast_vehicles", "maps_travel_time_min"),
+    )
     fig.savefig(path, dpi=130)
     plt.close(fig)
-    return path
+    return [path, csv_path]

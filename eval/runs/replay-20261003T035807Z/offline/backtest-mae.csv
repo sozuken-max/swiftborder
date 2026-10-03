@@ -1,0 +1,6 @@
+order_from_bottom,method,mean_mae_min
+0,XGB actual window,3.515444443843983
+1,XGB average,3.8758059042471427
+2,XGB blend window,4.626832353627241
+3,Naive blend,4.640914351851852
+4,Persistence T-60,4.739134837962963

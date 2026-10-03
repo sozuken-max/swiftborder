@@ -14,6 +14,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 - [docs/adr/0002-firebase-hosting-source.md](docs/adr/0002-firebase-hosting-source.md): put the Hosting client in this repo once `index.html`, `style.css`, `app.js`, and a recovered `firebase.json` are together. Deploy stays manual. No Hosting workflow, and `app.js` was not copied.
 - Offline XGB window ablation in `eval/timeseries_xgb.py` (Chad, day 2): (A) lags, (B) lags plus a causal first difference and a 60-minute rolling mean, (C) lags plus a per-window z-score Daubechies db2 wavelet at level 2 (level 3 optional; db4 is not the default). `use_dwt` stays off for the promoted report model. `python timeseries_xgb.py` scores the cache; below 10 day-blocks it prints point estimates only.
 - [docs/adr/0003-deep-training-and-feature-matrix.md](docs/adr/0003-deep-training-and-feature-matrix.md): keep LSTM / GRU / Transformer training on the local CPU. The next matrix is trees on the full wavelet and camera-profile factorial; deep models only on the cells importance selects. No GCP job.
+- Figure writers emit a same-stem CSV beside each PNG. The cited snapshot in `eval/runs/report/` is unchanged; its series were replayed from `run.json` into `eval/runs/replay-20261003T035807Z/` with no refit. `offline/holdout-sample` was never stored. Older schema-v2 promotions replay from the `run.json` in the commit that promoted them; `20260926T073406Z` is schema v1 and is not replayable.
 
 ## 2026-10-01
 

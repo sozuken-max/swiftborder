@@ -1,0 +1,4 @@
+display_rank,challenger,reference,n,mean_ae_diff_min,bootstrap_ci_low_min,bootstrap_ci_high_min,decision
+0,mean[XGB+deep],XGB (sklearn),1428,0.18551557019154066,-0.2358164145692902,0.5916867459482075,insufficient data
+1,stack[XGB+deep],XGB (sklearn),1428,0.0917417097472731,-0.11246565559036843,0.2869738532002554,insufficient data
+2,mean[deep],XGB (sklearn),1428,0.4599997732680109,-0.11345952792387845,0.9707163206917787,insufficient data
