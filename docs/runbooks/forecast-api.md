@@ -92,7 +92,7 @@ The fitted daily models are reused until 00:00 SGT. Memory is 1 GiB.
 1. **Test:** `pytest forecastapi`, then the harness equivalence test.
 2. **Buildpack:** builds the image from `forecastapi/` (Python 3.11; all images pinned by digest).
 3. **Deploy:** if the service exists, the new revision is deployed with **no traffic** and tag `candidate`. The first deploy takes traffic directly, because there is no earlier revision. The service is private (`--no-allow-unauthenticated`) and runs as `forecast-api@`. It sets `BQ_PROJECT` and `COMMIT_SHA`.
-4. **Smoke:** against the candidate URL with an identity token, the build checks:
+4. **Smoke:** against the candidate URL with an identity token, the build checks the cases below. Inside Cloud Build, `gcloud auth print-identity-token` fails and the metadata identity endpoint returns 404. The step therefore mints the token with the IAM Credentials `generateIdToken` API. That needs the build SA (`1095552466513-compute@`) to hold `roles/iam.serviceAccountOpenIdTokenCreator` on itself (granted 2026-10-03).
    - no token → 403;
    - `list=models` → 200 and lists `served`;
    - `model=served` → 200 with `"source": "local model"` (503 is accepted as a data gap);
@@ -110,6 +110,8 @@ curl.exe -s -H "Authorization: Bearer $t" "$u/?model=served"
 curl.exe -g -s -H "Authorization: Bearer $t" "$u/?model=xgb[maps]&direction=SG_TO_MY"
 curl.exe -g -s -H "Authorization: Bearer $t" "$u/?model=xgb_bq[daily]&model_my_to_sg=persistence"
 ```
+
+On 2026-10-03 a user token from `gcloud auth print-identity-token` got 401 from this service. If yours does too, call it through a service account you may impersonate (`--impersonate-service-account=<sa> --audiences=$u`). That needs `roles/iam.serviceAccountOpenIdTokenCreator` on that SA, and the SA needs invoke rights on the service.
 
 - **Roll back:** `gcloud run services update-traffic forecast-api --region asia-southeast1 --project swiftborder --to-revisions <previous-revision>=100`.
 - **Remove:** `gcloud run services delete forecast-api --region asia-southeast1 --project swiftborder`. Then disable trigger `949ff029` so the next push does not recreate it.

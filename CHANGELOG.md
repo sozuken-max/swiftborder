@@ -4,6 +4,8 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-03
 
+- Fix the `forecast-api` Smoke step. Build 363590b1 created the service (`forecast-api-00001-dz9`), then failed in Smoke: `gcloud auth print-identity-token` cannot mint an ID token in Cloud Build, and the metadata identity endpoint returns 404 there (2b76a1c3). Smoke now calls IAM Credentials `generateIdToken` for the build SA. GCP change: `1095552466513-compute@` holds `roles/iam.serviceAccountOpenIdTokenCreator` on itself. A smoke-only build against the live service (e5e280f6) passed every check; `model=served` returned `"source": "local model"`.
+
 - Fix the first `forecast-api` build on `main` (a8600413 failed in Buildpack): `builder:latest` is Ubuntu 24 and ships only Python 3.13 / 3.14, so `GOOGLE_PYTHON_VERSION=3.11` could not resolve. The build now uses `builder:google-22` (pinned by digest) with `3.11.x`, matching the Python the tests and harness use. A build-only Cloud Build of the fixed config (e92cf936: Test + Buildpack, no deploy) succeeded with Python 3.11.x.
 
 - Team decisions on the review: the default Compute Engine build identity for `forecast-api` is accepted; `swiftbackend` credential and public-access settings stay as they are and do not block the merge; the PR stays as one PR; deck PNGs are handled separately. Recorded in `docs/release-pr2.md`.
