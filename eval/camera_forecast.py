@@ -199,7 +199,10 @@ def cross_validate(df: pd.DataFrame, n_folds: int = CV_FOLDS, seed: int = 0) -> 
         for f in range(n_folds):
             test = fold == f
             model = make().fit(df[~test])
-            pred[test] = model.predict(df.loc[test, "direction"].to_numpy(), df.loc[test, "bin_ts"])
+            pred[test] = model.predict(
+                df.loc[test, "direction"].to_numpy(),
+                df.loc[test, "bin_ts"] + NOW_OFFSET,
+            )
         err = np.abs(df["vis_count"].to_numpy() - pred)
         row = {"candidate": name, "mae_count": float(np.mean(err))}
         for d in DIRECTIONS:

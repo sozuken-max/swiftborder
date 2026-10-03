@@ -169,6 +169,17 @@ def test_promote_copies_a_valid_run(tmp_path: Path):
     assert (report / "README.md").read_text(encoding="utf-8").startswith("> **Committed report snapshot.**")
 
 
+def test_promote_refuses_overlapping_source_and_report_directories(tmp_path: Path):
+    m = _manifest()
+    run_dir = _run_dir(tmp_path, m)
+
+    with pytest.raises(PromotionError, match="must not overlap"):
+        promote(run_dir, run_dir, runs_root=tmp_path)
+
+    assert (run_dir / "run.json").is_file()
+    assert (run_dir / "offline" / "plot.png").is_file()
+
+
 def test_promote_refuses_invalid_run_and_leaves_report_alone(tmp_path: Path):
     m = _manifest()
     m["offline"]["metrics"] = []

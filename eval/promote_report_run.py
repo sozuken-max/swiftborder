@@ -54,6 +54,11 @@ def promote(
     allow_dirty: bool = False,
     runs_root: Optional[Path] = None,
 ) -> None:
+    source_path = source_run_dir.resolve()
+    destination_path = report_dir.resolve()
+    if source_path == destination_path or source_path in destination_path.parents or destination_path in source_path.parents:
+        raise PromotionError("source and report directories must not overlap")
+
     problems = check_promotable(source_run_dir, allow_dirty=allow_dirty)
     if problems:
         raise PromotionError("refusing to promote:\n- " + "\n- ".join(problems))

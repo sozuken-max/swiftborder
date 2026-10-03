@@ -47,6 +47,25 @@ def test_cross_validation_prefers_a_profile_over_the_mean():
     assert info["chosen"].startswith("fourier") and info["harmonics"] in cf.HARMONICS
 
 
+def test_cross_validation_predicts_at_the_profile_fit_offset(monkeypatch):
+    kept, _ = cf.clean_history(_history(days=5))
+    predicted_timestamps = []
+
+    class TimestampProbe:
+        def fit(self, _):
+            return self
+
+        def predict(self, direction, ts):
+            predicted_timestamps.extend(pd.Series(ts).tolist())
+            return np.zeros(len(direction))
+
+    monkeypatch.setattr(cf, "candidate_models", lambda: {"probe": TimestampProbe})
+
+    cf.cross_validate(kept)
+
+    assert sorted(predicted_timestamps) == sorted((kept["bin_ts"] + cf.NOW_OFFSET).tolist())
+
+
 def test_profile_features_use_only_the_calendar_and_the_label_bin_offset():
     profile, _ = cf.fit_camera_profile(_history())
     t0 = pd.Timestamp("2026-09-16 06:00", tz="Asia/Singapore").tz_convert("UTC")
