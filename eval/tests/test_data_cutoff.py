@@ -77,7 +77,7 @@ def test_cut_weather_drops_late_rows():
 def test_promote_target_choice(tmp_path, monkeypatch):
     import promote_report_run as prr
 
-    assert prr.TARGETS == ("report", "report-confirm")
+    assert prr.TARGETS == ("report", "report-confirm", "parity-bqml")
     seen = {}
     monkeypatch.setattr(prr, "RUNS_ROOT", tmp_path)
     (tmp_path / "r1").mkdir()
@@ -94,15 +94,14 @@ def test_replay_refuses_confirm_snapshot():
 
 
 def test_confirmation_run_flags_parse(monkeypatch):
-    """Run B uses --bqml-only with --joined --ensemble; the ensemble guard must accept it."""
-    import run_artifacts
+    """Run B: local only (--skip-offline --joined --ensemble), no BigQuery ML."""
 
     def stop(**kwargs):
         raise RuntimeError(f"reached run dir creation with {kwargs['components']}")
 
     monkeypatch.setattr(gcp, "create_run_dir", stop)
-    with pytest.raises(RuntimeError, match=r"\['bqml', 'joined', 'ensemble'\]"):
-        gcp.main(["--data-cutoff", CUT, "--bqml-only", "--window-start", "2026-10-01 00:00", "--joined",
-                  "--joined-start", "2026-10-01", "--joined-end", "2026-10-19", "--ensemble"])
+    with pytest.raises(RuntimeError, match=r"\['joined', 'ensemble'\]"):
+        gcp.main(["--data-cutoff", CUT, "--skip-offline", "--joined", "--joined-start", "2026-10-01",
+                  "--joined-end", "2026-10-19", "--ensemble"])
     with pytest.raises(SystemExit):
-        gcp.main(["--joined", "--ensemble"])  # no BQML component
+        gcp.main(["--ensemble"])  # ensemble needs the joined rows

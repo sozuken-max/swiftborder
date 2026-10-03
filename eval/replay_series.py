@@ -25,7 +25,7 @@ from plots import write_series_csv
 from run_artifacts import EVAL_ROOT, load_manifest
 
 REPORT_SNAPSHOT = EVAL_ROOT / "runs" / "report"
-SNAPSHOTS = (REPORT_SNAPSHOT, EVAL_ROOT / "runs" / "report-confirm")
+SNAPSHOTS = (REPORT_SNAPSHOT, EVAL_ROOT / "runs" / "report-confirm", EVAL_ROOT / "runs" / "parity-bqml")
 HOLDOUT_SAMPLE = "offline/holdout-sample.png"
 DIRECTIONS_WITH_BOTH = ("SG_TO_MY", "MY_TO_SG", "both")
 FOREST_COLUMNS = (

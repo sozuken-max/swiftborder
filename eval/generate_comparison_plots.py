@@ -213,11 +213,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--deep-seeds", type=int, nargs="+", default=None, help="seeds per deep model (default deep_forecast.DEFAULT_SEEDS)")
     parser.add_argument("--fuzzy", action="store_true", help="Also score the fuzzy traffic-level classifier (60 min, both directions)")
     parser.add_argument("--ensemble", action="store_true", help="Also score ensembles / hybrids of the Layer B models (needs --bqml and --joined; uses --deep if given)")
+    parser.add_argument("--skip-offline", action="store_true", help="Do not run the offline 60-min component (e.g. the October confirmation run)")
+    parser.add_argument("--bqml-parity", action="store_true", help="One-off: compare BQML lin_h30 / xgb_h30 with their local replicas (needs --bqml or --bqml-only)")
     parser.add_argument("--data-cutoff", default=None, help="Drop observations after this time (SGT, e.g. '2026-10-19 23:59'); no scored label is later")
     parser.add_argument("--alpha", type=float, default=0.05)
     args = parser.parse_args(argv)
-    if args.ensemble and not ((args.bqml or args.bqml_only) and args.joined):
-        parser.error("--ensemble needs --bqml and --joined (it reuses their out-of-sample rows)")
+    if args.bqml_parity and not (args.bqml or args.bqml_only):
+        parser.error("--bqml-parity needs --bqml or --bqml-only")
+    if args.ensemble and not args.joined:
+        parser.error("--ensemble needs --joined (it reuses its out-of-sample rows; with --bqml the BQML predictions join the pool)")
     import timeseries_xgb as tsx
 
     cutoff = tsx.parse_data_cutoff(args.data_cutoff)
@@ -233,6 +237,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             parser.error(f"--joined-end is after the --data-cutoff day {last_day}")
 
     components = ["bqml"] if args.bqml_only else (["offline", "bqml"] if args.bqml else ["offline"])
+    if args.skip_offline and "offline" in components:
+        components.remove("offline")
     if args.joined:
         components.append("joined")
     if args.deep:
@@ -241,6 +247,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         components.append("fuzzy")
     if args.ensemble:
         components.append("ensemble")
+    if args.bqml_parity:
+        components.append("parity")
+    if not components:
+        parser.error("no component selected")
     run_dir = create_run_dir(components=components, run_id=args.run_id, runs_root=args.runs_root, exist_ok=args.reuse_run)
     manifest = new_manifest(components)
     if cutoff is not None:
@@ -313,13 +323,22 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         paths, meta = ensemble.ensemble_component(
             run_dir,
-            bqml_result=kept["bqml"]["result"],
+            bqml_result=kept["bqml"].get("result"),
             joined_oof=kept["joined"]["oof"],
             deep_keep=kept["deep"] or None,
             alpha=args.alpha,
         )
         written.extend(paths)
         manifest["ensemble"] = meta
+
+    if "parity" in components:
+        import bqml_parity
+        import joined as _jx
+
+        pframe, _ = _jx.load_inputs(refresh_bq=False, data_cutoff=cutoff)
+        paths, meta = bqml_parity.parity_component(run_dir, bqml_result=kept["bqml"]["result"], frame=pframe, alpha=args.alpha)
+        written.extend(paths)
+        manifest["parity"] = meta
 
     from run_artifacts import multiplicity_summary
 

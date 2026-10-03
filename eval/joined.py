@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+import bq_replica as bq
 import camera_forecast as cf
 import features as fx
 from plots import write_series_csv
@@ -114,13 +115,23 @@ def run_folds(
     end: str = DEFAULT_TEST_END,
     min_train_rows: int = 500,
     mp_harmonics: int = 4,
+    replicas: bool = True,
 ) -> pd.DataFrame:
     """Out-of-fold predictions for every test row: columns ``<model>[<feature set>]`` plus baselines.
 
     Feature sets whose columns are absent are skipped. ``mp_*`` (Maps-profile control) is fitted on
     each fold's training rows only.
+
+    ``replicas``: local copies of the BQML models (``bq_replica``). ``lin_bq[frozen]`` / ``xgb_bq[frozen]``
+    are fitted once on BQML's 12 Sep training rows; ``lin_bq[daily]`` / ``xgb_bq[daily]`` refit the same
+    estimators on every fold's earlier rows (the retraining effect, on one platform).
     """
     rows = []
+    frozen = None
+    if replicas:
+        fr = bq.frozen_training_rows(frame)
+        if len(fr) >= 100:
+            frozen = (bq.fit_lin(fr), bq.fit_xgb(fr))
     for day in fold_days(frame, start, end):
         train, test = fold_split(frame, day)
         if len(train) < min_train_rows or test.empty:
@@ -138,6 +149,14 @@ def run_folds(
                 continue
             for model, pred in predict_fold(train, test, cols).items():
                 out[f"{model}[{fs}]"] = pred
+        if replicas:
+            if frozen is not None:
+                out["lin_bq[frozen]"] = bq.predict_lin(frozen[0], test)
+                out["xgb_bq[frozen]"] = bq.predict_xgb(frozen[1], test)
+            tr_bq = bq.bqml_rows(train)
+            if len(tr_bq) >= 100:
+                out["lin_bq[daily]"] = bq.predict_lin(bq.fit_lin(tr_bq), test)
+                out["xgb_bq[daily]"] = bq.predict_xgb(bq.fit_xgb(tr_bq), test)
         rows.append(out)
     if not rows:
         raise RuntimeError("no fold had enough training rows")
@@ -186,6 +205,18 @@ def comparison_specs(oof: pd.DataFrame) -> List[Tuple[str, str, str]]:
             ("ridge[maps+weather+camera]", "ridge[maps+weather]", "camera-covered"),
         ]
     return specs
+
+
+def replica_specs(oof: pd.DataFrame) -> List[Tuple[str, str, str]]:
+    """Replica family: frozen vs persistence, the retraining effect, and harness vs BQML settings."""
+    want = [
+        ("lin_bq[frozen]", "persistence"),
+        ("xgb_bq[frozen]", "persistence"),
+        ("lin_bq[daily]", "lin_bq[frozen]"),
+        ("xgb_bq[daily]", "xgb_bq[frozen]"),
+        ("xgb[maps]", "xgb_bq[daily]"),
+    ]
+    return [(a, b, "all") for a, b in want if a in oof.columns and b in oof.columns]
 
 
 def camfc_specs(oof: pd.DataFrame) -> List[Tuple[str, str, str]]:
@@ -255,6 +286,10 @@ def joined_component(
     comps, notes = significance(oof, alpha=alpha, n_bootstrap=n_bootstrap)
     print(format_comparison_table(comps))
     camfc_comps, _ = significance(oof, alpha=alpha, n_bootstrap=n_bootstrap, specs=camfc_specs(oof))
+    replica_comps, _ = significance(oof, alpha=alpha, n_bootstrap=n_bootstrap, specs=replica_specs(oof))
+    if replica_comps:
+        print("BQML replica family (Holm within family):")
+        print(format_comparison_table(replica_comps))
     if camfc_comps:
         print("Layer A forecast family (Holm within family):")
         print(format_comparison_table(camfc_comps))
@@ -268,6 +303,8 @@ def joined_component(
     ]
     if camfc_comps:
         written.extend(plot_mae_diff_forest(camfc_comps, out / "camfc-mae-diff.png", title="Layer A queue forecast as input, 30 min: paired MAE difference (Holm within family)"))
+    if replica_comps:
+        written.extend(plot_mae_diff_forest(replica_comps, out / "replica-mae-diff.png", title="Local BQML replicas, 30 min: frozen vs daily refit (Holm within family)"))
     if cam_info.get("curves"):
         written.extend(cf.plot_profiles(cam_info["curves"], None, out / "camfc-profiles.png"))
     sig = []
@@ -280,6 +317,8 @@ def joined_component(
         sig.append(d)
     for c in camfc_comps:
         sig.append(dict(c.to_dict(), family="camfc"))
+    for c in replica_comps:
+        sig.append(dict(c.to_dict(), family="replica"))
     days = sorted(oof["date_sgt"].unique())
     meta = {
         "dataset": {
@@ -306,8 +345,10 @@ def joined_component(
             "ensemble = mean(ridge, xgb)",
             "camfc: camera-2701 queue forecast from Mar-Apr detections (camera_forecast.py)",
             "mpfc: same estimator fitted on each fold's Maps rows (control)",
+            "lin_bq / xgb_bq: local replicas of BQML lin_h30 / xgb_h30 (bq_replica.py); [frozen] = 12 Sep training rows, [daily] = refit per fold",
         ],
         "feature_sets": FEATURE_SETS,
+        "replica_settings": bq.settings(),
         "horizon_minutes": 30,
         "metrics": metrics,
         "significance": sig,

@@ -20,8 +20,9 @@ from typing import List, Optional
 from run_artifacts import RUNS_ROOT, code_fingerprint, load_manifest, validate_manifest
 
 # Committed snapshots: ``report`` is the headline citation target; ``report-confirm`` holds the
-# confirmation run on the period no model choice was tuned on (docs/roadmap.md, frozen-window plan).
-TARGETS = ("report", "report-confirm")
+# confirmation run on the period no model choice was tuned on (docs/roadmap.md, frozen-window plan);
+# ``parity-bqml`` holds the one-off BQML vs local-replica check (bqml_parity.py).
+TARGETS = ("report", "report-confirm", "parity-bqml")
 
 
 class PromotionError(RuntimeError):

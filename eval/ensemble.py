@@ -182,6 +182,39 @@ def pool_30(bqml_rows: Sequence[dict], oof: pd.DataFrame) -> Tuple[pd.DataFrame,
     return m, info
 
 
+def pool_30_local(oof: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Local-only pool: the BQML members are replaced by their local frozen replicas (``bq_replica``).
+
+    ``lin_h30`` / ``xgb_h30`` columns hold ``lin_bq[frozen]`` / ``xgb_bq[frozen]``; ``served`` is the
+    registry mix built from those replicas. No BigQuery ML prediction is used.
+    """
+    need = ["lin_bq[frozen]", "xgb_bq[frozen]", "ridge[maps]", "xgb[maps]"]
+    missing = [c for c in need if c not in oof.columns]
+    if missing:
+        raise RuntimeError(f"joined out-of-fold rows lack {missing}; run joined with replicas")
+    m = oof[["direction", "bin_ts", "y_30", "y_persistence", *need]].copy()
+    m = m.rename(columns={"y_30": "y", "y_persistence": "Persistence", "lin_bq[frozen]": "lin_h30", "xgb_bq[frozen]": "xgb_h30"})
+    m = m.dropna(subset=["y", "Persistence", "lin_h30", "xgb_h30", "ridge[maps]", "xgb[maps]"])
+    m["bin_ts"] = pd.to_datetime(m["bin_ts"], utc=True)
+    m["ensemble_mean"] = (m["lin_h30"] + m["xgb_h30"]) / 2.0
+    m["date_sgt"] = m["bin_ts"].dt.tz_convert(SGT).dt.strftime("%Y-%m-%d")
+    m["served"] = np.where(m["direction"] == "SG_TO_MY", m[REGISTRY["SG_TO_MY"]], m[REGISTRY["MY_TO_SG"]])
+    m = m.sort_values(["direction", "bin_ts"]).reset_index(drop=True)
+    info = {"source": "local replicas (no BigQuery ML)", "joined_rows": int(len(oof)), "matched_rows": int(len(m)), "days": sorted(m["date_sgt"].unique())}
+    return m, info
+
+
+LOCAL_LABEL_SUFFIX = " (local replica)"
+
+
+def local_labels() -> Dict[str, str]:
+    out = dict(LABELS_30)
+    for k in ("lin_h30", "xgb_h30", "served"):
+        out[k] = LABELS_30[k] + LOCAL_LABEL_SUFFIX
+    out["ensemble_mean"] = "ensemble_mean (replicas of lin_h30 + xgb_h30)"
+    return out
+
+
 def candidates_30(frame: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     from fuzzy_traffic import LevelPartition
 
@@ -236,19 +269,21 @@ def regime(frame: pd.DataFrame, threshold: float = REGIME_THRESHOLD_MIN) -> pd.S
     return pd.Series(np.where(change > threshold, "rising", np.where(change < -threshold, "falling", "steady")), index=frame.index)
 
 
-def error_regimes(frame: pd.DataFrame, cols: Sequence[str]) -> Dict[str, Any]:
+def error_regimes(frame: pd.DataFrame, cols: Sequence[str], labels: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """MAE and share of total absolute error per regime: where is the error left to remove?"""
     from run_artifacts import metric_row
+
+    labels = labels or LABELS_30
 
     r = regime(frame)
     metrics, summary = [], {"threshold_min": REGIME_THRESHOLD_MIN, "row_share": r.value_counts(normalize=True).round(4).to_dict(), "error_share": {}}
     for c in cols:
         ae = (frame["y"] - frame[c]).abs()
-        summary["error_share"][LABELS_30.get(c, c)] = (ae.groupby(r).sum() / ae.sum()).round(4).to_dict()
+        summary["error_share"][labels.get(c, c)] = (ae.groupby(r).sum() / ae.sum()).round(4).to_dict()
         for name in ("rising", "steady", "falling"):
             e = (frame["y"] - frame[c])[r == name]
             if len(e):
-                metrics.append(metric_row(LABELS_30.get(c, c), f"30min both/regime={name}", int(len(e)), float(e.abs().mean()), float(np.sqrt((e**2).mean()))))
+                metrics.append(metric_row(labels.get(c, c), f"30min both/regime={name}", int(len(e)), float(e.abs().mean()), float(np.sqrt((e**2).mean()))))
     return {"metrics": metrics, "summary": summary}
 
 
@@ -304,7 +339,7 @@ def _metrics(frame: pd.DataFrame, cols: Sequence[str], labels: Dict[str, str], p
 def ensemble_component(
     run_dir: Path,
     *,
-    bqml_result: Dict[str, Any],
+    bqml_result: Optional[Dict[str, Any]] = None,
     joined_oof: pd.DataFrame,
     deep_keep: Optional[Dict[str, Any]] = None,
     alpha: float = 0.05,
@@ -314,13 +349,18 @@ def ensemble_component(
     from significance import apply_holm, format_comparison_table
 
     out_dir = subdir(run_dir, "ensemble")
-    base, info = pool_30(bqml_result["holdout"].rows, joined_oof)
+    if bqml_result is not None:
+        base, info = pool_30(bqml_result["holdout"].rows, joined_oof)
+        labels = LABELS_30
+    else:
+        base, info = pool_30_local(joined_oof)
+        labels = local_labels()
     frame, logs = candidates_30(base)
-    cols = list(LABELS_30)
-    metrics = _metrics(frame, cols, LABELS_30, "30min ")
-    regimes = error_regimes(frame, ["Persistence", "served", BEST_SINGLE_30, "stack"])
+    cols = list(labels)
+    metrics = _metrics(frame, cols, labels, "30min ")
+    regimes = error_regimes(frame, ["Persistence", "served", BEST_SINGLE_30, "stack"], labels)
     metrics += regimes["metrics"]
-    comps = apply_holm([_compare(frame, ch, ref, LABELS_30, 3, alpha) for ch, ref in FAMILY_30])
+    comps = apply_holm([_compare(frame, ch, ref, labels, 3, alpha) for ch, ref in FAMILY_30])
     print("Ensemble / hybrid, 30 min (Holm over this family):")
     print(format_comparison_table(comps))
     sig = [dict(c.to_dict(), family="30min") for c in comps]
@@ -346,7 +386,7 @@ def ensemble_component(
             "pool_60min": meta_60 or None,
         },
         "window": {"timezone": SGT, "basis": "rolling daily origin inside the scored window; weights use earlier days only", "start": info["days"][0], "end": info["days"][-1]},
-        "models": [LABELS_30[c] for c in cols],
+        "models": [labels[c] for c in cols],
         "horizon_minutes": 30,
         "config": {"min_fit_days": MIN_FIT_DAYS, "select_days": SELECT_DAYS, "fit": "convex LAD (scipy linprog / HiGHS)", "gate": "fuzzy_traffic.LevelPartition on current travel time"},
         "weights_30min": logs,
