@@ -849,7 +849,7 @@ function forecastSpark(pts, forecastMin, forecastAt, color) {
     const y = v => H - m - ((v - (lo - pad)) / ((hi + pad) - (lo - pad) || 1)) * (H - 2 * m);
     const line = hist.map(p => `${x(p.t).toFixed(1)},${y(p.mins).toFixed(1)}`).join(' ');
     const fx = x(forecastAt).toFixed(1), fy = y(forecastMin).toFixed(1);
-    return `<svg viewBox="0 0 ${W} ${H}" class="fc-spark" style="width:100%;height:56px" role="img"
+    return `<svg viewBox="0 0 ${W} ${H}" class="fc-spark" role="img"
                  aria-label="Last 2 hours and 30-minute forecast">
         <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
         <line x1="${x(last.t).toFixed(1)}" y1="${y(last.mins).toFixed(1)}" x2="${fx}" y2="${fy}"
@@ -889,19 +889,16 @@ async function fetchForecast() {
             const f = dirs[d.key];
             if (!f || f.forecast_min == null) {
                 return `
-                    <div class="ai-dir-card ${d.cls}">
-                        <span class="ai-dir-label"><span class="lc-dot ${d.cls}"></span>${d.label}</span>
-                        <span class="ai-dir-count">—</span>
-                        <span class="ai-dir-unit">no forecast available</span>
+                    <div class="fc-card ${d.cls}">
+                        <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}</div>
+                        <div class="fc-value">—</div>
+                        <div class="fc-when">no forecast available</div>
                     </div>`;
             }
             const pts = traffic ? seriesPoints(traffic, d.series) : [];
             const now = pts.length ? pts[pts.length - 1].mins : null;
             const delta = now == null ? null : f.forecast_min - now;
-            const nowTxt = delta == null
-                ? ''
-                : ` · now ${now.toFixed(1)} (${delta >= 0 ? '+' : ''}${delta.toFixed(1)})`;
-
+            
             // Label the forecast against this direction's own 24h free-flow level.
             const baseline = pts.length ? percentile(pts.map(p => p.mins), BASELINE_PCTILE) : null;
             const level = congestionLevel({ ok: baseline != null, baseline, recentMean: f.forecast_min });
@@ -914,13 +911,21 @@ async function fetchForecast() {
                         : { cls: 'stable', txt: '▬ Steady' };
             const color = d.cls === 'sg' ? '#00f2fe' : '#ff9f1c';
 
+            const whenTxt = `min at ${sgtClock(f.forecast_for)} SGT`;
+            const nowLine = delta == null ? '' :
+                `<div class="fc-now">Now <strong>${now.toFixed(1)}</strong> min <span class="fc-delta">(${delta >= 0 ? '+' : ''}${delta.toFixed(1)})</span></div>`;
             return `
-                <div class="ai-dir-card ${d.cls}">
-                    <span class="ai-dir-label"><span class="lc-dot ${d.cls}"></span>${d.label}</span>
-                    <span class="ai-dir-count">${f.forecast_min.toFixed(1)}</span>
-                    <span class="ai-dir-unit">min at ${sgtClock(f.forecast_for)} SGT${nowTxt}</span>
-                    <span class="status-indicator-badge ${level.cls}">${level.text}</span>
-                    ${trend ? `<span class="time-trend ${trend.cls}">${trend.txt} vs now</span>` : ''}
+                <div class="fc-card ${d.cls}">
+                    <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}</div>
+                    <div class="fc-main">
+                        <span class="fc-value">${f.forecast_min.toFixed(1)}</span>
+                        <span class="fc-when">${whenTxt}</span>
+                    </div>
+                    ${nowLine}
+                    <div class="fc-badges">
+                        <span class="status-indicator-badge ${level.cls}">${level.text}</span>
+                        ${trend ? `<span class="time-trend ${trend.cls}">${trend.txt} vs now</span>` : ''}
+                    </div>
                     ${forecastSpark(pts, f.forecast_min, Date.parse(f.forecast_for), color)}
                 </div>`;
         }).join('');

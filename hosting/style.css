@@ -2310,3 +2310,100 @@ h4 {
         animation: none;
     }
 }
+
+/* ── 30-min Forecast widget ─────────────────────────────────────────────── */
+.fc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.fc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1.1rem 1.25rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--text-muted);
+    border-radius: 12px;
+}
+
+.fc-card.sg {
+    border-left-color: #00f2fe;
+}
+
+.fc-card.jb {
+    border-left-color: #ff9f1c;
+}
+
+.fc-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-white);
+}
+
+.fc-main {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.fc-value {
+    font-family: var(--font-heading);
+    font-size: 2.4rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-white);
+}
+
+.fc-when,
+.fc-now {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.fc-now strong {
+    color: var(--text-main);
+}
+
+.fc-badges {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.fc-badges .status-indicator-badge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.7rem;
+    white-space: nowrap;
+}
+
+.fc-badges .time-trend {
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.fc-spark {
+    display: block;
+    width: 100%;
+    height: 56px;
+    margin-top: 0.2rem;
+}
+
+.fc-note {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+#forecast-widget .cam-grid-footer {
+    padding: 0.8rem 0 0;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
