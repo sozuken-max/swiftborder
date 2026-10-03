@@ -1,6 +1,6 @@
 # Release checklist: PR #2 (`eval-integrity-overhaul`)
 
-PR #2 touches four live things: a `swiftbackend` redeploy and a first `forecast-api` deploy (both on merge), the weather tables in BigQuery (already written), and the snapshots that allow reverting them (they expire). This page lists owners, checks and rollback for each. Facts were re-queried read-only on 2026-10-01; if the project disagrees, the project wins.
+PR #2 touches four live things: a `swiftbackend` redeploy and a first `forecast-api` deploy (both on merge), the weather tables in BigQuery (already written), and the snapshots that allow reverting them (they expire). This page lists owners, checks and rollback for each. The redeploy, weather, and snapshot facts were re-queried read-only on 2026-10-01. The `forecast-api@` IAM row in the GCP changes table was checked on 2026-10-03. If the project disagrees, the project wins.
 
 | Item | State | Owner | Deadline |
 | --- | --- | --- | --- |
