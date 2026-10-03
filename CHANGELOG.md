@@ -4,6 +4,11 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-03
 
+- PR #3 fixes two evaluation edge cases.
+  - `promote_report_run.py` now refuses source and report directories that are equal or nested. Before the fix, `rmtree` on the report directory could delete the source run.
+  - `camera_forecast.cross_validate` now predicts at `bin_ts + NOW_OFFSET`, the offset used for fitting and for feature generation.
+  - On the cached camera history, CV MAE moves by at most 0.006 counts and K=8 is still chosen, so `eval/runs/report/` stays the citation target.
+
 - Fix the `forecast-api` Smoke step. Build 363590b1 created the service (`forecast-api-00001-dz9`), then failed in Smoke: `gcloud auth print-identity-token` cannot mint an ID token in Cloud Build, and the metadata identity endpoint returns 404 there (2b76a1c3). Smoke now calls IAM Credentials `generateIdToken` for the build SA. GCP change: `1095552466513-compute@` holds `roles/iam.serviceAccountOpenIdTokenCreator` on itself. A smoke-only build against the live service (e5e280f6) passed every check; `model=served` returned `"source": "local model"`.
 
 - Fix the first `forecast-api` build on `main` (a8600413 failed in Buildpack): `builder:latest` is Ubuntu 24 and ships only Python 3.13 / 3.14, so `GOOGLE_PYTHON_VERSION=3.11` could not resolve. The build now uses `builder:google-22` (pinned by digest) with `3.11.x`, matching the Python the tests and harness use. A build-only Cloud Build of the fixed config (e92cf936: Test + Buildpack, no deploy) succeeded with Python 3.11.x.
