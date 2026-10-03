@@ -82,8 +82,12 @@ def _load_dividing_lines():
     try:
         parsed = json.loads(raw)
     except ValueError:
+        logger.warning("ignoring malformed DIVIDING_LINES; using the built-in lines")
         return DEFAULT_DIVIDING_LINES
-    return parsed if isinstance(parsed, dict) else DEFAULT_DIVIDING_LINES
+    if not isinstance(parsed, dict):
+        logger.warning("ignoring DIVIDING_LINES that is not a JSON object; using the built-in lines")
+        return DEFAULT_DIVIDING_LINES
+    return parsed
 
 
 DIVIDING_LINES = _load_dividing_lines()

@@ -20,7 +20,7 @@ The product intent is a Woodlands-only forecast of causeway crossing time, up to
 
 `causeway.travel_times.duration_in_traffic_sec` is the Distance Matrix estimate at observation time. There is no second ground truth (no probe-vehicle wait, no checkpoint timestamp). Every Layer B score is skill **on the Maps series**: a model beats persistence when its error on a future Maps reading is lower than carrying the current reading forward. Say "skill over persistence on the Maps duration series", not "we beat Google".
 
-`v_training_set` defines `y_persistence` as the mean duration in the current 10-minute bin and `y_30` / `y_60` as the bin 3 / 6 bins later. The bin mean includes readings up to the bin end, so a row is treated as known at bin start + 10 minutes.
+`v_training_set` defines `y_persistence` as the mean duration in the current 10-minute bin and `y_30` / `y_60` as the bin 3 / 6 bins later. The bin mean includes readings up to the bin end, so a row is treated as known at bin start + 10 minutes. The scored 30-minute horizon is the gap from origin bin start to the label bin start (`[t+30, t+40)`); from that as-of time the label bin begins 20 minutes later. The offline default is 12 steps of 5 minutes, so `target_ts` is 60 minutes after `origin_ts`. Rainfall sums include station readings with `ts <= asof` and add no publication delay; the 2-hour forecast uses acquisition time (`update_timestamp`), or 10 minutes after issue when that stamp is missing.
 
 ### Baselines
 
@@ -258,7 +258,7 @@ Significance (Holm over 15 comparisons, both directions):
 | Ridge [Maps + weather] | Ridge [Maps] | +0.011 | [−0.002, +0.025] | not significant |
 | Ensemble [Maps + weather] | XGBoost [Maps + weather] | +0.036 | [−0.003, +0.075] | not significant (also on `MY_TO_SG`: +0.076, Holm p = 0.064) |
 
-**Finding:** on 13–30 Sep, weather features did **not** reduce 30-minute MAE (difference indistinguishable from zero for both models, and slightly positive). An XGBoost refit daily on Maps-only features beats persistence by about 0.37 min. The camera experiment is pending: no camera-2701 frames have been scored for this window yet (0% coverage). A camera row will be marked insufficient below 60% coverage of test rows.
+**Finding:** on 13–30 Sep, weather features did **not** reduce 30-minute MAE (difference indistinguishable from zero for both models, and slightly positive). An XGBoost refit daily on Maps-only features beats persistence by about 0.37 min. The observed-count camera arm is pending: no camera-2701 frames have been scored for this window (0% coverage), and a camera row is marked insufficient below 60% coverage of test rows. The queue-forecast arm is scored in section 7a.
 
 Plots: `eval/runs/report/joined/joined-mae-diff.png`, `joined/joined-mae-by-feature-set.png`.
 
@@ -350,7 +350,7 @@ Plots: `eval/runs/report/fuzzy/fuzzy-memberships.png`, `fuzzy/fuzzy-confusion.pn
 
 **Question:** does combining the existing forecasters beat the best single one, and how much would the served forecast gain?
 
-**Pool (30 min, both directions, 13–30 Sep):** the BQML models of section 1 and the daily-refit Maps-only models of section 2, joined on (direction, bin) with identical labels (5,184 of 5,184 rows matched), plus persistence. Every combiner uses only earlier days of the window. A row counts as earlier once its label has been observed (bin + 40 min) before the test day starts. The first two days use equal weights.
+**Pool (30 min, both directions, 13–30 Sep):** the BQML models of section 1 and the daily-refit Maps-only models of section 2, joined on (direction, bin) with identical labels (5,184 of 5,184 rows matched), plus persistence. Every combiner uses only earlier days of the window. A row counts as earlier once its label has been observed (bin + 40 min) before the test day starts. The first two days use equal weights. `xgb[maps]` is `BEST_SINGLE_30` in `eval/ensemble.py` because it was the lowest-MAE single model on this same window; there is no later untouched period.
 
 - **Equal mean** of the four models (`lin_h30`, `xgb_h30`, `ridge[maps]`, `xgb[maps]`).
 - **Rolling LAD stack:** convex weights per direction over the five pool members, fitted by least absolute deviation on all earlier days.

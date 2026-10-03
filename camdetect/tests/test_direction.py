@@ -1,5 +1,7 @@
 """Geometry and congestion tests. No network and no Roboflow key."""
 
+import logging
+
 import main
 
 
@@ -97,9 +99,16 @@ def test_extract_predictions_degrades_on_a_changed_payload():
     assert main._extract_predictions([{"predictions": {}}]) == []
 
 
-def test_load_dividing_lines_falls_back_on_bad_json(monkeypatch):
+def test_load_dividing_lines_falls_back_on_bad_json(monkeypatch, caplog):
     monkeypatch.setenv("DIVIDING_LINES", "{")
-    assert main._load_dividing_lines() == main.DEFAULT_DIVIDING_LINES
+    with caplog.at_level(logging.WARNING, logger="camdetect"):
+        assert main._load_dividing_lines() == main.DEFAULT_DIVIDING_LINES
+    assert "malformed DIVIDING_LINES" in caplog.text
+    caplog.clear()
+    monkeypatch.setenv("DIVIDING_LINES", "[]")
+    with caplog.at_level(logging.WARNING, logger="camdetect"):
+        assert main._load_dividing_lines() == main.DEFAULT_DIVIDING_LINES
+    assert "not a JSON object" in caplog.text
     monkeypatch.setenv(
         "DIVIDING_LINES",
         '{"2702": {"reference_size": [10, 10], "points": [[0, 1], [2, 3]]}}',

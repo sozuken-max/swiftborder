@@ -216,6 +216,10 @@ def _cors_headers():
     }
 
 
+class NoRecentForecast(Exception):
+    """The query ran and did not return every requested direction."""
+
+
 def _error(message, status):
     headers = {**_cors_headers(), "Content-Type": "application/json"}
     return (json.dumps({"error": message}), status, headers)
@@ -363,7 +367,7 @@ def _assemble(model_id, version_id, horizon, directions, result):
             raise ValueError("direction set")
         by_direction[direction] = payload
     if set(by_direction) != set(directions):
-        raise ValueError("missing direction")
+        raise NoRecentForecast("missing direction")
     ordered = {direction: by_direction[direction] for direction in directions}
     return {
         "model": model_id,
@@ -431,6 +435,8 @@ def forecast(request):
         try:
             result = query_forecast(model_id, directions)
             payload = _assemble(model_id, version_id, horizon, directions, result)
+        except NoRecentForecast:
+            return _error("No recent forecast for the requested direction", 503)
         except Exception:
             logger.exception("forecast query failed")
             return _error("Forecast query failed", 502)

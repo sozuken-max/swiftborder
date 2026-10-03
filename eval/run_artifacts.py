@@ -248,6 +248,24 @@ def _walk_strings(value: Any, prefix: str = "") -> Iterable[tuple]:
         yield prefix, value
 
 
+def _artifact_problem(run_dir: Path, art: str) -> Optional[str]:
+    """Return why ``art`` is not a file inside ``run_dir``, or None when it is.
+
+    ``resolve`` follows ``..`` and symlinks. A path that lands outside the run
+    directory is rejected even when that outside file exists, so promotion cannot
+    record an artifact ``copytree`` will not copy.
+    """
+    root = Path(run_dir).resolve()
+    try:
+        resolved = (root / str(art)).resolve()
+        resolved.relative_to(root)
+    except (ValueError, OSError):
+        return "escapes the run directory"
+    if not resolved.is_file():
+        return "not found in run directory"
+    return None
+
+
 def validate_manifest(manifest: Dict[str, Any], run_dir: Optional[Path] = None) -> List[str]:
     """Return a list of problems (empty list = valid schema v2 manifest)."""
     errors: List[str] = []
@@ -292,8 +310,9 @@ def validate_manifest(manifest: Dict[str, Any], run_dir: Optional[Path] = None) 
                 errors.append(f"{name}.significance[{i}] missing {missing}")
         if run_dir is not None:
             for art in block.get("artifacts") or []:
-                if not (Path(run_dir) / art).is_file():
-                    errors.append(f"{name}.artifacts: {art} not found in run directory")
+                problem = _artifact_problem(run_dir, art)
+                if problem:
+                    errors.append(f"{name}.artifacts: {art} {problem}")
     for where, text in _walk_strings(manifest):
         if _ABSOLUTE.match(text):
             errors.append(f"absolute path at {where}: {text}")
@@ -366,7 +385,7 @@ def write_run_readme(run_dir: Path, manifest: Dict[str, Any]) -> Path:
             lines.append("")
         arts = block.get("artifacts") or []
         if arts:
-            lines.append("Figures:")
+            lines.append("Figures (each PNG has a same-stem CSV of the plotted series):")
             lines.extend(f"- `{a}`" for a in arts)
             lines.append("")
     mult = manifest.get("multiplicity")

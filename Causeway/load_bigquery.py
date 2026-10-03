@@ -15,7 +15,8 @@ Safety rules:
 - Dry run by default: prints what would be loaded. ``--execute`` performs the load.
 - Refuses to load if the target already has any row inside the load's time range (no duplicates,
   no silent overwrite). Complete days only (``filter_*`` output from complete day files).
-- Before the first append, creates a snapshot table ``<table>_snapshot_<YYYYMMDD>`` (expires in
+- Before any snapshot or append, checks every selected table for an overlapping range.
+  Then, for each table, creates a snapshot ``<table>_snapshot_<YYYYMMDD>`` (expires in
   30 days) so the load can be reverted with ``CREATE OR REPLACE TABLE ... CLONE <snapshot>``.
 - Append only (``WRITE_APPEND``); nothing is deleted or updated.
 
@@ -194,14 +195,20 @@ def run(
         from google.cloud import bigquery
 
         client = bigquery.Client(project=PROJECT)
+    # Overlap checks for every selected table finish before the first snapshot,
+    # so a refusal on a later table cannot leave an earlier table already loaded.
+    existing_by_table: Dict[str, int] = {}
+    if client is not None:
+        for plan in selected:
+            existing = _count_in_range(client, plan)
+            existing_by_table[plan.table] = existing
+            if existing:
+                raise LoadRefused(f"{plan.table} already has {existing} rows in {plan.start} .. {plan.end}; refusing to append")
     for plan in selected:
         info = {"table": plan.table, "rows": len(plan.rows), "start_utc": plan.start, "end_utc": plan.end}
         print(f"{plan.table}: {len(plan.rows)} rows, {plan.start} .. {plan.end} UTC", file=log)
         if client is not None:
-            existing = _count_in_range(client, plan)
-            info["existing_rows_in_range"] = existing
-            if existing:
-                raise LoadRefused(f"{plan.table} already has {existing} rows in {plan.start} .. {plan.end}; refusing to append")
+            info["existing_rows_in_range"] = existing_by_table[plan.table]
         if execute:
             info["snapshot"] = _snapshot(client, plan.table, today or dt.date.today())
             info["loaded"] = _load(client, plan)

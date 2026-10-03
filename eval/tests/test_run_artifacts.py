@@ -94,6 +94,18 @@ def test_create_run_dir_and_manifest(tmp_path: Path):
     assert json.loads((tmp_path / "LATEST.json").read_text())["path"] == run_dir.name
 
 
+def test_artifact_that_escapes_the_run_dir_is_rejected(tmp_path: Path):
+    outside = tmp_path / "other"
+    outside.mkdir()
+    (outside / "plot.png").write_bytes(b"png")
+    m = _manifest()
+    run_dir = _run_dir(tmp_path, m)
+    m["offline"]["artifacts"] = ["../other/plot.png"]
+    problems = validate_manifest(m, run_dir)
+    assert any("escapes the run directory" in p for p in problems), problems
+    assert not any("not found" in p for p in problems)
+
+
 def test_valid_manifest_has_no_problems(tmp_path: Path):
     m = _manifest()
     assert validate_manifest(m, _run_dir(tmp_path, m)) == []

@@ -115,7 +115,8 @@ Callable today (a forecast request runs the SQL already in `forecastapi/main.py`
 | --- | --- |
 | 400 | Missing `model`, unknown model, model not deployed, unknown version, bad `direction`, `horizon_min` outside that model's scored horizon, `list` other than `models` |
 | 405 | Any method other than `GET` or `OPTIONS` |
-| 502 | The query failed or did not return every requested direction. The body is `{"error": "Forecast query failed"}`. SQL and stack traces stay in the process log |
+| 502 | The query failed. The body is `{"error": "Forecast query failed"}`. SQL and stack traces stay in the process log |
+| 503 | The query succeeded and did not return every requested direction. The body is `{"error": "No recent forecast for the requested direction"}`. A smoke test that hits a data gap should see 503, not a failed deploy |
 
 ## Cache
 
@@ -288,7 +289,7 @@ curl.exe -H "Authorization: Bearer $token" "https://REPLACE_ME.asia-southeast1.r
 curl.exe -H "Authorization: Bearer $token" "https://REPLACE_ME.asia-southeast1.run.app/?model=lin_h30&direction=SG_TO_MY"
 ```
 
-Expect HTTP 200 on the list, and on the forecast: `model` `lin_h30`, `version` `2026-09-12T06:15:33.163Z`, `horizon_min` 30, `source` `ML.PREDICT`, and `directions.SG_TO_MY.forecast_min`. A second forecast within five minutes should repeat `generated_at`. `GET /?model=lstm` should be HTTP 400.
+Expect HTTP 200 on the list, and on the forecast: `model` `lin_h30`, `version` `2026-09-12T06:15:33.163Z`, `horizon_min` 30, `source` `ML.PREDICT`, and `directions.SG_TO_MY.forecast_min`. A second forecast within five minutes should repeat `generated_at`. `GET /?model=lstm` should be HTTP 400. A callable model with no row for the requested direction in the query window returns HTTP 503 (`No recent forecast for the requested direction`), which is a data gap rather than a failed deploy.
 
 ### Rollback
 

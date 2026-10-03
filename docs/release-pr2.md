@@ -68,7 +68,7 @@ The merge commit adds `forecastapi/**`, which starts Cloud Build trigger `foreca
    curl.exe -s -o NUL -w "%{http_code}`n" "$u/?list=models"                                    # expect 403 (no token)
    curl.exe -s -H "Authorization: Bearer $t" "$u/?list=models"                                 # expect 200, catalog
    curl.exe -s -H "Authorization: Bearer $t" "$u/?model=served"                                # expect 200, both directions; equals v_forecast_recent
-   curl.exe -s -w "`n%{http_code}`n" -H "Authorization: Bearer $t" "$u/?model=xgb[maps]"        # expect 400 model is not deployed
+   curl.exe -g -s -w "`n%{http_code}`n" -H "Authorization: Bearer $t" "$u/?model=xgb[maps]"     # expect 400 model is not deployed
    ```
    A 502 on `served` means the runtime identity cannot read a dataset the views use; check the dataset grants in [inventory.md](inventory.md).
 3. **Rollback:** `gcloud run services delete forecast-api --region asia-southeast1 --project swiftborder` (service only; the image and trigger stay). Then revert `forecastapi/` on `main`, or disable trigger `949ff029`, so the next push does not recreate it.

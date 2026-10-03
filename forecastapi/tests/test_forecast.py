@@ -203,6 +203,33 @@ def test_forecast_of_undeployed_model_is_400(monkeypatch):
     assert calls == []
 
 
+def test_missing_direction_is_503_and_not_cached(monkeypatch):
+    calls = []
+
+    def empty(model_id, directions):
+        calls.append((model_id, tuple(directions)))
+        return {"source": "fixture", "rows": []}
+
+    monkeypatch.setattr(main, "query_forecast", empty)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "lin_h30", "direction": "SG_TO_MY"})))
+    assert status == 503
+    assert payload == {"error": "No recent forecast for the requested direction"}
+    again, again_status, _ = _json(main.forecast(_request(query={"model": "lin_h30", "direction": "SG_TO_MY"})))
+    assert again_status == 503
+    assert again == payload
+    assert len(calls) == 2
+
+
+def test_partial_direction_set_is_503(monkeypatch):
+    def partial(model_id, directions):
+        return _rows(("SG_TO_MY",))
+
+    monkeypatch.setattr(main, "query_forecast", partial)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 503
+    assert payload["error"] == "No recent forecast for the requested direction"
+
+
 def test_query_failure_is_502_without_sql(monkeypatch):
     def boom(model_id, directions):
         raise RuntimeError("SELECT secret FROM `swiftborder.traffic_prediction.v_training_set`")

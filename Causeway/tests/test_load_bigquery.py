@@ -136,3 +136,27 @@ def test_overlap_is_refused_before_any_write(files):
         lb.run(("rainfall",), execute=True, client=client, make_plans=_plans(files))
     assert client.loads == []
     assert not any("SNAPSHOT" in q for q in client.queries)
+
+
+def test_both_tables_are_checked_before_the_first_snapshot(files):
+    client = FakeClient()
+    lb.run(("rainfall", "forecast"), execute=True, client=client, today=dt.date(2026, 10, 1), make_plans=_plans(files))
+    kinds = ["snapshot" if "SNAPSHOT" in sql else "count" for sql in client.queries]
+    assert kinds[:2] == ["count", "count"]
+    assert kinds.index("snapshot") == 2
+
+
+def test_later_table_overlap_refuses_before_any_snapshot(files):
+    client = FakeClient()
+
+    def query(sql, job_config=None, location=None):
+        client.queries.append(sql)
+        existing = 4 if "COUNT" in sql and "weatherforecast" in sql else 0
+        return FakeJob([{"n": existing}])
+
+    client.query = query
+    with pytest.raises(lb.LoadRefused, match="weatherforecast"):
+        lb.run(("rainfall", "forecast"), execute=True, client=client, make_plans=_plans(files))
+    assert client.loads == []
+    assert not any("SNAPSHOT" in sql for sql in client.queries)
+    assert sum("COUNT" in sql for sql in client.queries) == 2
