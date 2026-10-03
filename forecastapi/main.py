@@ -7,7 +7,9 @@ build runs, this module is not deployed.
 Model ids and version strings are an allow-list. Served BigQuery rows are
 refreshed from the read-only queries in docs/runbooks/forecast-api.md
 (2026-10-03). Other ids are the eval harness names. A forecast is returned
-only when deploy_state is served. BigQuery has no separate model-version
+only for a callable deploy_state: ``production`` (model id ``served``, the
+registry mix that v_forecast_recent publishes) or ``api`` (a single model
+queried directly; not what the live system serves). BigQuery has no separate model-version
 objects for lin_h30 and xgb_h30. Their version string is the model resource
 creationTime. persistence uses the registry decided_on date.
 The SQL below does not add a VERSION clause: the live view calls the model
@@ -37,6 +39,11 @@ LIN_H30_VERSION = "2026-09-12T06:15:33.163Z"
 XGB_H30_VERSION = "2026-09-12T06:19:18.783Z"
 # model_registry.decided_on. persistence is not a BigQuery ML model.
 PERSISTENCE_VERSION = "2026-09-12"
+# model_registry.decided_on for the per-direction mix that v_forecast_recent serves.
+REGISTRY_VERSION = "2026-09-12"
+# deploy_state values that return a forecast. ``production`` is what the live view serves;
+# ``api`` is a direct query of one model, which the registry may not serve in that direction.
+CALLABLE_STATES = frozenset({"production", "api"})
 
 _BASE_FILTER = """
   lag_60 IS NOT NULL
@@ -85,6 +92,17 @@ WHERE {_BASE_FILTER}
 QUALIFY ROW_NUMBER() OVER (PARTITION BY direction ORDER BY bin_ts DESC) = 1
 """
 
+_SERVED_SQL = """
+SELECT
+  direction,
+  bin_ts AS origin_ts,
+  forecast_for_ts,
+  forecast_30min_min AS forecast_min
+FROM `swiftborder.traffic_prediction.v_forecast_recent`
+WHERE direction IN UNNEST(@directions)
+QUALIFY ROW_NUMBER() OVER (PARTITION BY direction ORDER BY bin_ts DESC) = 1
+"""
+
 # Promoted harness snapshot. Version label for models that run scored and saved
 # nothing a Cloud Run service can load. Not a semver.
 REPORT_RUN_ID = "20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble"
@@ -109,10 +127,10 @@ def _spec(
     source=None,
     sql=None,
 ):
-    if callable != (deploy_state == "served"):
-        raise RuntimeError("callable must match deploy_state served")
+    if callable != (deploy_state in CALLABLE_STATES):
+        raise RuntimeError("callable must match a callable deploy_state")
     if callable and not sql:
-        raise RuntimeError("a served model needs SQL")
+        raise RuntimeError("a callable model needs SQL")
     if horizon_min not in (30, 60):
         raise RuntimeError("horizon")
     return {
@@ -131,20 +149,21 @@ def _spec(
 
 
 def _build_models():
-    """Allow-list. Served rows are the 2026-10-03 BigQuery read. The rest are
+    """Allow-list. ``served`` mirrors v_forecast_recent; the ``api`` rows are the 2026-10-03 BigQuery read. The rest are
     ids from eval code (joined, ensemble, fuzzy_traffic, timeseries_xgb,
     deep_forecast). The camera Fourier profile is not an entry.
     """
     rows = [
-        _spec("lin_h30", "bqml", LIN_H30_VERSION, 30, BOTH, "served", True, "ML.PREDICT", _LIN_SQL),
-        _spec("xgb_h30", "bqml", XGB_H30_VERSION, 30, BOTH, "served", True, "ML.PREDICT", _XGB_SQL),
+        _spec("served", "registry", REGISTRY_VERSION, 30, BOTH, "production", True, "bigquery view", _SERVED_SQL),
+        _spec("lin_h30", "bqml", LIN_H30_VERSION, 30, BOTH, "api", True, "ML.PREDICT", _LIN_SQL),
+        _spec("xgb_h30", "bqml", XGB_H30_VERSION, 30, BOTH, "api", True, "ML.PREDICT", _XGB_SQL),
         _spec(
             "persistence",
             "baseline",
             PERSISTENCE_VERSION,
             30,
             BOTH,
-            "served",
+            "api",
             True,
             "bigquery view",
             _PERSISTENCE_SQL,

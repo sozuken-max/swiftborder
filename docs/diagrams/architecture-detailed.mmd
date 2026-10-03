@@ -60,7 +60,7 @@ flowchart LR
   GH -.->|"build artifacts"| CB
   RS1 -.->|"asia Run deploy source"| GFN
   RS1 -.->|"asia Run deploy source"| BF
-  PUB -.->|"no Hosting wired"| FH["Firebase APIs not enabled"]
+  PUB -.->|"fetched by browser"| FH["Firebase Hosting site<br/>swiftborder-92b45, not in this project<br/>source not in git"]
 
   subgraph EV["Evaluation - repo eval/, read-only"]
     HAR["layer_b.py fixed window<br/>joined.py offline join<br/>layer_a.py scorer"]

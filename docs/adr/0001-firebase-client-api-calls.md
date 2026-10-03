@@ -60,7 +60,7 @@ The callable travel-time API is the public object the client already fetches:
 
 `GET https://storage.googleapis.com/swiftborder-public/traffic-24h.json`
 
-No new Cloud Run handler. No request-time BigQuery query on the browser tick.
+No new Cloud Run handler **for these cards**. No request-time BigQuery query on the browser tick. (`forecastapi/` is a separate, private endpoint for the 30-minute forecast, which this file does not contain; the cards do not call it.)
 
 | | Public GCS object | Direct BigQuery on each refresh |
 | --- | --- | --- |

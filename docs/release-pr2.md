@@ -1,11 +1,12 @@
 # Release checklist: PR #2 (`eval-integrity-overhaul`)
 
-PR #2 touches three live things: a `swiftbackend` redeploy (on merge), the weather tables in BigQuery (already written), and the snapshots that allow reverting them (they expire). This page lists owners, checks and rollback for each. Facts were re-queried read-only on 2026-10-01; if the project disagrees, the project wins.
+PR #2 touches four live things: a `swiftbackend` redeploy and a first `forecast-api` deploy (both on merge), the weather tables in BigQuery (already written), and the snapshots that allow reverting them (they expire). This page lists owners, checks and rollback for each. Facts were re-queried read-only on 2026-10-01; if the project disagrees, the project wins.
 
 | Item | State | Owner | Deadline |
 | --- | --- | --- | --- |
 | `swiftbackend` credential / public access ([findings.md](findings.md#known-risk-public-swiftbackend-documented-not-changed)) | Open. Not changed by this PR | _team to assign_ | Before merge if the team treats it as a blocker (see below) |
 | `swiftbackend` redeploy on merge | Pending merge | _team to assign_ | At merge |
+| `forecast-api` first deploy on merge (trigger `949ff029`) | Pending merge | _team to assign_ | At merge |
 | Weather append (1–30 Sep 2026) | Applied 2026-10-01 ~01:50 SGT | _team to assign_ | Retention decision before snapshots expire |
 | Snapshots `*_snapshot_20261001` | Expire **2026-10-31 01:41 SGT** | same | 2026-10-30 |
 | Deck PNGs `docs/images/*.png` | Stale; regenerate per [diagram skill](../skills/diagram-image-generation/SKILL.md) | Implementer; Yingzhao signs off | Before the next deck |
@@ -48,6 +49,41 @@ Merging changes `camdetect/main.py` and `camdetect/requirements.txt`, which star
    Then revert the merge on `main` so the next push does not redeploy the same code.
 
 The redeploy does not change authentication. The service stays public until item 3 is decided.
+
+## 1b. `forecast-api` first deploy (on merge to `main`)
+
+The merge commit adds `forecastapi/**`, which starts Cloud Build trigger `forecast-api` (`949ff029`). That trigger runs pytest, builds the image and **creates** Cloud Run `forecast-api` in `asia-southeast1` (`--no-allow-unauthenticated`). Merging therefore deploys two services. This one is new, so there is no earlier revision to roll back to. Full detail: [runbooks/forecast-api.md](runbooks/forecast-api.md).
+
+**After the build succeeds**
+
+1. The service exists, is private and runs as `forecast-api@`:
+   ```powershell
+   gcloud run services describe forecast-api --region asia-southeast1 --project swiftborder --format="value(status.url,spec.template.spec.serviceAccountName)"
+   gcloud run services get-iam-policy forecast-api --region asia-southeast1 --project swiftborder   # no allUsers
+   ```
+2. Smoke test with an identity token (each forecast call runs one small BigQuery job):
+   ```powershell
+   $u = gcloud run services describe forecast-api --region asia-southeast1 --project swiftborder --format="value(status.url)"
+   $t = gcloud auth print-identity-token
+   curl.exe -s -o NUL -w "%{http_code}`n" "$u/?list=models"                                    # expect 403 (no token)
+   curl.exe -s -H "Authorization: Bearer $t" "$u/?list=models"                                 # expect 200, catalog
+   curl.exe -s -H "Authorization: Bearer $t" "$u/?model=served"                                # expect 200, both directions; equals v_forecast_recent
+   curl.exe -s -w "`n%{http_code}`n" -H "Authorization: Bearer $t" "$u/?model=xgb[maps]"        # expect 400 model is not deployed
+   ```
+   A 502 on `served` means the runtime identity cannot read a dataset the views use; check the dataset grants in [inventory.md](inventory.md).
+3. **Rollback:** `gcloud run services delete forecast-api --region asia-southeast1 --project swiftborder` (service only; the image and trigger stay). Then revert `forecastapi/` on `main`, or disable trigger `949ff029`, so the next push does not recreate it.
+
+## GCP changes made for this PR
+
+All other access to project `swiftborder` was read-only.
+
+| When (SGT) | Change | Revert |
+| --- | --- | --- |
+| 2026-10-01 01:50 | Weather append, `update_timestamp` column, snapshots (section 2) | Section 2 |
+| 2026-10-03 (by the `ae5d034` author) | Cloud Build trigger `forecast-api` (`949ff029`, `^main$`, `forecastapi/**`, ignores `camdetect/**`); service account `forecast-api@` with project `bigquery.jobUser` and `bigquery.dataViewer` | `gcloud builds triggers delete 949ff029-31c9-4521-8ff4-d0e8d16dfa25`; `gcloud iam service-accounts delete forecast-api@swiftborder.iam.gserviceaccount.com` |
+| 2026-10-03 | `forecast-api@`: removed project-wide `bigquery.dataViewer`; granted `dataViewer` on datasets `traffic_prediction` and `causeway` only | `REVOKE` the two dataset grants and re-add the project binding |
+
+Still open: the trigger builds as the default Compute Engine service account, which usually holds broad project roles. A dedicated build identity (Cloud Run admin on the one service, `iam.serviceAccountUser` on `forecast-api@`, Artifact Registry writer, logs writer) is the narrower option, and it needs approval.
 
 ## 2. Weather append: verify, keep or revert
 
@@ -94,6 +130,6 @@ Decision: ______ Date: ______ By: ______
 ## 4. Merge order
 
 1. Section 3: decide whether it blocks the merge. If it does, do steps 1–2 first; they do not depend on this PR.
-2. Merge PR #2, then work through section 1 steps 3–5.
+2. Merge PR #2, then work through section 1 steps 3–5 and section 1b.
 3. Section 2 retention decision by 2026-10-30.
 4. Regenerate the deck PNGs before the next presentation.

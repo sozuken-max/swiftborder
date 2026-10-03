@@ -48,7 +48,7 @@ Use this for the proposal, the presentations and the final report (31 Oct 2026).
 | Roboflow Public can export a dataset version; weight download is Core | Empty `traffic_images.labels` means export is impossible | — |
 | `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend`; tests also run in GitHub Actions | Forecast SQL/models deploy from git | A separate pipeline exists |
 | `swiftbackend` is publicly callable (known risk) | The service is secured | The live service is changed and inventory re-checked |
-| Firebase Hosting is planned | The UI is live | Hosting exists in the project |
+| A Firebase Hosting site (`swiftborder-92b45.web.app`) serves the UI and charts the public `traffic-24h.json`; it is not deployed from this repo or project `swiftborder` | The UI is deployed from git, or shows a forecast | Hosting source is in git ([ADR 0002](adr/0002-firebase-hosting-source.md)) and the UI calls a forecast endpoint |
 
 Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `run.json` before the deck):
 
@@ -74,4 +74,4 @@ Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `r
 
 **Deep learning is scored and not served.** With about three weeks of 5-minute data, LSTM, GRU and a patch Transformer trail XGBoost by 0.5–0.7 min at 60 minutes. Reasons and the conditions for revisiting: [deep-learning-assessment.md](deep-learning-assessment.md).
 
-**What to defer.** ResNet, Firebase and holiday calendars can wait. The order of work is in [roadmap.md](roadmap.md) and [plan-eval-integrity.md](plan-eval-integrity.md).
+**What to defer.** ResNet, bringing the Hosting client into git, and holiday calendars can wait. The order of work is in [roadmap.md](roadmap.md) and [plan-eval-integrity.md](plan-eval-integrity.md).

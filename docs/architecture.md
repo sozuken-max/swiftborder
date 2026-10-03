@@ -166,7 +166,7 @@ flowchart LR
   GH -.->|"build artifacts"| CB
   RS1 -.->|"asia Run deploy source"| GFN
   RS1 -.->|"asia Run deploy source"| BF
-  PUB -.->|"no Hosting wired"| FH["Firebase APIs not enabled"]
+  PUB -.->|"fetched by browser"| FH["Firebase Hosting site<br/>swiftborder-92b45, not in this project<br/>source not in git"]
 
   subgraph EV["Evaluation - repo eval/, read-only"]
     HAR["layer_b.py fixed window<br/>joined.py offline join<br/>layer_a.py scorer"]
@@ -198,4 +198,4 @@ What those facts allow the report to claim is in [findings.md](findings.md). Met
 
 ![Detailed architecture](images/architecture-detailed.png)
 
-Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the join, a longer horizon, Layer A results, 2702 geometry, Firebase) is in [findings.md](findings.md) and [roadmap.md](roadmap.md).
+Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the join, a longer horizon, Layer A results, 2702 geometry, the Hosting client in git) is in [findings.md](findings.md) and [roadmap.md](roadmap.md).

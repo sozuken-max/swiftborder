@@ -184,7 +184,9 @@ def test_list_models_includes_a_non_bqml_model_that_is_not_callable(monkeypatch)
     assert by_id["xgb[maps]"]["deploy_state"] == "artifact"
     assert by_id["xgb[maps]"]["callable"] is False
     assert by_id["xgb[maps]"]["horizon_min"] == 30
-    assert by_id["lin_h30"]["deploy_state"] == "served"
+    assert by_id["lin_h30"]["deploy_state"] == "api"
+    assert by_id["served"]["deploy_state"] == "production"
+    assert by_id["served"]["callable"] is True
     assert by_id["lin_h30"]["callable"] is True
     assert by_id["lstm"]["family"] == "deep"
     assert by_id["lstm"]["callable"] is False
@@ -211,3 +213,20 @@ def test_query_failure_is_502_without_sql(monkeypatch):
     assert payload == {"error": "Forecast query failed"}
     assert "SELECT" not in json.dumps(payload)
     assert "secret" not in json.dumps(payload)
+
+
+def test_served_mirrors_the_live_view(monkeypatch):
+    calls = _install(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert status == 200
+    assert payload["model"] == "served"
+    assert payload["version"] == main.REGISTRY_VERSION
+    assert calls == [("served", ("SG_TO_MY", "MY_TO_SG"))]
+    sql = main.MODELS["served"]["sql"]
+    assert "v_forecast_recent" in sql and "ML.PREDICT" not in sql
+
+
+def test_only_production_and_api_states_are_callable():
+    for spec in main.MODELS.values():
+        assert spec["callable"] == (spec["deploy_state"] in main.CALLABLE_STATES)
+    assert [m for m, s in main.MODELS.items() if s["deploy_state"] == "production"] == ["served"]

@@ -63,35 +63,40 @@ Query string, or a JSON body on `GET`. A body value wins unless it is missing, n
 | Parameter | Required | Default | Values |
 | --- | --- | --- | --- |
 | `list` | no | none | `models` lists the catalog and does not forecast |
-| `model` | yes, unless `list=models` | none | any `id` from the catalog; only served ids return a forecast |
+| `model` | yes, unless `list=models` | none | any `id` from the catalog; only `production` and `api` ids return a forecast |
 | `version` | no | the version on that catalog row | one string per model; anything else is 400 |
 | `direction` | no | `both` | `SG_TO_MY`, `MY_TO_SG`, `both`. A model that is only scored on one direction rejects the other |
 | `horizon_min` | no | that model's `horizon_min` | the horizon that model is scored at. Served models are 30 only |
 
 | `model` | Default `version` | How the default was chosen | `source` | Query |
 | --- | --- | --- | --- | --- |
+| `served` | `2026-09-12` | `model_registry.decided_on`. The per-direction mix the live system serves (`lin_h30` for `SG_TO_MY`, persistence for `MY_TO_SG`) | `bigquery view` | latest row per direction of `v_forecast_recent` |
 | `lin_h30` | `2026-09-12T06:15:33.163Z` | Model resource `creationTime`. This is the model `v_forecast_recent` passes to `ML.PREDICT`, with no `VERSION` clause | `ML.PREDICT` | `ML.PREDICT` on `traffic_prediction.lin_h30`, latest 24h bin per direction |
 | `xgb_h30` | `2026-09-12T06:19:18.783Z` | Model resource `creationTime`. Trained, not called by the view | `ML.PREDICT` | `ML.PREDICT` on `traffic_prediction.xgb_h30` |
 | `persistence` | `2026-09-12` | `model_registry.decided_on`. Registry serving model for `MY_TO_SG`. Not a BigQuery ML model | `bigquery view` | `y_persistence` on `v_training_set` (the column the view uses when `serving_model` is not `lin_h30`) |
 
-There is no single default `model`. `model` is required unless `list=models`. The curl labelled "default" below is `lin_h30` with the version omitted, because that is the model the live view predicts with.
+There is no single default `model`. `model` is required unless `list=models`. For the forecast the live system shows, use `model=served`.
 
 Callable today (a forecast request runs the SQL already in `forecastapi/main.py`):
 
 | `model` | `deploy_state` | `callable` |
 | --- | --- | --- |
-| `lin_h30` | `served` | true |
-| `xgb_h30` | `served` | true. The view does not call it. `ML.PREDICT` on the BigQuery model can |
-| `persistence` | `served` | true. Last Maps bin mean (`y_persistence`), not a model file |
+| `served` | `production` | true. What `v_forecast_recent` publishes. Use this for anything traveller-facing |
+| `lin_h30` | `api` | true. Direct query, both directions. The registry does not serve it for `MY_TO_SG`, where it is worse than persistence |
+| `xgb_h30` | `api` | true. Trained, not served by the view. `ML.PREDICT` on the BigQuery model can |
+| `persistence` | `api` | true. Last Maps bin mean (`y_persistence`), not a model file |
+
+`api` means "this endpoint can query it", not "the live system serves it".
 
 `GET /?list=models` is the full catalog. Shortened shape (every row also has `family`, `version`, `horizon_min`, `directions`, and `callable`):
 
 ```json
 {
   "models": [
-    {"id": "lin_h30", "deploy_state": "served"},
-    {"id": "xgb_h30", "deploy_state": "served"},
-    {"id": "persistence", "deploy_state": "served"},
+    {"id": "served", "deploy_state": "production"},
+    {"id": "lin_h30", "deploy_state": "api"},
+    {"id": "xgb_h30", "deploy_state": "api"},
+    {"id": "persistence", "deploy_state": "api"},
     {"id": "xgb[maps]", "deploy_state": "artifact"},
     {"id": "XGB (sklearn)", "deploy_state": "artifact"},
     {"id": "lstm", "deploy_state": "artifact"},
@@ -261,7 +266,7 @@ Config: [forecastapi/cloudbuild.yaml](../../forecastapi/cloudbuild.yaml). It mat
 | --- | --- |
 | Service | Cloud Run `forecast-api`, `asia-southeast1`, function target `forecast`, minimum instances 0, no GPU |
 | Image | `asia-southeast1-docker.pkg.dev/swiftborder/cloud-run-source-deploy` (the repository already in that region). No keys in the image |
-| Identity | `forecast-api@swiftborder.iam.gserviceaccount.com`. Project `swiftborder` only: `roles/bigquery.jobUser` and `roles/bigquery.dataViewer`. Application Default Credentials. No `ROBOFLOW_API_KEY`, no `GOOGLE_MAPS_API_KEY` |
+| Identity | `forecast-api@swiftborder.iam.gserviceaccount.com`. `roles/bigquery.jobUser` on project `swiftborder`, and `roles/bigquery.dataViewer` on datasets `traffic_prediction` and `causeway` only (narrowed 2026-10-03 from project-wide `dataViewer`; the views read `causeway.travel_times` and `traffic_prediction.model_registry`). Application Default Credentials. No `ROBOFLOW_API_KEY`, no `GOOGLE_MAPS_API_KEY` |
 | Env | `BQ_PROJECT=swiftborder` only. Each deploy sets that list and does not carry a key forward |
 | Auth | `--no-allow-unauthenticated`. A public URL is a separate approval. Do not copy `swiftbackend` |
 | GitHub Actions | [tests.yml](../../.github/workflows/tests.yml) runs the `forecastapi` suite. It has no deploy credentials |

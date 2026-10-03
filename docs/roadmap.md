@@ -136,7 +136,7 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 
 | Item | Why it waits |
 | --- | --- |
-| Firebase Hosting | Not in the project. The grade does not require a hosted UI if the demo runs. |
+| Firebase Hosting from git | A site is live at `swiftborder-92b45.web.app` (not in project `swiftborder`; source not in git). Bringing the client into the repo is [ADR 0002](adr/0002-firebase-hosting-source.md). The grade does not require it if the demo runs. |
 | Holiday calendars | No calendar table yet. Add only if a residual error looks like a public holiday. |
 | ResNet | Optional third detector. It does not unblock Layer B. |
 | Serving a better 30-min model | A daily-refit XGBoost (or the rolling stack) beats the served registry forecast by ~0.27 min on 13–30 Sep ([evaluation.md §6](evaluation.md#6-ensembles-and-hybrids-of-the-layer-b-models-evalensemblepy)); blending on top adds nothing. Serving it needs a daily retrain job and a `v_forecast_recent` change: an approved deploy. |

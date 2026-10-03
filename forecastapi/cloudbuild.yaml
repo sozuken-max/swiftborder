@@ -1,10 +1,12 @@
 # Pytest, then deploy Cloud Run service forecast-api.
 # Not swiftbackend. Not trigger 76bbca35. No GPU, no Roboflow key, no Maps key.
 # A GitHub trigger on ^main$ should call this file. A push of this branch does not.
+# Images are pinned by digest (resolved 2026-10-03: python:3.11, pack:latest, buildpacks builder:latest,
+# cloud-sdk:slim) so a rebuild of the same commit uses the same toolchain. Refresh the digests deliberately.
 
 steps:
   - id: Test
-    name: python:3.11
+    name: python:3.11@sha256:50ffeeb3884b139e654d2ce95300cf67d016febfb93d54ecf68a00d723fa6fc6
     entrypoint: bash
     args:
       - -c
@@ -12,12 +14,12 @@ steps:
         pip install -q -r forecastapi/requirements-dev.txt
         python -m pytest forecastapi
   - id: Buildpack
-    name: gcr.io/k8s-skaffold/pack
+    name: gcr.io/k8s-skaffold/pack@sha256:221c0c0d9a90f46f108bb888a1da9e99c82ff631e8b1c63b0223ea951752bd53
     entrypoint: pack
     args:
       - build
       - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - --builder=gcr.io/buildpacks/builder:latest
+      - --builder=gcr.io/buildpacks/builder@sha256:ee028b481db027435142c27caeb3b4b37738e0665722f72a3f6734ef7ea2a7a9
       - --network=cloudbuild
       - --publish
       - --path=forecastapi
@@ -25,7 +27,7 @@ steps:
     env:
       - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
   - id: Deploy
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
     entrypoint: gcloud
     args:
       - run
