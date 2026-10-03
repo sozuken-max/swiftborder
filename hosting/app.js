@@ -54,9 +54,9 @@ let trafficCache = { data: null, fetchedAt: 0 }; // shared by the transit card a
 const LTA_API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
 const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
 const TRAFFIC_API = 'https://storage.googleapis.com/swiftborder-public/traffic-24h.json';
-// Private Cloud Run service (docs/runbooks/forecast-api.md). Cloud Run's standard URL form;
-// confirm with `gcloud run services describe forecast-api`. A browser can only call it once
-// the service is public (roles/run.invoker for allUsers) and allows this origin via CORS.
+// Cloud Run service endpoint (docs/runbooks/forecast-api.md). The service is private, so a
+// browser can only call it once it is public (roles/run.invoker for allUsers) and allows
+// this origin via CORS.
 const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app/';
 
 // ── Backend AI Detection Image ─────────────────────────────────────────────
