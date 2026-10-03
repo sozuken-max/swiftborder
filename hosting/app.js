@@ -790,6 +790,29 @@ function setForecastStatus(text) {
     el.style.display = text ? '' : 'none';
 }
 
+// Last 2 hours of observed minutes, then a dashed segment to the forecast point.
+function forecastSpark(pts, forecastMin, forecastAt, color) {
+    if (!pts.length || !Number.isFinite(forecastAt)) return '';
+    const last = pts[pts.length - 1];
+    const hist = pts.filter(p => p.t >= last.t - 120 * 60000);
+    const t0 = hist[0].t, t1 = Math.max(forecastAt, last.t);
+    const vals = hist.map(p => p.mins).concat(forecastMin);
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = Math.max(0.5, (hi - lo) * 0.15);
+    const W = 240, H = 56, m = 4;
+    const x = t => m + ((t - t0) / (t1 - t0 || 1)) * (W - 2 * m);
+    const y = v => H - m - ((v - (lo - pad)) / ((hi + pad) - (lo - pad) || 1)) * (H - 2 * m);
+    const line = hist.map(p => `${x(p.t).toFixed(1)},${y(p.mins).toFixed(1)}`).join(' ');
+    const fx = x(forecastAt).toFixed(1), fy = y(forecastMin).toFixed(1);
+    return `<svg viewBox="0 0 ${W} ${H}" class="fc-spark" style="width:100%;height:56px" role="img"
+                 aria-label="Last 2 hours and 30-minute forecast">
+        <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+        <line x1="${x(last.t).toFixed(1)}" y1="${y(last.mins).toFixed(1)}" x2="${fx}" y2="${fy}"
+              stroke="${color}" stroke-width="2" stroke-dasharray="4 3"/>
+        <circle cx="${fx}" cy="${fy}" r="4" fill="${color}" stroke="#070b13" stroke-width="1.5"/>
+    </svg>`;
+}
+
 async function fetchForecast() {
     const cards = document.getElementById('fc-cards');
     const updatedEl = document.getElementById('fc-updated');
@@ -824,11 +847,27 @@ async function fetchForecast() {
             const nowTxt = delta == null
                 ? ''
                 : ` · now ${now.toFixed(1)} (${delta >= 0 ? '+' : ''}${delta.toFixed(1)})`;
+
+            // Label the forecast against this direction's own 24h free-flow level.
+            const baseline = pts.length ? percentile(pts.map(p => p.mins), BASELINE_PCTILE) : null;
+            const level = congestionLevel({ ok: baseline != null, baseline, recentMean: f.forecast_min });
+
+            // Same stable band as the Traffic Summary card.
+            const pct = now > 0 ? (delta / now) * 100 : 0;
+            const trend = delta == null ? null
+                : pct > TREND_STABLE_PCT ? { cls: 'up', txt: `▲ Rising ${pct.toFixed(0)}%` }
+                    : pct < -TREND_STABLE_PCT ? { cls: 'down', txt: `▼ Easing ${Math.abs(pct).toFixed(0)}%` }
+                        : { cls: 'stable', txt: '▬ Steady' };
+            const color = d.cls === 'sg' ? '#00f2fe' : '#ff9f1c';
+
             return `
                 <div class="ai-dir-card ${d.cls}">
                     <span class="ai-dir-label"><span class="lc-dot ${d.cls}"></span>${d.label}</span>
                     <span class="ai-dir-count">${f.forecast_min.toFixed(1)}</span>
                     <span class="ai-dir-unit">min at ${sgtClock(f.forecast_for)} SGT${nowTxt}</span>
+                    <span class="status-indicator-badge ${level.cls}">${level.text}</span>
+                    ${trend ? `<span class="time-trend ${trend.cls}">${trend.txt} vs now</span>` : ''}
+                    ${forecastSpark(pts, f.forecast_min, Date.parse(f.forecast_for), color)}
                 </div>`;
         }).join('');
 
