@@ -80,8 +80,22 @@ steps:
             print(svc["status"]["url"])
         PY
         )
-        echo "smoke target: $$url"
-        token=$$(gcloud auth print-identity-token --audiences="$$url")
+        base=$$(python3 -c 'import json; print(json.load(open("/workspace/service.json"))["status"]["url"])')
+        echo "smoke target: $$url (token audience $$base)"
+        # Cloud Build's gcloud cannot mint an ID token (build 363590b1) and its metadata identity endpoint
+        # returns 404 (build 2b76a1c3). Mint one through the IAM Credentials API instead. The build SA needs
+        # roles/iam.serviceAccountOpenIdTokenCreator on itself. The audience is the service URL, which
+        # Cloud Run accepts on every URL of the service, tags included.
+        sa=$$(curl -sf -H "Metadata-Flavor: Google" \
+          "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email")
+        curl -sS -X POST -o /workspace/idtoken.json -w '%{http_code}\n' \
+          -H "Authorization: Bearer $$(gcloud auth print-access-token)" -H "Content-Type: application/json" \
+          -d "{\"audience\": \"$$base\", \"includeEmail\": true}" \
+          "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/$$sa:generateIdToken" > /workspace/idtoken.code
+        test "$$(cat /workspace/idtoken.code)" = "200" || { echo "generateIdToken for $$sa failed:"; cat /workspace/idtoken.json; exit 1; }
+        token=$$(python3 -c 'import json; print(json.load(open("/workspace/idtoken.json"))["token"])')
+        rm -f /workspace/idtoken.json
+        test -n "$$token" || { echo "empty identity token"; exit 1; }
         code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$$url/?list=models")
         test "$$code" = "403" || { echo "expected 403 without a token, got $$code"; exit 1; }
         code=$$(curl -s -o /workspace/list.json -w '%{http_code}' --max-time 60 -H "Authorization: Bearer $$token" "$$url/?list=models")

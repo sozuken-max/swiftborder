@@ -53,6 +53,15 @@ def test_smoke_checks_auth_catalog_served_and_undeployed():
         assert needle in script
 
 
+def test_smoke_token_comes_from_iam_credentials():
+    # Inside Cloud Build, gcloud cannot mint an ID token (build 363590b1) and the metadata identity
+    # endpoint returns 404 (build 2b76a1c3); generateIdToken works once the SA may mint for itself.
+    script = _step("Smoke")["args"][-1]
+    assert "gcloud auth print-identity-token" not in script
+    assert "/identity?audience=" not in script
+    assert "iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/$$sa:generateIdToken" in script
+
+
 def test_builder_ships_the_python_the_tests_use():
     # builder:latest is google-24 (Python 3.13 / 3.14 only); the suites and the harness run 3.11.
     step = _step("Buildpack")
