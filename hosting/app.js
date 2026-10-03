@@ -50,6 +50,9 @@ let currentCheckpoint = 'woodlands';
 let cameraRefreshTimer = null;
 let chartRefreshTimer = null;
 let trafficCache = { data: null, fetchedAt: 0 }; // shared by the transit card and the chart
+// 30-min forecast drawn as an extension of the chart: { at: epoch ms, SG_TO_MY: min, MY_TO_SG: min }.
+// Null until forecast-api answers; the chart draws from traffic-24h.json alone in the meantime.
+let chartForecast = null;
 
 const LTA_API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
 const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
@@ -572,7 +575,23 @@ async function fetchAndRenderCongestionChart() {
         const sgMap = Object.fromEntries(sgPts.map(p => [p.label, p.mins]));
         const jbMap = Object.fromEntries(jbPts.map(p => [p.label, p.mins]));
 
-        const allMins = [...sgPts.map(p => p.mins), ...jbPts.map(p => p.mins)];
+        // ── 30-min forecast extension ──────────────────────────────────────
+        // Extra x slots (5 min each) are appended after the last observed label.
+        // Ignored if the forecast is not later than the newest observation.
+        const clockOf = ms => new Date(ms).toLocaleTimeString('en-GB',
+            { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' });
+        const lastEpoch = parseSgt(`${todayStr}T${allLabels[allLabels.length - 1]}`);
+        const fc = chartForecast && lastEpoch != null && chartForecast.at > lastEpoch ? chartForecast : null;
+        const fcSg = fc ? fc.SG_TO_MY : null;
+        const fcJb = fc ? fc.MY_TO_SG : null;
+        const extra = fc ? Math.max(1, Math.min(12, Math.round((fc.at - lastEpoch) / 300000))) : 0;
+        const axisLabels = allLabels.concat(Array.from({ length: extra },
+            (_, k) => clockOf(k === extra - 1 ? fc.at : lastEpoch + (k + 1) * 300000)));
+        const N = axisLabels.length;
+        const fcIdx = N - 1;
+
+        const allMins = [...sgPts.map(p => p.mins), ...jbPts.map(p => p.mins),
+            ...(fcSg != null ? [fcSg] : []), ...(fcJb != null ? [fcJb] : [])];
         const pad = Math.max(1, (Math.max(...allMins) - Math.min(...allMins)) * 0.15);
         const minVal = Math.max(0, Math.min(...allMins) - pad);
         const maxVal = Math.max(...allMins) + pad;
@@ -589,7 +608,7 @@ async function fetchAndRenderCongestionChart() {
         const dotStroke = dotR >= 2.6 ? 1.5 : 1;
         const lineW = n > 120 ? 1.8 : 2.5;
 
-        function xOf(i) { return padL + (i / Math.max(n - 1, 1)) * plotW; }
+        function xOf(i) { return padL + (i / Math.max(N - 1, 1)) * plotW; }
         function yOf(v) { return padT + plotH - ((v - minVal) / (maxVal - minVal || 1)) * plotH; }
 
         function polyline(map) {
@@ -622,6 +641,21 @@ async function fetchAndRenderCongestionChart() {
             return '';
         }
 
+        // Dashed segment from a series' last observation to its forecast point.
+        function fcExtension(map, val, cls) {
+            if (val == null) return '';
+            let li = -1;
+            for (let i = n - 1; i >= 0; i--) { if (map[allLabels[i]] != null) { li = i; break; } }
+            if (li < 0) return '';
+            const x1 = xOf(li).toFixed(1), y1 = yOf(map[allLabels[li]]).toFixed(1);
+            const x2 = xOf(fcIdx).toFixed(1), y2 = yOf(val).toFixed(1);
+            return `<line class="lc-fc-line ${cls}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>
+                    <circle class="lc-fc-marker ${cls}" cx="${x2}" cy="${y2}" r="5"/>`;
+        }
+        const fcZone = fc ? `
+            <rect class="lc-fc-zone" x="${xOf(n - 1).toFixed(1)}" y="${padT}" width="${(xOf(fcIdx) - xOf(n - 1)).toFixed(1)}" height="${plotH}"/>
+            <text class="lc-fc-tag" x="${xOf(fcIdx).toFixed(1)}" y="${padT + 11}" text-anchor="end">FORECAST</text>` : '';
+
         const ySteps = 4;
         let gridLines = '';
         for (let s = 0; s <= ySteps; s++) {
@@ -632,10 +666,13 @@ async function fetchAndRenderCongestionChart() {
         }
 
         let xLabels = '';
-        const step = allLabels.length <= 8 ? 1 : Math.ceil(allLabels.length / 6);
-        allLabels.forEach((lbl, i) => {
-            if (i % step !== 0 && i !== allLabels.length - 1) return;
-            xLabels += `<text x="${xOf(i).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="rgba(148,163,184,0.7)">${lbl}</text>`;
+        const step = N <= 8 ? 1 : Math.ceil(N / 6);
+        axisLabels.forEach((lbl, i) => {
+            const isEnd = i === N - 1;
+            // Keep stepped labels clear of the final (forecast) label.
+            if (!isEnd && (i % step !== 0 || (fc && N - 1 - i < step))) return;
+            const cls = fc && isEnd ? ' class="lc-fc-xlabel"' : '';
+            xLabels += `<text${cls} x="${xOf(i).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="rgba(148,163,184,0.7)">${lbl}</text>`;
         });
 
         const sgLine = polyline(sgMap);
@@ -654,6 +691,7 @@ async function fetchAndRenderCongestionChart() {
                 </linearGradient>
             </defs>
             ${gridLines}
+            ${fcZone}
             <text x="16" y="${axisMidY}" transform="rotate(-90 16 ${axisMidY})"
                   text-anchor="middle" font-size="11" fill="rgba(148,163,184,0.85)"
                   letter-spacing="0.5">Travel time (min)</text>
@@ -663,6 +701,8 @@ async function fetchAndRenderCongestionChart() {
             ${jbLine ? `<polyline points="${jbLine}" fill="none" stroke="#ff9f1c" stroke-width="${lineW}" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
             ${dotR ? allLabels.map((l, i) => sgMap[l] != null ? `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(sgMap[l]).toFixed(1)}" r="${dotR}" fill="#00f2fe" stroke="#070b13" stroke-width="${dotStroke}"/>` : '').join('') : ''}
             ${dotR ? allLabels.map((l, i) => jbMap[l] != null ? `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(jbMap[l]).toFixed(1)}" r="${dotR}" fill="#ff9f1c" stroke="#070b13" stroke-width="${dotStroke}"/>` : '').join('') : ''}
+            ${fcExtension(sgMap, fcSg, 'sg')}
+            ${fcExtension(jbMap, fcJb, 'jb')}
             ${lastDot(sgMap, '#00f2fe')}
             ${lastDot(jbMap, '#ff9f1c')}
             ${xLabels}
@@ -696,9 +736,10 @@ async function fetchAndRenderCongestionChart() {
 
         function showAt(evt) {
             const x = toSvgX(evt);
-            let i = Math.round(((x - padL) / plotW) * (n - 1));
-            i = Math.max(0, Math.min(n - 1, i));
-            const label = allLabels[i];
+            let i = Math.round(((x - padL) / plotW) * (N - 1));
+            i = Math.max(0, Math.min(N - 1, i));
+            const label = axisLabels[i];
+            const isFc = fc && i === fcIdx;
             const cx = xOf(i);
 
             cross.setAttribute('x1', cx.toFixed(1));
@@ -706,17 +747,18 @@ async function fetchAndRenderCongestionChart() {
             cross.style.display = '';
 
             const rows = [];
-            [[sgMap, hdSg, 'SG → JB', 'sg'], [jbMap, hdJb, 'JB → SG', 'jb']].forEach(([map, dot, name, cls]) => {
-                const v = map[label];
+            [[sgMap, fcSg, hdSg, 'SG → JB', 'sg'], [jbMap, fcJb, hdJb, 'JB → SG', 'jb']].forEach(([map, fcVal, dot, name, cls]) => {
+                // Slots past the last observation carry no data, except the forecast point.
+                const v = isFc ? fcVal : (i < n ? map[label] : null);
                 if (v == null) { dot.style.display = 'none'; return; }
                 dot.setAttribute('cx', cx.toFixed(1));
                 dot.setAttribute('cy', yOf(v).toFixed(1));
                 dot.style.display = '';
-                rows.push(`<div class="lc-tt-row"><span class="lc-dot ${cls}"></span>${name}<strong>${v.toFixed(1)} min</strong></div>`);
+                rows.push(`<div class="lc-tt-row"><span class="lc-dot ${cls}"></span>${name}<strong>${v.toFixed(1)} min${isFc ? ' (forecast)' : ''}</strong></div>`);
             });
 
             if (!rows.length) { tip.style.display = 'none'; return; }
-            tip.innerHTML = `<div class="lc-tt-time">${label} SGT</div>${rows.join('')}`;
+            tip.innerHTML = `<div class="lc-tt-time">${label} SGT${isFc ? ' · forecast' : ''}</div>${rows.join('')}`;
             tip.style.display = 'block';
 
             const areaRect = chartArea.getBoundingClientRect();
@@ -744,14 +786,17 @@ async function fetchAndRenderCongestionChart() {
             updatedEl.textContent = `Updated ${data.updated_at_sgt.slice(11, 16)} SGT`;
         }
 
+        const legendFc = document.getElementById('lc-legend-fc');
+        if (legendFc) legendFc.style.display = fc ? '' : 'none';
+
         if (footerEl) footerEl.style.display = 'flex';
         const latestSg = sgPts[sgPts.length - 1];
         const latestJb = jbPts[jbPts.length - 1];
         if (statSg && latestSg) {
-            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>SG → JB</strong>&nbsp;Latest: <strong>${latestSg.mins.toFixed(1)} min</strong> at ${latestSg.label}`;
+            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>SG → JB</strong>&nbsp;Latest: <strong>${latestSg.mins.toFixed(1)} min</strong> at ${latestSg.label}${fcSg != null ? ` &rarr; <strong>${fcSg.toFixed(1)}</strong> forecast at ${axisLabels[fcIdx]}` : ''}`;
         }
         if (statJb && latestJb) {
-            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>JB → SG</strong>&nbsp;Latest: <strong>${latestJb.mins.toFixed(1)} min</strong> at ${latestJb.label}`;
+            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>JB → SG</strong>&nbsp;Latest: <strong>${latestJb.mins.toFixed(1)} min</strong> at ${latestJb.label}${fcJb != null ? ` &rarr; <strong>${fcJb.toFixed(1)}</strong> forecast at ${axisLabels[fcIdx]}` : ''}`;
         }
 
     } catch (err) {
@@ -827,6 +872,15 @@ async function fetchForecast() {
         const data = await res.json();
         const dirs = data.directions || {};
 
+        // Hand the forecast to the chart, which redraws with the dashed extension.
+        const fcAt = Math.max(...FORECAST_DIRECTIONS.map(d => Date.parse(dirs[d.key]?.forecast_for)).filter(Number.isFinite));
+        chartForecast = Number.isFinite(fcAt) ? {
+            at: fcAt,
+            SG_TO_MY: dirs.SG_TO_MY?.forecast_min ?? null,
+            MY_TO_SG: dirs.MY_TO_SG?.forecast_min ?? null
+        } : null;
+        fetchAndRenderCongestionChart();
+
         // Latest observed value per direction, from the feed the chart already loaded.
         let traffic = null;
         try { traffic = await loadTrafficData(); } catch (_) { /* "now" is optional */ }
@@ -883,6 +937,7 @@ async function fetchForecast() {
         const msg = err instanceof TypeError
             ? 'Forecast service unreachable (blocked by CORS or not public).'
             : err.message;
+        if (chartForecast) { chartForecast = null; fetchAndRenderCongestionChart(); } // drop a stale extension
         cards.innerHTML = '';
         setForecastStatus(`Forecast unavailable: ${msg}`);
         if (updatedEl) updatedEl.textContent = 'Unavailable';
