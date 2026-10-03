@@ -10,8 +10,8 @@ flowchart LR
     SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
     MAPS["Google Maps Distance Matrix"] --> ING
     ING --> TT["causeway.travel_times"]
-    TT --> FEATURES["v_training_set<br/>Maps lags and calendar"]
-    FEATURES --> API["Cloud Run forecast-api<br/>local fitting and prediction<br/>SG_TO_MY: lin_bq frozen<br/>MY_TO_SG: persistence"]
+    TT --> FEATURES["v_bins_10min<br/>closed bins only"]
+    FEATURES --> API["Cloud Run forecast-api, public<br/>harness features, local fit<br/>SG_TO_MY: lin_bq frozen<br/>MY_TO_SG: persistence"]
     LEGACY["Historical BQML retained<br/>lin_h30 / xgb_h30<br/>model_registry / v_forecast_recent"]
   end
   subgraph DELIVERY["Delivery and evaluation"]

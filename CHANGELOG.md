@@ -4,6 +4,24 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-04
 
+- Address [docs/final-report-readiness.md](docs/final-report-readiness.md); the per-finding status is in its Response table.
+  - `forecast-api` availability contract:
+    - origins are closed bins only (60 s grace);
+    - a direction whose target bin has started, or that lies within an hour after a >25 min gap, answers 503;
+    - cached answers expire with their target;
+    - responses add `origin_closed_at`, `forecast_window_end`, `observation_age_min`, `lead_min` and `target_offset_min`.
+  - Features for serving and daily training are built from `v_bins_10min` with the harness's time-based rules (`local_models.features_from_bins`, tested equal to `eval/features.maps_features` with skipped bins). They no longer come from `v_training_set`'s positional LAG/LEAD.
+  - `forecastapi/cloudbuild.yaml` matches the live public setting: `--no-invoker-iam-check`, `--max-instances=3`, and an anonymous smoke test with the Hosting origin. The token mint is removed, so the build SA's `serviceAccountOpenIdTokenCreator` grant is unused (revert command in `docs/release-pr2.md`; not revoked).
+  - `eval/significance.py` pooled comparisons:
+    - the gate counts shared calendar days;
+    - the decision needs the joint calendar-day bootstrap CI;
+    - a day-clustered p-value is reported (also in the run-wide multiplicity check).
+  - A sensitivity re-run on the snapshot's cached data (`eval/runs/sensitivity-joint-day`, not promoted) left every 30-minute pooled decision unchanged and made the three fuzzy decisions "insufficient data" (6 shared days).
+  - Roadmap C5/C8: "not significant" is "no improvement detected", not confirmation.
+  - Docs re-queried `cam2701` / `cam2702`: a Mar–Apr detection batch with no model version; live camera calls are not stored.
+  - README, findings, architecture (Mermaid; PNGs now stale on two labels), runbook, ADR 0004 amendment and inventory updated.
+  - No GCP settings changed.
+
 - Regenerate all four `docs/images/` deck PNGs with built-in image generation after rechecking live serving and storage. Update architecture/evaluation Mermaid and report embeds for the local forecast API, current Hosting connection, historical BQML, pending vision metrics and seven verified buckets. Record prompts and visual QA in `docs/diagrams/`; refresh the diagram skill and its Cursor mirror. No application code or cloud settings changed.
 
 ## 2026-10-03

@@ -53,6 +53,13 @@ Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemen
 - Cloud Build: test, build, deploy a no-traffic candidate, smoke-test it, promote.
 - A live read-only run on 2026-10-03 took about 13 s cold and 3 s warm.
 
+**Amendment (2026-10-04, readiness review §2, §3, §8).** Fixture agreement between the two copies did not make serving equal the evaluation end to end. The service changes:
+- **Features:** it now reads `v_bins_10min` and builds the features with the harness's time-based rules (`local_models.features_from_bins`, tested equal to `eval/features.maps_features` with skipped bins and a gap). The Context bullet above ("score the latest `v_training_set` row directly") holds only while no bin is missing, because the view's positional LAG/LEAD shift after a skipped bin.
+- **Origin:** the newest bin that has closed (plus a 60-second ingestion grace), not the still-open bin.
+- **Freshness:** a direction answers 503, not a 200 with an expired target, once the target bin has started or within an hour after a gap.
+- **Response:** reports `lead_min` and `observation_age_min`.
+- **Frozen replicas:** their 12 Sep training rows still number 1,406 in a live read after the change.
+
 ## Consequences
 
 - BigQuery ML models and `v_forecast_recent` are no longer maintained. They stay in the project, unchanged, until someone deletes them, and the report describes them as history.

@@ -6,6 +6,21 @@ Reviewed 2026-10-03 (SGT), checkout `be9281d`, against repository code, committe
 
 **Verdict: request changes before final submission.** The project is ready to start assembling the final report. It is not ready to freeze the report or claim the original crossing-time product goal is achieved. The strongest contribution is the evaluated forecasting methodology and its honest negative results. The biggest gaps are unmeasured vision quality, live/evaluation timing differences, statistical interpretation, and inconsistent documentation.
 
+## Response (2026-10-04, branch `fix/final-report-readiness`)
+
+| # | Finding | Status | Where |
+| --- | --- | --- | --- |
+| 1 | No Layer A quality evidence | **Open (team).** Needs a scored Roboflow export. BigQuery `cam2701` / `cam2702` hold Mar–Apr model detections without a model version, not ground truth, and live calls are not stored. Until scored, the report calls Layer A an unvalidated prototype | [findings.md](findings.md) items 7–8, README |
+| 2 | Live API uses incomplete origin bins | **Fixed in code.** The origin is the newest bin closed for at least 60 s. The response carries `origin_closed_at`, `forecast_window_end` and `lead_min`. The target is described as the bin 30–40 min after the origin, 9–19 min ahead of the request | `forecastapi/main.py`, [runbook](runbooks/forecast-api.md), [ADR 0004](adr/0004-serve-local-models.md) amendment |
+| 3 | Stale observations served as current | **Fixed in code.** A direction answers 503 once its target bin has started or within an hour of a >25 min gap, and a cached answer expires with its target. Tests cover each case, per direction | `forecastapi/tests/test_forecast.py` |
+| 4 | Pooled inference ignores shared days | **Fixed in code; sensitivity re-run.** The gate counts shared calendar days, and the decision needs the joint calendar-day bootstrap CI; a day-clustered p is reported. 30-min pooled decisions are unchanged; the three fuzzy decisions become "insufficient data" | `eval/significance.py`, [findings.md](findings.md#pooled-significance-sensitivity-2026-10-04), [evaluation.md](evaluation.md#significance) |
+| 5 | Non-significance treated as confirmation | **Reworded.** C5/C8 have no "confirmed" outcome; "not significant" is reported as no improvement detected. No equivalence margin was adopted, which needs team confirmation before 19 Oct | [roadmap.md](roadmap.md) |
+| 6 | Deployment and report architecture disagree | **Docs updated.** README, findings, architecture prose and Mermaid, runbook and ADR now describe `forecast-api` local serving; BQML results are labelled BQML-era | as listed; **PNGs need regeneration** (see 10) |
+| 7 | Access policy contradicts the smoke test | **Reconciled to the live decision (public).** Deploy sets `--no-invoker-iam-check` and `--max-instances=3`. The smoke test calls anonymously with the Hosting origin and checks the annotation and CORS. Risk recorded | `forecastapi/cloudbuild.yaml`, [findings.md](findings.md#known-risk-public-forecast-api-by-decision) |
+| 8 | Parity depends on gap-free data | **Fixed in code.** Serving and daily training build features from `v_bins_10min` with the harness's time-based rules. A test asserts they equal `eval/features.maps_features` with skipped bins and a gap. `v_training_set` itself is unchanged | `forecastapi/local_models.py`, `eval/tests/test_forecastapi_models.py` |
+| 9 | Reproducibility / submission package | **Open (team).** Needs an immutable data package or access procedure, the Hosting source (ADR 0002), the Maps fetcher source, and the frozen run from a clean revision | [roadmap.md](roadmap.md) |
+| 10 | Deck PNGs | **Regenerated 4 Oct, and now stale on two labels** (forecast-api input and public access). Handled separately, as agreed | [architecture.md](architecture.md) |
+
 ## Readiness by graded surface
 
 | Surface | Assessment | Remaining evidence |

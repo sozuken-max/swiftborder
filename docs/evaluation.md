@@ -50,6 +50,17 @@ Point forecasts are **paired** on the same `(direction, time)` rows. For each ro
 
 **Decision rule:** "challenger" only when the Holm-adjusted two-sided DM p < 0.05, the mean difference is negative, **and** the two-sided 95% bootstrap CI lies entirely below 0; "reference" by the mirror rule; **"insufficient data"** when a resample has fewer than 10 day-blocks (the CI is too coarse); otherwise "not significant". Very small p-values are reported as computed but should be read as "far below α", not as precise probabilities.
 
+**Pooled comparisons (both directions; code changed 2026-10-04, after the committed snapshot).** The two routes cover the same calendar days, and a common event can move both routes' errors together, so day-blocks summed over directions overstate the evidence. Code after 2026-10-04 (`significance.py`) treats a pooled comparison differently:
+- The gate counts **distinct calendar days** (`calendar_days`), not blocks summed over groups.
+- The decision also needs the **joint calendar-day bootstrap** CI (`joint_ci_low_min` / `joint_ci_high_min`) to exclude 0 on the same side. That bootstrap resamples whole days with both directions' rows together.
+- A **day-clustered** two-sided p-value (`day_cluster_pvalue`, t with days − 1 df) is reported as a sensitivity check.
+
+Directional results are reported separately. A pooled "challenger" is one result, not two independent confirmations.
+
+**"Not significant" is not "no effect".** It means no difference was detected on that window. Equivalence was never tested, because no margin was fixed in advance.
+
+The committed snapshot (`eval/runs/report/`, code `b3b6562`) used the earlier rule. Its 30-minute pooled comparisons cover 18 calendar days and pass the new gate. The pooled weekend slice (5 days) and every fuzzy comparison (5 days) do not, so under the new rule they are "insufficient data". The sensitivity re-run of the same cached data is summarised in [findings.md](findings.md#pooled-significance-sensitivity-2026-10-04).
+
 **Family boundaries.** Holm is applied within one family per question, and a claim never combines rows from two families:
 
 | Family (`run.json`) | Question | Comparisons |
@@ -351,7 +362,7 @@ Plots: `eval/runs/report/deep/deep-mae-by-seed.png`, `deep/deep-mae-diff.png`.
 | Fuzzy rule base | 0.718 | 0.698 | 0.839 / 0.710 / 0.534 | 0.0025 | 0.116 |
 | XGB forecast → fuzzy level | **0.785** | **0.770** | 0.787 / 0.849 / 0.631 | 0.0007 | **0.082** |
 
-RPS is the ranked probability score of the normalised class degrees (ordinal, lower is better). Significance uses the 0/1 misclassification loss, so the difference is in error rate (Holm over 3 comparisons; 10 day-blocks, two directions × 5 days):
+RPS is the ranked probability score of the normalised class degrees (ordinal, lower is better). Significance uses the 0/1 misclassification loss, so the difference is in error rate (Holm over 3 comparisons). The decisions below are the committed snapshot's: 10 day-blocks, counted as two directions × 5 days. Both routes cover the same days, and the sensitivity run counts 6 shared calendar days. Under the pooled rule (see [Significance](#significance)) **all three are "insufficient data"**. Read the table as point estimates only:
 
 | Challenger | Reference | Error-rate difference | CI | Decision |
 | --- | --- | --- | --- | --- |
@@ -359,7 +370,7 @@ RPS is the ranked probability score of the normalised class degrees (ordinal, lo
 | XGB → fuzzy level | Persistence level | −0.096 | [−0.113, −0.067] | challenger |
 | Fuzzy rule base | XGB → fuzzy level | +0.067 | [+0.021, +0.105] | reference (the hybrid is better; family-level only) |
 
-**Finding:** the learned rule base is readable (for example, "IF now is heavy AND trend is rising AND time is evening AND workday AND yesterday heavy THEN heavy", CF 0.85). It halves severe errors against persistence, but its accuracy gain is not significant. The hybrid, a regression forecast followed by fuzzy level assignment, is significantly better than both. Heavy traffic on `MY_TO_SG` is the weak spot for every classifier (recall 0.38–0.47). Per-direction rows and the top rules are in `run.json` (`fuzzy`).
+**Finding:** the learned rule base is readable (for example, "IF now is heavy AND trend is rising AND time is evening AND workday AND yesterday heavy THEN heavy", CF 0.85). It halves severe errors against persistence. The hybrid, a regression forecast followed by fuzzy level assignment, has the best accuracy of the three. With 6 shared calendar days, neither ranking is a significance claim. Heavy traffic on `MY_TO_SG` is the weak spot for every classifier (recall 0.38–0.47). Per-direction rows and the top rules are in `run.json` (`fuzzy`).
 
 Plots: `eval/runs/report/fuzzy/fuzzy-memberships.png`, `fuzzy/fuzzy-confusion.png`.
 

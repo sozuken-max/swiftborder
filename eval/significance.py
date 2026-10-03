@@ -21,6 +21,16 @@ Decision rule: **challenger** when the (Holm-adjusted) two-sided DM p-value is b
 mean difference is negative, **and** the two-sided (1 - alpha) bootstrap CI lies entirely below 0;
 **reference** by the mirror rule; **insufficient data** when a resample has fewer than
 ``MIN_BLOCKS`` blocks (the CI is too coarse to use); otherwise **not significant**.
+
+Pooled comparisons (more than one group, with timestamps): the directions share calendar days, so
+the coverage gate counts **distinct calendar days**, not blocks summed over groups, and the decision
+also needs the **joint calendar-day bootstrap** CI (whole days resampled with all groups' rows) to
+exclude 0 on the same side. A calendar-day cluster-robust p-value is reported alongside as a
+sensitivity check. Report directional results separately; a pooled decision is not two
+independent confirmations.
+
+"Not significant" means no difference was detected on that window. It is not evidence that the
+models are equivalent.
 """
 
 from __future__ import annotations
@@ -71,6 +81,21 @@ class ComparisonResult:
     holm_adjusted_p_reference: Optional[float] = None
     """Same value as holm_adjusted_p (kept for manifest compatibility)."""
     family_size: int = 1
+    calendar_days: Optional[int] = None
+    """Distinct calendar days shared by all groups' rows. For a pooled (multi-group) comparison this,
+    not the per-group block count summed over groups, is the temporal coverage gate: two directions
+    over the same five days are five days of traffic, not ten independent blocks."""
+    joint_ci_low_min: Optional[float] = None
+    joint_ci_high_min: Optional[float] = None
+    """Pooled comparisons only: percentile CI from resampling whole calendar days with every group's
+    rows of that day together, so errors shared across directions on a day stay together."""
+    day_cluster_pvalue: Optional[float] = None
+    """Pooled comparisons only: two-sided p of the mean with a calendar-day cluster-robust variance
+    (t with days - 1 df). Reported as a sensitivity check next to the per-group HAC DM."""
+
+    @property
+    def pooled(self) -> bool:
+        return self.n_groups > 1 and self.calendar_days is not None
 
     @property
     def dm_pvalue_two_sided(self) -> float:
@@ -83,15 +108,29 @@ class ComparisonResult:
 
     @property
     def enough_blocks(self) -> bool:
+        if self.pooled:
+            return self.calendar_days >= MIN_BLOCKS
         return self.blocks_per_resample is None or self.blocks_per_resample >= MIN_BLOCKS
+
+    def _joint_below(self) -> bool:
+        return not self.pooled or (self.joint_ci_high_min is not None and self.joint_ci_high_min < 0)
+
+    def _joint_above(self) -> bool:
+        return not self.pooled or (self.joint_ci_low_min is not None and self.joint_ci_low_min > 0)
 
     @property
     def challenger_better_at_alpha(self) -> bool:
-        return bool(self.enough_blocks and self._p() < self.alpha and self.mean_ae_diff_min < 0 and self.bootstrap_ci_high_min < 0)
+        return bool(
+            self.enough_blocks and self._p() < self.alpha and self.mean_ae_diff_min < 0
+            and self.bootstrap_ci_high_min < 0 and self._joint_below()
+        )
 
     @property
     def reference_better_at_alpha(self) -> bool:
-        return bool(self.enough_blocks and self._p() < self.alpha and self.mean_ae_diff_min > 0 and self.bootstrap_ci_low_min > 0)
+        return bool(
+            self.enough_blocks and self._p() < self.alpha and self.mean_ae_diff_min > 0
+            and self.bootstrap_ci_low_min > 0 and self._joint_above()
+        )
 
     @property
     def decision(self) -> str:
@@ -316,6 +355,57 @@ def block_bootstrap_mean_ci(
     return float(np.quantile(means, tail_p)), float(np.quantile(means, 1.0 - tail_p))
 
 
+def calendar_day_ids(timestamps: Sequence[Any], *, utc_offset_hours: float = 0.0) -> np.ndarray:
+    secs = np.array([_to_seconds(t) for t in timestamps], dtype=float)
+    return np.floor((secs + utc_offset_hours * 3600.0) / SECONDS_PER_DAY).astype(np.int64)
+
+
+def joint_day_bootstrap_mean_ci(
+    values: Sequence[float],
+    day_ids: Sequence[int],
+    *,
+    n_resamples: int = 4999,
+    confidence: float = 0.95,
+    random_state: Optional[int] = 0,
+) -> Tuple[float, float]:
+    """Percentile CI for the pooled mean, resampling whole calendar days across all groups.
+
+    Every row of a drawn day comes along (both directions), so a shared event moves both directions'
+    errors together. The resampled statistic is the pooled mean of the drawn rows.
+    """
+    d = np.asarray(values, dtype=float)
+    days = np.asarray(day_ids)
+    if len(d) == 0:
+        return float("nan"), float("nan")
+    uniq, inv = np.unique(days, return_inverse=True)
+    sums = np.bincount(inv, weights=d)
+    counts = np.bincount(inv).astype(float)
+    if len(uniq) == 1:
+        m = float(sums[0] / counts[0])
+        return m, m
+    rng = np.random.default_rng(random_state)
+    draw = rng.integers(0, len(uniq), size=(n_resamples, len(uniq)))
+    means = np.sort(sums[draw].sum(axis=1) / counts[draw].sum(axis=1))
+    tail_p = (1.0 - confidence) / 2.0
+    return float(np.quantile(means, tail_p)), float(np.quantile(means, 1.0 - tail_p))
+
+
+def day_cluster_pvalue(values: Sequence[float], day_ids: Sequence[int]) -> float:
+    """Two-sided p for mean 0 with a calendar-day cluster-robust variance (t, days - 1 df)."""
+    d = np.asarray(values, dtype=float)
+    n = len(d)
+    uniq, inv = np.unique(np.asarray(day_ids), return_inverse=True)
+    g = len(uniq)
+    if g < 2:
+        return float("nan")
+    s = np.bincount(inv, weights=d - d.mean())
+    var_mean = float(np.dot(s, s)) / n**2 * g / (g - 1)
+    if var_mean <= 0:
+        return 1.0
+    t_stat = float(d.mean() / math.sqrt(var_mean))
+    return float(2.0 * stats.t.sf(abs(t_stat), df=g - 1))
+
+
 # --- comparisons ----------------------------------------------------------------
 
 
@@ -370,6 +460,15 @@ def compare_absolute_errors(
         random_state=random_state,
         groups=groups,
     )
+    calendar_days = joint_low = joint_high = cluster_p = None
+    if timestamps is not None and n:
+        day_ids = calendar_day_ids(timestamps, utc_offset_hours=day_utc_offset_hours)
+        calendar_days = int(len(np.unique(day_ids)))
+        if len(slices) > 1:
+            joint_low, joint_high = joint_day_bootstrap_mean_ci(
+                diffs, day_ids, n_resamples=n_bootstrap, confidence=1.0 - alpha, random_state=random_state
+            )
+            cluster_p = day_cluster_pvalue(diffs, day_ids)
     return ComparisonResult(
         label_challenger=label_challenger,
         label_reference=label_reference,
@@ -388,6 +487,10 @@ def compare_absolute_errors(
         n_groups=len(slices),
         block=block_label,
         blocks_per_resample=sum(math.ceil((s.stop - s.start) / min(b, s.stop - s.start)) for s in slices if s.stop > s.start),
+        calendar_days=calendar_days,
+        joint_ci_low_min=joint_low,
+        joint_ci_high_min=joint_high,
+        day_cluster_pvalue=cluster_p,
     )
 
 

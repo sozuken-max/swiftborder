@@ -30,9 +30,11 @@ def test_tests_include_the_harness_equivalence_check():
     assert "pytest -q forecastapi" in script and "tests/test_forecastapi_models.py" in script
 
 
-def test_deploy_is_private_candidate_first():
+def test_deploy_is_public_and_candidate_first():
     script = _step("Deploy")["args"][-1]
-    assert "--no-allow-unauthenticated" in script
+    # public by decision (invoker check disabled live on 2026-10-03); bounded instances
+    assert "--no-invoker-iam-check" in script and "--no-allow-unauthenticated" not in script
+    assert "--max-instances=$_MAX_INSTANCES" in script
     assert "--no-traffic --tag=candidate" in script
     assert "COMMIT_SHA=$COMMIT_SHA" in script
     assert "swiftbackend" not in script
@@ -47,19 +49,15 @@ def test_shell_variables_are_escaped_from_substitution():
             assert name in allowed, f"{s['id']}: unescaped ${name}"
 
 
-def test_smoke_checks_auth_catalog_served_and_undeployed():
+def test_smoke_calls_like_the_browser_catalog_served_and_undeployed():
     script = _step("Smoke")["args"][-1]
-    for needle in ('test "$$code" = "403"', "?list=models", "?model=served", "?model=lstm", '"source": "local model"'):
+    for needle in (
+        "run.googleapis.com/invoker-iam-disabled", "access-control-allow-origin", "?list=models",
+        "?model=served", "?model=lstm", '"source": "local model"', '"lead_min"',
+    ):
         assert needle in script
-
-
-def test_smoke_token_comes_from_iam_credentials():
-    # Inside Cloud Build, gcloud cannot mint an ID token (build 363590b1) and the metadata identity
-    # endpoint returns 404 (build 2b76a1c3); generateIdToken works once the SA may mint for itself.
-    script = _step("Smoke")["args"][-1]
-    assert "gcloud auth print-identity-token" not in script
-    assert "/identity?audience=" not in script
-    assert "iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/$$sa:generateIdToken" in script
+    # anonymous on purpose: no identity token, so no 403 expectation either
+    assert "Authorization: Bearer" not in script and 'test "$$code" = "403"' not in script
 
 
 def test_builder_ships_the_python_the_tests_use():

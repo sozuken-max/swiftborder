@@ -75,3 +75,31 @@ def test_service_fit_predicts_exactly_what_the_harness_predicts(model_id):
     train_s = lm.training_rows(view, lm.LOCAL_MODELS[model_id]["rows"], day_start)
     served = lm.fit(model_id, train_s).predict(lm.prepare(test_h.drop(columns=["is_my_to_sg", "date_sgt"])))
     np.testing.assert_allclose(served, harness, rtol=0, atol=1e-6)
+
+
+def test_service_features_equal_the_harness_features_with_missing_bins():
+    # v_training_set uses positional LAG/LEAD; the service builds features like eval/features.py instead
+    rng = np.random.default_rng(3)
+    t0 = pd.Timestamp("2026-09-05 16:00", tz="UTC")
+    skipped = {t0 + pd.Timedelta(minutes=10 * i) for i in (40, 41, 42, 43, 200, 333)}  # a 50-minute gap and two single bins
+    rows = []
+    for d, route in (("SG_TO_MY", "r_sg"), ("MY_TO_SG", "r_my")):
+        for i in range(3 * 144):
+            ts = t0 + pd.Timedelta(minutes=10 * i)
+            if ts in skipped:
+                continue
+            rows.append({"route_id": route, "direction": d, "bin_ts": ts, "dur_min": 25 + rng.normal(0, 3),
+                         "typical_min": 20.0, "congestion_ratio": 1 + rng.normal(0, 0.1), "speed_kmh": 40 + rng.normal(0, 3)})
+    bins = pd.DataFrame(rows)
+    bins["gap_min"] = bins.groupby("route_id")["bin_ts"].diff().dt.total_seconds() / 60.0
+
+    harness = fx.maps_features(bins)
+    service = lm.features_from_bins(bins.drop(columns=["gap_min", "typical_min"]))
+    cols = ["direction", "bin_ts", *lm.VIEW_COLUMNS, "after_gap", "y_30"]
+    pd.testing.assert_frame_equal(
+        service[cols].reset_index(drop=True),
+        harness[cols].reset_index(drop=True),
+        check_dtype=False,
+    )
+    single = harness[harness["bin_ts"] == t0 + pd.Timedelta(minutes=10 * 201)]
+    assert single["lag_10"].isna().all() and (single["after_gap"] == 0).all()

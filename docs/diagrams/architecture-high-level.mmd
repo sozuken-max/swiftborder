@@ -7,8 +7,8 @@ flowchart LR
   subgraph LB["Layer B - Forecasting"]
     SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
     GM["Google Maps<br/>Distance Matrix"] --> ING
-    ING --> TT["BigQuery travel_times<br/>Maps-only v_training_set"]
-    TT --> API["Cloud Run forecast-api<br/>local models<br/>nominal 30-minute bin shift"]
+    ING --> TT["BigQuery travel_times<br/>Maps-only 10-minute bins"]
+    TT --> API["Cloud Run forecast-api, public<br/>local models<br/>target: bin 30-40 min after<br/>the newest closed bin"]
     API --> UI
     OLD["Historical BQML retained<br/>lin_h30 / xgb_h30<br/>v_forecast_recent"]
   end

@@ -46,8 +46,8 @@ flowchart LR
   subgraph LB["Layer B - Forecasting"]
     SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
     GM["Google Maps<br/>Distance Matrix"] --> ING
-    ING --> TT["BigQuery travel_times<br/>Maps-only v_training_set"]
-    TT --> API["Cloud Run forecast-api<br/>local models<br/>nominal 30-minute bin shift"]
+    ING --> TT["BigQuery travel_times<br/>Maps-only 10-minute bins"]
+    TT --> API["Cloud Run forecast-api, public<br/>local models<br/>target: bin 30-40 min after<br/>the newest closed bin"]
     API --> UI
     OLD["Historical BQML retained<br/>lin_h30 / xgb_h30<br/>v_forecast_recent"]
   end
@@ -70,7 +70,7 @@ flowchart LR
 
 ![High-level architecture](images/architecture-high-level.png)
 
-Regenerated on 4 Oct 2026 after a fresh serving and storage check; see [diagrams/README.md](diagrams/README.md).
+Regenerated on 4 Oct 2026 after a fresh serving and storage check; see [diagrams/README.md](diagrams/README.md). **Stale since then:** the `forecast-api` input is now `v_bins_10min` (closed bins, harness features), not `v_training_set`, and the service is labelled public. The Mermaid above already shows this. Regenerate both PNGs before the deck.
 
 The high-level figure shows camera, cache and public-history storage. The detailed figure names all seven verified buckets. Storage inventory nodes have no inferred data-flow edges.
 
@@ -92,8 +92,8 @@ flowchart LR
     SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
     MAPS["Google Maps Distance Matrix"] --> ING
     ING --> TT["causeway.travel_times"]
-    TT --> FEATURES["v_training_set<br/>Maps lags and calendar"]
-    FEATURES --> API["Cloud Run forecast-api<br/>local fitting and prediction<br/>SG_TO_MY: lin_bq frozen<br/>MY_TO_SG: persistence"]
+    TT --> FEATURES["v_bins_10min<br/>closed bins only"]
+    FEATURES --> API["Cloud Run forecast-api, public<br/>harness features, local fit<br/>SG_TO_MY: lin_bq frozen<br/>MY_TO_SG: persistence"]
     LEGACY["Historical BQML retained<br/>lin_h30 / xgb_h30<br/>model_registry / v_forecast_recent"]
   end
   subgraph DELIVERY["Delivery and evaluation"]
@@ -118,14 +118,14 @@ flowchart LR
 ```
 <!-- /mermaid:architecture-detailed -->
 
-Weather and historical camera features are used only in offline experiments. The live `v_training_set` is Maps-only. The `eval/` block reads the project without writing to GCP; its dashed inputs denote offline work. `swiftborder-frame-cache` has no writer in git. Deployment and offline-input references are repeated as labelled references in the detailed PNG to avoid crossing connectors.
+Weather and historical camera features are used only in offline experiments. The live `v_training_set` and `forecast-api` inputs are Maps-only. The `eval/` block reads the project without writing to GCP; its dashed inputs denote offline work. `swiftborder-frame-cache` has no writer in git. Deployment and offline-input references are repeated as labelled references in the detailed PNG to avoid crossing connectors.
 
 **Notes**
 
 - `traffic-backfill` is a **Cloud Run Job** (compute), not a BigQuery dataset. Latest execution succeeded 13 Sep 2026, 03:53 SGT, after two failed runs the same day.
 - `swiftbackend` is publicly invocable (IAM invoker check disabled, ingress `all`, CORS `*`) and holds `ROBOFLOW_API_KEY` as a plain env var. Recorded as a risk in [findings.md](findings.md); not changed.
 - `v_training_set` is built only from `causeway.travel_times`: 10-minute bins, lags, rolling means, time-of-day, weekend and peak flags. Labels are `y_30` and `y_60`.
-- `forecast-api` fits and serves local models from `v_training_set`. The nominal horizon is a 30-minute bin-start shift, not necessarily 30 minutes from request time. `v_forecast_recent`, `lin_h30`, `xgb_h30` and the BQML registry remain as historical resources; the HTTP API does not call them.
+- `forecast-api` reads closed `v_bins_10min` bins and builds the features with the harness's time-based rules (`local_models.features_from_bins`), then fits and serves local models. The target is the mean over the bin 30-40 minutes after the newest closed bin, which is 9-19 minutes ahead of the request when ingestion is current (`lead_min`). A direction with stale data answers 503. The service is public (invoker IAM check disabled, by decision). `v_forecast_recent`, `lin_h30`, `xgb_h30` and the BQML registry remain as historical resources; the HTTP API does not call them.
 - View and BQML DDL checked in under [sql/](../sql/) (exported 2026-09-26). Apply order: [sql/README.md](../sql/README.md).
 - A 24-hour forecast is the product intent. It is not what the live API emits.
 

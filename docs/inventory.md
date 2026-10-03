@@ -1,5 +1,12 @@
 # GCP inventory (dated copy)
 
+**Camera tables and forecast access, 2026-10-04 approximately 00:45-01:05 SGT** (read-only `bq show`, aggregates, Cloud Audit Logs). No settings changed.
+- **`cam2701.Cam2701`:** 298,137 rows; 3,513 frames on 33 days, 2026-03-13 to 2026-04-22; last modified 2026-07-18. Classes `car`, `motorcycle`, `bus`, `truck` and `pedestrian`. Directions `to_JB`, `to_Woodlands` and `none`. Minimum confidence 0.12. View `v_congestion_index_10min`.
+- **`cam2702.Cam2702`:** 233,463 rows; 3,507 frames on the same 33 days; last modified 2026-07-18. `camera_id` 2702. No pedestrian rows, no `none` direction, minimum confidence 0.10, no view.
+- **Common to both:** neither table records a model or workflow version.
+- **Live detections:** none are written anywhere. `swiftbackend` (`camdetect/main.py`) has no BigQuery or Cloud Storage client.
+- **`forecast-api` access:** `run.googleapis.com/invoker-iam-disabled: true` was set by an `UpdateService` call from the project owner at 2026-10-03 14:27:44 UTC, after that day's Cloud Build deploys (create 10:33 UTC, replace 10:59-11:00 UTC) had left it private. Service IAM policy is empty. Revision `forecast-api-00002-zaj`; an anonymous GET returned 200 with CORS `*`.
+
 **Diagram refresh, 2026-10-04 approximately 00:35 SGT:** fresh read-only Cloud Run and bucket listings returned the same four service revisions and seven buckets recorded below. An anonymous forecast GET again returned `source: local model`, `horizon_min: 30`, `SG_TO_MY: lin_bq[frozen]`, and `MY_TO_SG: persistence`. This refresh did not re-count BigQuery tables; diagrams omit volatile row counts. No cloud settings changed.
 
 ## Latest verification: 2026-10-03, approximately 23:35-23:40 SGT
