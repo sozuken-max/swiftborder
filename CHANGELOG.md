@@ -2,7 +2,13 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-04
+
+- Regenerate all four `docs/images/` deck PNGs with built-in image generation after rechecking live serving and storage. Update architecture/evaluation Mermaid and report embeds for the local forecast API, current Hosting connection, historical BQML, pending vision metrics and seven verified buckets. Record prompts and visual QA in `docs/diagrams/`; refresh the diagram skill and its Cursor mirror. No application code or cloud settings changed.
+
 ## 2026-10-03
+
+- Add `docs/final-report-readiness.md`: repository, evaluation, live GCP and diagram review, with prioritized submission gaps. Refresh the inventory with the deployed local-model forecast API, public access, newer camera revision, seven buckets and current ingestion. All 315 fast tests and five slow TensorFlow tests passed. No cloud settings or application code changed in this review.
 
 - PR #3 fixes two evaluation edge cases.
   - `promote_report_run.py` now refuses source and report directories that are equal or nested. Before the fix, `rmtree` on the report directory could delete the source run.

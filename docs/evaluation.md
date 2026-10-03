@@ -4,13 +4,13 @@
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
 **Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `b3b6562`, clean tree, `code_sha256` `39fa1c24…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family).
 
-Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` are stale until regenerated ([diagrams/README.md](diagrams/README.md)).
+Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` were regenerated on 4 Oct 2026 ([diagrams/README.md](diagrams/README.md)).
 
 ---
 
 ## What would count as success
 
-The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes. **Both stay targets.** The live serve path emits a **30-minute** forecast of Google Maps `duration_in_traffic` (`v_forecast_recent`). No model here forecasts beyond 60 minutes, and there is no independent crossing-time label to test the 15-minute target against.
+The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes. **Both stay targets.** The live `forecast-api` emits a local-model forecast of Google Maps `duration_in_traffic` with a nominal **30-minute bin-start shift**. The BQML results below evaluate the earlier `v_forecast_recent` policy; see [inventory.md](inventory.md) for current serving and [final-report-readiness.md](final-report-readiness.md) for timing and inference limitations. No model here forecasts beyond 60 minutes, and there is no independent crossing-time label to test the 15-minute target against.
 
 ---
 
@@ -134,6 +134,8 @@ flowchart LR
 ```
 <!-- /mermaid:eval-layer-a -->
 
+![Layer A evaluation protocol, refreshed 4 Oct 2026](images/eval-layer-a.png)
+
 ### Results table
 
 | Candidate | Split | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | Count MAE | Day | Night |
@@ -149,36 +151,25 @@ flowchart LR
 <!-- mermaid:eval-layer-b -->
 ```mermaid
 flowchart LR
-  DATA["v_training_set<br/>Maps-only features<br/>label y_30"]
-  CAND["Candidates<br/>persistence lin_h30 xgb_h30<br/>ensemble mean"]
-  HAR["layer_b.py<br/>fixed window 13-30 Sep SGT<br/>after model training 12 Sep"]
-  SIG["significance.py<br/>DM-HAC + day-block CI<br/>Holm per family"]
-  REP["eval/runs/report/<br/>run.json schema v2"]
-  REG["model_registry<br/>per-direction serving_model<br/>not written by harness"]
-  SRV["Serve 30 min<br/>v_forecast_recent<br/>lin_h30 or persistence"]
-  DATA --> CAND --> HAR --> SIG --> REP
-  REG --> SRV
-  REP -.->|"evidence for promotion"| REG
-
-  subgraph OFF["Offline, in eval/"]
-    JX["joined.py<br/>rolling daily folds<br/>Maps vs +weather vs +camera"]
-    EN["ensemble.py<br/>served, stack, selection<br/>fuzzy-gated stack"]
-    OX["timeseries_xgb.py<br/>60 min jb_to_woodlands"]
-    DL["deep_forecast.py<br/>LSTM GRU patch Transformer<br/>same rows as XGB"]
-    FZ["fuzzy_traffic.py<br/>light moderate heavy<br/>rule base, XGB to fuzzy"]
+  DATA["Maps duration series<br/>causal features and label times"] --> MODELS["Forecast experiments<br/>30-min BQML and daily refits<br/>60-min XGB and deep models<br/>fuzzy levels and ensembles"]
+  MODELS --> SCORE["Paired held-out scoring<br/>persistence baseline<br/>MAE / RMSE or classification loss"]
+  SCORE --> SIG["DM-HAC and block intervals<br/>family + run-wide Holm<br/>pooled-day dependence: review open"]
+  SIG --> REPORT["eval/runs/report/run.json<br/>versioned results and provenance"]
+  REPORT -.->|"manual evidence-based selection"| SERVE["forecast-api local models<br/>interim per-direction selection<br/>nominal 30-minute bin shift"]
+  subgraph INPUTS["Offline feature experiments"]
+    WX["Weather: scored"] --> MODELS
+    PROFILE["Mar-Apr camera queue profile: scored"] --> MODELS
+    CAMERA["Observed camera counts: pending"] -.-> MODELS
   end
-  HAR --> EN
-  JX --> EN
-  JX --> SIG
-  EN --> SIG
-  OX --> SIG
-  DL --> SIG
-  FZ --> SIG
-  CAMFC["camera_forecast.py<br/>queue profile from Mar-Apr<br/>Layer A detections"] --> JX
-  CAM["observed camera counts<br/>no overlap with Maps window"] -.->|"pending backfill"| JX
-  INTENT["24h horizon<br/>target, not served"] -.-> SRV
+  subgraph LIMITS["Interpretation"]
+    L1["Maps estimates are the label<br/>not independent crossing time"]
+    L2["Deep hold-out: five day-blocks<br/>insufficient data for significance"]
+    L3["24-hour horizon and real crossing MAE <=15 min<br/>remain targets"]
+  end
 ```
 <!-- /mermaid:eval-layer-b -->
+
+![Layer B evaluation protocol, refreshed 4 Oct 2026](images/eval-layer-b.png)
 
 **Frozen run.** It is local only (BigQuery ML is represented by local replicas, §1a). The windows, the claims the October-only confirmation run tests (C1–C8), the 0.5-minute practical threshold and the 60-minute design are fixed in advance in [roadmap.md](roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt). `generate_comparison_plots.py --data-cutoff` enforces the cutoff on every component.
 
@@ -414,7 +405,7 @@ On 30 Sep the stack put about 0.61 of its weight on `xgb[maps]`, 0.24 on persist
 
 **60 minutes, one route:** the equal mean of XGBoost and the three deep models scored 3.655 min, the deep-only mean 3.929 and a rolling stack 3.561, all against XGBoost's 3.469. Every decision is "insufficient data" (5 blocks).
 
-**Finding:** ensembling and hybridising add nothing measurable over the best single model. The daily-refit `xgb[maps]` is within 0.02 min of every combiner, and the equal mean is worse. The gain available now is from **what is served**: replacing the registry choice with `xgb[maps]` or the stack would cut 30-minute MAE by about 0.27–0.29 min, about 16–17 seconds (significant, also under run-wide Holm; below the proposed 0.5-min serving threshold). The served choice itself is not significantly better than persistence on this window. Changing the serve path is an approved deploy (a daily retrain job and a `v_forecast_recent` change), not something the harness does.
+**Finding:** ensembling and hybridising add nothing measurable over the best single model. The daily-refit `xgb[maps]` is within 0.02 min of every combiner, and the equal mean is worse. The gain available now is from **what is served**: replacing the registry choice with `xgb[maps]` or the stack would cut 30-minute MAE by about 0.27–0.29 min, about 16–17 seconds (significant, also under run-wide Holm; below the proposed 0.5-min serving threshold). The served choice itself is not significantly better than persistence on this window. These are historical BQML-era comparisons. Current local serving and its selection policy are documented in [ADR 0004](adr/0004-serve-local-models.md); the harness does not deploy a selection.
 
 Plots: `eval/runs/report/ensemble/ensemble-30min-mae-diff.png`, `ensemble/ensemble-60min-mae-diff.png`.
 

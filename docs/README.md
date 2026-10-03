@@ -6,6 +6,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 
 | Report section | Doc |
 | --- | --- |
+| Final-report readiness review (3 Oct 2026) | [final-report-readiness.md](final-report-readiness.md) |
 | Tools, techniques, system design | [architecture.md](architecture.md) |
 | Performance: methods, reasoning, result tables | [evaluation.md](evaluation.md) |
 | Findings and what may be claimed | [findings.md](findings.md) |
@@ -15,7 +16,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
 | Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |
-| 30-minute forecast HTTP API (undeployed) | [runbooks/forecast-api.md](runbooks/forecast-api.md); serving local models: [adr/0004](adr/0004-serve-local-models.md) |
+| 30-minute forecast HTTP API (deployed; current access and timing findings in inventory/review) | [runbooks/forecast-api.md](runbooks/forecast-api.md); serving local models: [adr/0004](adr/0004-serve-local-models.md) |
 | Release checklist for PR #2: redeploy smoke test and rollback, weather-append verification and retention, credential risk | [release-pr2.md](release-pr2.md) |
 | Evidence appendix (dated GCP copy) | [inventory.md](inventory.md) |
 | Layer B harness and report figures | [../eval/README.md](../eval/README.md), committed snapshot [../eval/runs/report/](../eval/runs/report/) |
@@ -37,6 +38,6 @@ Design figures are **high-level** and **detailed** views of one system, not an a
 | `diagrams/eval-layer-b.mmd` | `eval-layer-b.png` | Performance: Layer B method |
 | — | `../eval/runs/report/{offline,bqml,joined,deep,fuzzy,ensemble}/*.png` | Performance: scored comparison plots (see [evaluation.md](evaluation.md)) |
 
-The four deck PNGs predate the 2026-10-01 fact pass and are **stale** until regenerated ([diagrams/README.md](diagrams/README.md#png-exports-are-stale-regenerate-before-the-deck)). The Mermaid sources are current. There is no as-is / to-be pair.
+The four deck PNGs were regenerated on 4 Oct 2026 from the updated topology and fresh GCP checks. See [diagrams/README.md](diagrams/README.md) for generation and QA notes.
 
 Region layout is not part of the graded story.
