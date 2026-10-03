@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Run the camdetect, Causeway, and eval test suites (and repo doc checks).
+# Run the camdetect, Causeway, eval, and forecastapi test suites (and repo doc checks).
 #
 #   python3.11 -m venv .venv
 #   .venv/bin/pip install -r camdetect/requirements-dev.txt -r Causeway/requirements-dev.txt -r eval/requirements-dev.txt
 #   .venv/bin/pip install -r eval/requirements-notebook.txt   # only for --slow
 #
 # Usage: scripts/run_tests.sh [--slow] [--coverage] [suite ...]
-#   suites: camdetect Causeway eval repo (default: all)
+#   suites: camdetect Causeway eval forecastapi repo (default: all)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,7 +27,7 @@ for arg in "$@"; do
     *) suites+=("$arg") ;;
   esac
 done
-if [[ ${#suites[@]} -eq 0 ]]; then suites=(camdetect Causeway eval repo); fi
+if [[ ${#suites[@]} -eq 0 ]]; then suites=(camdetect Causeway eval forecastapi repo); fi
 
 failed=()
 for name in "${suites[@]}"; do

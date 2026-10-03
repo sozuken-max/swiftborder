@@ -10,10 +10,12 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | Performance: methods, reasoning, result tables | [evaluation.md](evaluation.md) |
 | Findings and what may be claimed | [findings.md](findings.md) |
 | What remains, and the order to do it | [roadmap.md](roadmap.md) |
+| Evaluation data cutoff (19 Oct 2026 23:59 SGT) | [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03) |
 | LSTM, GRU and Transformer forecasters: design, results, when to revisit | [deep-learning-assessment.md](deep-learning-assessment.md) |
 | Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
 | Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |
+| 30-minute forecast HTTP API (undeployed) | [runbooks/forecast-api.md](runbooks/forecast-api.md) |
 | Release checklist for PR #2: redeploy smoke test and rollback, weather-append verification and retention, credential risk | [release-pr2.md](release-pr2.md) |
 | Evidence appendix (dated GCP copy) | [inventory.md](inventory.md) |
 | Layer B harness and report figures | [../eval/README.md](../eval/README.md), committed snapshot [../eval/runs/report/](../eval/runs/report/) |

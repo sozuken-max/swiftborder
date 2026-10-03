@@ -9,6 +9,23 @@
 
 The report describes **one system at two depths** (high-level, then detailed). This page is the sequence that gets the empty tables in [evaluation.md](evaluation.md) filled and the claims in [findings.md](findings.md) updated. It is not a second architecture.
 
+## Evaluation freeze (decided 2026-10-03)
+
+**Label cutoff:** 2026-10-19 23:59 SGT (2026-10-19T15:59:59Z). Final deliverables stay **31 Oct 2026**. From 20 Oct through 31 Oct the work is scoring the frozen window and writing the report, deck, and video.
+
+**Scoring rule.** Every reported table, figure, and comparison uses only rows whose label or target time is at or before that instant. Rows collected later may stay in BigQuery for the live demo. They are out of the report. This is not an outage. Leave Cloud Scheduler `Gmap-Woodlands` (`*/5 * * * *`, Asia/Singapore, writing `traffic-24h.json`) and `swiftbackend` running. Do not delete the scheduler.
+
+**Before 19 Oct 23:59 SGT, if it is to appear in the report**
+
+1. Score a Roboflow Layer A `test` export with [`eval/layer_a.py`](../eval/layer_a.py) (step 4).
+2. Observed September counts only if the Roboflow key holder runs the backfill before the 19th ([handoff-camera-pilot.md](handoff-camera-pilot.md)). The 6-11 Sep frames already exist. The cutoff does not create them. A read on 2026-10-03: `cam2701` / `cam2702` detection rows end 22 Apr 2026, `traffic_images.metadata` has frames through 11 Sep 2026, `traffic_images.labels` is empty, and no detection overlaps the Maps label.
+3. Re-promote the existing 30-minute harness on a longer window that still ends at or before the cutoff (step 2). 13 Sep through 19 Oct is 37 calendar days, so that window has more than 10 day-blocks. The published 13-30 Sep window (18 days) already does.
+4. Train deep models on the local machine ([adr/0003](adr/0003-deep-training-and-feature-matrix.md), Accepted). Do not start a GCP training job.
+
+The promoted offline 60-minute one-route split stays at 5 day-blocks unless that split is extended before the cutoff. The same 80/20 split on a series that starts 6 Sep and ends at this cutoff is still about 9 day-blocks, below 10, so those 60-minute and deep decisions stay **insufficient data**. Do not invent a new split to clear the threshold. A 24-hour horizon and <= 15 min MAE stay targets. The cutoff does not meet them.
+
+**After 19 Oct 23:59 SGT:** no new feature arms, no new model families, no expansion to a 24-hour horizon. Re-run the existing harness on the frozen window, fill [evaluation.md](evaluation.md) and [findings.md](findings.md) from that run, and finish the deck and video.
+
 ---
 
 ## Already true
@@ -50,8 +67,8 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 **Remaining**
 
 1. Keep slide/report wording distinct: **60 min offline XGB (one route)** vs **30 min production serve (both directions)**.
-2. Before the final report, extend the window (more days, more rain events) and re-run `generate_comparison_plots.py --bqml --joined` from a clean tree, then promote (see [eval/README.md](../eval/README.md#reproduce-the-report-run)).
-3. Deep-learning forecasters are scored and not served; see [deep-learning-assessment.md](deep-learning-assessment.md) for when to revisit.
+2. Before the [evaluation freeze](#evaluation-freeze-decided-2026-10-03), extend the 30-minute window (more days, more rain events) so it still ends at or before 2026-10-19 23:59 SGT, and re-run `generate_comparison_plots.py --bqml --joined` from a clean tree, then promote (see [eval/README.md](../eval/README.md#reproduce-the-report-run)).
+3. Deep-learning forecasters are scored and not served; see [deep-learning-assessment.md](deep-learning-assessment.md) for when to revisit. The wavelet, importance, and camera-profile matrix, and the decision to keep training local, are in [adr/0003-deep-training-and-feature-matrix.md](adr/0003-deep-training-and-feature-matrix.md).
 
 **Done when** the report cites data source, horizon, and persistence baseline for each table. Do not write "we beat Google." Maps is the label.
 

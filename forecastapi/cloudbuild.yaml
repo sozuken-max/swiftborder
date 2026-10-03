@@ -1,0 +1,59 @@
+# Pytest, then deploy Cloud Run service forecast-api.
+# Not swiftbackend. Not trigger 76bbca35. No GPU, no Roboflow key, no Maps key.
+# A GitHub trigger on ^main$ should call this file. A push of this branch does not.
+
+steps:
+  - id: Test
+    name: python:3.11
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install -q -r forecastapi/requirements-dev.txt
+        python -m pytest forecastapi
+  - id: Buildpack
+    name: gcr.io/k8s-skaffold/pack
+    entrypoint: pack
+    args:
+      - build
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --builder=gcr.io/buildpacks/builder:latest
+      - --network=cloudbuild
+      - --publish
+      - --path=forecastapi
+      - --env=GOOGLE_FUNCTION_TARGET
+    env:
+      - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
+  - id: Deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE_NAME
+      - --project=$_AR_PROJECT_ID
+      - --platform=managed
+      - --region=$_DEPLOY_REGION
+      - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --min-instances=0
+      - --service-account=$_RUNTIME_SERVICE_ACCOUNT
+      - --no-allow-unauthenticated
+      - --set-env-vars=BQ_PROJECT=$_AR_PROJECT_ID
+      - --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
+      - --quiet
+
+substitutions:
+  _AR_HOSTNAME: asia-southeast1-docker.pkg.dev
+  _AR_PROJECT_ID: swiftborder
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _DEPLOY_REGION: asia-southeast1
+  _FUNCTION_TARGET: forecast
+  _SERVICE_NAME: forecast-api
+  _RUNTIME_SERVICE_ACCOUNT: forecast-api@swiftborder.iam.gserviceaccount.com
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
+
+tags:
+  - forecast-api

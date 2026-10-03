@@ -11,7 +11,7 @@ Evaluation harnesses for Layer A and Layer B. Nothing here deploys `swiftbackend
 | [`layer_b.py`](layer_b.py) | Production models at 30 min on a **fixed** window after training (default 13 Sep 00:00 SGT to the latest labelled bin): persistence, `lin_h30`, `xgb_h30`, ensemble; slices by direction, time of day, day type, day/night; refuses models trained inside the window |
 | [`joined.py`](joined.py) | Offline joined-feature experiment at 30 min: rolling daily folds; Maps vs + weather vs + camera; ridge, XGBoost, ensemble; persistence and Maps-typical baselines |
 | [`features.py`](features.py) | Causal 10-min feature table: `v_training_set` logic in pandas (parity-checked against the live view), rainfall, 2-h forecast, camera counts |
-| [`timeseries_xgb.py`](timeseries_xgb.py) | Offline 60-min sklearn XGBoost, `jb_to_woodlands` only (JB → SG); causal inputs, raw labels, split on target time |
+| [`timeseries_xgb.py`](timeseries_xgb.py) | Offline 60-min sklearn XGBoost, `jb_to_woodlands` only (JB → SG); causal inputs, raw labels, split on target time. `python timeseries_xgb.py` scores the window ablation below |
 | [`timeseries_lstm.py`](timeseries_lstm.py), [`train_lstm.py`](train_lstm.py) | Recurrent architectures and a tuning CLI on the same rows as offline XGB (seeded by `LSTMTrainConfig.seed`) |
 | [`timeseries_transformer.py`](timeseries_transformer.py) | Patch Transformer encoder (6 × 30-min patches, pre-LN, flatten head, about 19k weights) |
 | [`deep_forecast.py`](deep_forecast.py) | Scored deep component: LSTM, GRU, patch Transformer (+ raw-target ablation), one training protocol, 3 seeds, DM/Holm vs persistence and XGB ([assessment](../docs/deep-learning-assessment.md)) |
@@ -63,6 +63,38 @@ python joined.py --start 2026-09-13 --end 2026-09-30
 python features.py --build --parity                 # feature table + parity with the live view
 python layer_a.py --coco <export>/_annotations.coco.json --predictions preds.json --frame-times times.csv
 ```
+
+## Window-feature ablation (offline XGB)
+
+Chad's day-2 note: a discrete wavelet gives trees a trend and a bend that raw lags do not. This is an extra comparison in [`timeseries_xgb.py`](timeseries_xgb.py), not a change to the model in [`runs/report/`](runs/report/). `use_dwt` stays off for that snapshot.
+
+Same chronological split, same `XGBTrainConfig`, same raw labels, same persistence baseline as the offline 60-minute path. The three sets are only the window columns (calendar, D-1/D-7, and origin `duration_sec` stay on the default model and out of this comparison):
+
+| Set | Columns |
+| --- | --- |
+| A | lags (`target_lag_*`, default 12 bins) |
+| B | A, plus the first difference (one 5-minute bin) and a causal rolling mean |
+| C | A, plus the window mean, the window standard deviation, and wavelet coefficients |
+
+The rolling mean uses 12 bins (60 minutes), the same span as `keep_lags` and the 60-minute horizon, ending at the forecast origin. The wavelet is Daubechies **db2 at level 2** (level 3 is `--dwt-level 3`). Each window is z-scored before the transform so the coefficients describe shape; mean and std are kept as columns so the level is not discarded. A zero-std window becomes a zero shape and still emits mean and std. **db4 is not the default** because it smooths the bends. Nothing in the window is after the origin.
+
+```bash
+cd eval
+python timeseries_xgb.py
+python timeseries_xgb.py --dwt-level 3 --json-out runs/wavelet-ablation.json
+```
+
+The cache is `data/causeway_gdata.csv` (gitignored). The command prints MAE and RMSE in minutes against persistence. Significance follows [`significance.py`](significance.py): Diebold-Mariano, day-block bootstrap, Holm. Below 10 day-blocks the decision is **insufficient data** and the command reports point estimates only (no p-values). Leave those estimates out of `docs/evaluation.md` and `runs/report/` unless a promoted run produced them.
+
+Local run of `python timeseries_xgb.py --json-out runs/wavelet-ablation.json` on `data/causeway_gdata.csv` (sha256 `13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07`, 3,484,144 bytes). Route `jb_to_woodlands`, 7,183 rows, observed 2026-09-06 01:53:30 to 2026-10-01 00:30:03 SGT. Split boundary 2026-09-26 01:35 (5,710 train / 1,428 test), the same boundary as section 3 of [docs/evaluation.md](../docs/evaluation.md). A/B/C use only the window columns above. Persistence T-60 on that hold-out: MAE 4.6770 min, RMSE 6.3858 min.
+
+| Set | MAE (min) | RMSE (min) |
+| --- | --- | --- |
+| A | 4.0830 | 5.4636 |
+| B | 4.0722 | 5.4507 |
+| C (db2, level 2) | 3.9919 | 5.4846 |
+
+Printed to 4 decimal places (unrounded values are in the gitignored JSON). The test labels cover 6 calendar dates and **5 day-blocks** under the harness rule, so the decision is **insufficient data**. These are point estimates of error on the Maps duration series for this window comparison.
 
 ## Camera backfill (Roboflow free tier)
 

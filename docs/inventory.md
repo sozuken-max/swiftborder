@@ -1,6 +1,6 @@
 # GCP inventory (dated copy)
 
-**Observed:** 2026-10-01 ~00:40 SGT (2026-09-30 16:38 UTC), read-only `gcloud` / `bq` queries of project `swiftborder`, plus model, view and horizon checks from the 2026-09-30 ~21:35 SGT pass. **One change since:** the weather tables were appended on 2026-10-01 ~01:50 SGT (requested by the team; see `rainfall` / `weatherforecast` below). No other resources or settings were changed. Camera and image date ranges, and `model_registry`, were re-queried read-only on 2026-10-01 ~03:30 SGT. When this file and the project disagree, the project wins; re-query and update this file.
+**Observed:** 2026-10-01 ~00:40 SGT (2026-09-30 16:38 UTC), read-only `gcloud` / `bq` queries of project `swiftborder`, plus model, view and horizon checks from the 2026-09-30 ~21:35 SGT pass. **One change since:** the weather tables were appended on 2026-10-01 ~01:50 SGT (requested by the team; see `rainfall` / `weatherforecast` below). No other resources or settings were changed. Camera and image date ranges, and `model_registry`, were re-queried read-only on 2026-10-01 ~03:30 SGT. **2026-10-03 ~10:48 SGT** re-checked `causeway.travel_times` metadata, `traffic-24h.json`, bucket CORS, Hosting, and the Maps scheduler (see those sections). **2026-10-03 ~11:20 SGT** re-checked `traffic_prediction` models, `model_registry`, and `v_forecast_recent`, and listed Cloud Run services (see those sections). No forecast HTTP service exists. When this file and the project disagree, the project wins; re-query and update this file.
 
 ## Project metadata
 
@@ -25,7 +25,7 @@ Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, `weatherforecast`
 
 ### `causeway`
 
-- **Partitioned table `travel_times`** -- location `US`; **14,368 rows** (7,184 per direction), `observed_at` 2026-09-05 17:53 UTC to 2026-09-30 16:35 UTC. Partitioned on `observed_date_sgt`, clustered on `route_id`. Maps Distance Matrix logging (**LIVE**). Mean `duration_in_traffic_sec`: **26.0 min** (`MY_TO_SG`), **25.4 min** (`SG_TO_MY`).
+- **Partitioned table `travel_times`** -- location `US`; **14,368 rows** (7,184 per direction), `observed_at` 2026-09-05 17:53 UTC to 2026-09-30 16:35 UTC, as queried 2026-10-01. Partitioned on `observed_date_sgt`, clustered on `route_id`. Maps Distance Matrix logging (**LIVE**). Mean `duration_in_traffic_sec`: **26.0 min** (`MY_TO_SG`), **25.4 min** (`SG_TO_MY`) on that 2026-10-01 snapshot. On **2026-10-03 ~10:48 SGT** table metadata showed **15,760 rows** and **2,742,224** logical bytes (streaming buffer estimated 4 rows). A read-only query of `observed_date_sgt` from the previous Singapore date, `status = 'OK'`, both Woodlands routes, returned **418** rows per route and `MAX(observed_at)` **2026-10-03 02:45:03 UTC**. The means above were not recomputed.
 - Routes: `jb_to_woodlands` = `MY_TO_SG`, `mandai_to_shell_jb` = `SG_TO_MY` (1:1).
 
 ### `rainfall` / `weatherforecast`
@@ -53,6 +53,7 @@ Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 20
   - Both: `dataSplitMethod = CUSTOM`, `dataSplitColumn = is_val` (11–12 Sep), label `y_30`. BQML-internal eval MAE 3.04 (lin) / 2.87 (xgb) on that split; these are not harness results. Every date from **13 Sep** is out-of-sample for both.
 - **`v_bins_10min`**, **`v_training_set`** (last modified 2026-09-12 13:58 SGT), **`v_forecast_recent`** (2026-09-12 14:16 SGT) -- live SQL matches [sql/](../sql/) (2026-09-30 check). `v_training_set` uses Maps columns only; `LEAD(bin_ts, 3)` was exactly 30 min on every row (0 of 3,572 per direction differ, 2026-09-30).
 - `v_forecast_recent` serves **30 minutes** ahead: `lin_h30` where the registry says so, otherwise persistence.
+- **2026-10-03 ~11:20 SGT** (read-only): `bq ls --models` still only `lin_h30` and `xgb_h30`. `model_registry` still the two rows above. `INFORMATION_SCHEMA.VIEWS` for `v_forecast_recent` still matches the checked-in SQL (`ML.PREDICT` on `lin_h30`, `INTERVAL 30 MINUTE`). `bq show --model` has one training run each and no version list. Resource `creationTime`: `lin_h30` `2026-09-12T06:15:33.163Z`, `xgb_h30` `2026-09-12T06:19:18.783Z`. `gcloud run services list` returned only `gmap-woodlands-fetcher` and `swiftbackend`.
 
 ## Cloud Run / Scheduler / Storage
 
@@ -71,10 +72,11 @@ Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 20
 - `includedFiles`: `camdetect/main.py`, `camdetect/requirements.txt`, `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`, `camdetect/*.{yaml,yml,json,toml}`. Tests, `pytest.ini`, `requirements-dev.txt` and `README.md` do not start a build.
 - Latest builds: `33a6d0e5` (2026-09-26 07:07 UTC, SUCCESS, `e49b232`), `8ca80327` (06:31 UTC, SUCCESS, `cf1c228`).
 - The Maps fetcher, backfill job, views and models are not in this trigger. A GitHub Actions test workflow ([.github/workflows/tests.yml](../.github/workflows/tests.yml)) is committed on branch `eval-integrity-overhaul` (PR #2), not yet on `main`; it runs tests only and deploys nothing.
+- **2026-10-03:** a second trigger, `forecast-api` (`949ff029-31c9-4521-8ff4-d0e8d16dfa25`), GitHub `sozuken-max/swiftborder`, push to `^main$`, config `forecastapi/cloudbuild.yaml`. `includedFiles` is `forecastapi/**` and `forecastapi/cloudbuild.yaml`. `ignoredFiles` is `camdetect/**`. It has not run. Cloud Run still lists only `gmap-woodlands-fetcher` and `swiftbackend`. Runtime identity `forecast-api@swiftborder.iam.gserviceaccount.com` has `roles/bigquery.jobUser` and `roles/bigquery.dataViewer` on project `swiftborder` only. See [runbooks/forecast-api.md](runbooks/forecast-api.md).
 
 ### Cloud Scheduler
 
-- `Gmap-Woodlands` -- `*/5 * * * *` `Asia/Singapore` -> `gmap-woodlands-fetcher`. **ENABLED**; last attempt 2026-09-30 16:35 UTC.
+- `Gmap-Woodlands` -- `*/5 * * * *` `Asia/Singapore` -> `gmap-woodlands-fetcher`. **ENABLED** on 2026-10-03; last attempt recorded here is still 2026-09-30 16:35 UTC because this describe returned an empty `status` and no newer `lastAttemptTime`. The public object below was rewritten at 10:40:05 and 10:45:05 SGT.
 
 ### Cloud Storage (six buckets)
 
@@ -87,9 +89,11 @@ Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 20
 | `swiftborder-public` | `asia-southeast1` |
 | `swiftborder_cloudbuild` | `US` (underscore) |
 
+Public object `gs://swiftborder-public/traffic-24h.json` (`https://storage.googleapis.com/swiftborder-public/traffic-24h.json`). Observed **2026-10-03 10:45 SGT**: **18,478** bytes, `Cache-Control: public, max-age=300`, `updated_at_sgt` `2026-10-03T10:45:03`, **288** points on each of `mandai_to_shell_jb` (`SG_TO_MY`) and `jb_to_woodlands` (`MY_TO_SG`). Point triple: SGT minute timestamp, `duration_in_traffic_sec`, `speed_kmh`. A metadata describe at **10:55 SGT** showed size **18,480** and `update_time` `2026-10-03T02:55:06Z` (the 10:45 body was not re-parsed). Bucket CORS allows `GET` and `HEAD` from `https://swiftborder-92b45.web.app`, `https://swiftborder-92b45.firebaseapp.com`, and `http://localhost:5000`. Serve decision: [adr/0001-firebase-client-api-calls.md](adr/0001-firebase-client-api-calls.md).
+
 ### Firebase / Hosting
 
-No Firebase APIs are enabled (`gcloud services list --enabled`). Hosting is **planned**, not live.
+Checked **2026-10-03 10:57 SGT**. `https://swiftborder-92b45.web.app` and `https://swiftborder-92b45.firebaseapp.com` returned HTTP 200. `/`, `/app.js`, and `/style.css` share `Last-Modified: Sat, 19 Sep 2026 05:54:38 GMT` (15,989, 42,084, and 44,139 bytes). Response `Vary` includes `x-fh-requested-host`. Firebase Management API and Firebase Hosting API are disabled on GCP project `swiftborder` (`gcloud services list --enabled` returned no `firebase*` rows; both REST calls returned `SERVICE_DISABLED`). `gcloud projects describe swiftborder-92b45` returned permission denied for the active account, so that id is not confirmed as a project this account can read. No Cloud Build trigger and no GitHub workflow deploys this site. Decision: [adr/0002-firebase-hosting-source.md](adr/0002-firebase-hosting-source.md).
 
 ## Querying this project from a Windows dev box
 

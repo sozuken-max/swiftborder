@@ -232,3 +232,158 @@ def test_backtest_actual_window_matches_the_supervised_rows():
     assert got == pytest.approx(expected)
     persist = scores[scores["method"] == f"Persistence T-{config.horizon_minutes}"]["MAE_min"].iloc[0]
     assert persist == pytest.approx(tsx.mae_minutes(day_rows["y"], day_rows["persistence"]))
+
+
+# --- Wavelet / trend ablation (Chad, day 2) ------------------------------------
+
+
+def _wave_config(**kw) -> TimeSeriesConfig:
+    """Window long enough for db2 level 2 (and level 3 when asked)."""
+    base = dict(
+        window_size=32,
+        horizon_steps=3,
+        keep_lags=4,
+        trend_window=12,
+        train_fraction=0.7,
+        max_slew_step_sec=0,
+        include_trends=True,
+        use_dwt=True,
+        dwt_wavelet="db2",
+        dwt_level=2,
+    )
+    base.update(kw)
+    return TimeSeriesConfig(**base)
+
+
+def _coeff_columns(frame: pd.DataFrame) -> list[str]:
+    return [c for c in frame.columns if c.startswith("dwt_") and c not in (tsx.DWT_MEAN_COL, tsx.DWT_STD_COL)]
+
+
+def test_default_wavelet_is_db2_level_2():
+    assert tsx.DWT_WAVELET == "db2"
+    assert tsx.DWT_LEVEL == 2
+    assert tsx.DWT_LEVEL_COARSE == 3
+    cfg = TimeSeriesConfig()
+    assert cfg.dwt_wavelet == "db2"
+    assert cfg.dwt_level == 2
+    assert cfg.use_dwt is False
+    assert cfg.include_trends is False
+    assert cfg.trend_window == 12  # 60 minutes on the 5-minute grid
+
+
+def test_default_frame_does_not_add_wavelet_or_trend_columns():
+    config = _small_config()
+    sup = _sup(_synthetic_frame(80), config)
+    cols = tsx.feature_columns(sup)
+    assert not any(c.startswith("dwt_") or c.startswith("trend_") for c in cols)
+
+
+def test_zscore_shape_is_invariant_to_shift_and_positive_scale():
+    pytest.importorskip("pywt")
+    window = np.sin(np.linspace(0.2, 3.0, 36)) + np.array([0.1 * ((i % 5) - 2) for i in range(36)])
+    base = tsx.dwt_features_from_windows(window.reshape(1, -1), wavelet="db2", level=2)
+    shifted = tsx.dwt_features_from_windows((window + 80.0).reshape(1, -1), wavelet="db2", level=2)
+    scaled = tsx.dwt_features_from_windows((window * 4.0).reshape(1, -1), wavelet="db2", level=2)
+    coeffs = _coeff_columns(base)
+    np.testing.assert_allclose(base[coeffs].to_numpy(), shifted[coeffs].to_numpy(), atol=1e-8)
+    np.testing.assert_allclose(base[coeffs].to_numpy(), scaled[coeffs].to_numpy(), atol=1e-8)
+    assert base[tsx.DWT_MEAN_COL].iloc[0] == pytest.approx(float(np.mean(window)))
+    assert base[tsx.DWT_STD_COL].iloc[0] == pytest.approx(float(np.std(window, ddof=0)))
+    assert shifted[tsx.DWT_MEAN_COL].iloc[0] == pytest.approx(float(np.mean(window)) + 80.0)
+    assert shifted[tsx.DWT_STD_COL].iloc[0] == pytest.approx(float(np.std(window, ddof=0)))
+    assert scaled[tsx.DWT_MEAN_COL].iloc[0] == pytest.approx(float(np.mean(window)) * 4.0)
+    assert scaled[tsx.DWT_STD_COL].iloc[0] == pytest.approx(float(np.std(window, ddof=0)) * 4.0)
+
+
+def test_zero_std_window_is_a_zero_shape_and_keeps_mean():
+    pytest.importorskip("pywt")
+    constant = np.full(36, 42.0)
+    frame = tsx.dwt_features_from_windows(constant.reshape(1, -1), wavelet="db2", level=2)
+    row = frame.iloc[0]
+    assert row[tsx.DWT_MEAN_COL] == pytest.approx(42.0)
+    assert row[tsx.DWT_STD_COL] == pytest.approx(0.0)
+    np.testing.assert_allclose(row[_coeff_columns(frame)].to_numpy(dtype=float), 0.0)
+
+
+def test_db2_level_2_and_level_3_coefficient_counts_differ():
+    pytest.importorskip("pywt")
+    window = np.sin(np.linspace(0.0, 6.0, 36)).reshape(1, -1)
+    level2 = tsx.dwt_features_from_windows(window, wavelet="db2", level=2)
+    level3 = tsx.dwt_features_from_windows(window, wavelet="db2", level=3)
+    coeffs2 = _coeff_columns(level2)
+    coeffs3 = _coeff_columns(level3)
+    # periodization on length 36: level 2 is 9+9+18=36; level 3 is 5+5+9+18=37.
+    assert len(coeffs2) == 36
+    assert len(coeffs3) == 37
+    assert len([c for c in coeffs2 if c.startswith("dwt_a_")]) == 9
+    assert len([c for c in coeffs3 if c.startswith("dwt_a_")]) == 5
+    assert any(c.startswith("dwt_d2_") for c in coeffs2)
+    assert not any(c.startswith("dwt_d3_") for c in coeffs2)
+    assert any(c.startswith("dwt_d3_") for c in coeffs3)
+    assert tsx.DWT_MEAN_COL in level2.columns and tsx.DWT_STD_COL in level3.columns
+
+
+def test_trend_diff_and_rolling_mean_match_the_origin_window():
+    config = _wave_config(use_dwt=False)
+    sup = _sup(_synthetic_frame(80), config)
+    # Synthetic target is 1500 + 2 per bin, slew off, so the step is 2 seconds.
+    np.testing.assert_allclose(sup[tsx.TREND_DIFF_COL], 2.0)
+    np.testing.assert_allclose(
+        sup[tsx.TREND_ROLL_COL],
+        sup["target_lag_1"] - (config.trend_window - 1),
+    )
+
+
+def test_wavelet_and_trends_do_not_change_when_the_future_changes():
+    pytest.importorskip("pywt")
+    config = _wave_config()
+    base = _synthetic_frame(90)
+    sup = _sup(base, config)
+    row = sup.iloc[len(sup) // 2]
+    origin = row["origin_ts"]
+    perturbed = base.copy()
+    obs = pd.to_datetime(perturbed["observed_at_sgt"])
+    future = obs > origin + STEP
+    perturbed.loc[future, "duration_in_traffic_sec"] += 10_000
+    perturbed.loc[future, "duration_sec"] += 10_000
+    sup2 = _sup(perturbed, config)
+    row2 = sup2.set_index("target_ts").loc[row["target_ts"]]
+    cols = tsx.ablation_feature_columns(sup, "B") + [
+        c for c in tsx.ablation_feature_columns(sup, "C") if c not in tsx.ablation_feature_columns(sup, "A")
+    ]
+    pd.testing.assert_series_equal(row[cols].astype(float), row2[cols].astype(float), check_names=False)
+    assert row2["y"] != row["y"]
+
+
+def test_feature_set_a_is_the_lag_prefix_of_b_and_c():
+    pytest.importorskip("pywt")
+    config = _wave_config()
+    sup = _sup(_synthetic_frame(90), config)
+    a = tsx.ablation_feature_columns(sup, "A")
+    b = tsx.ablation_feature_columns(sup, "B")
+    c = tsx.ablation_feature_columns(sup, "C")
+    assert a == [col for col in sup.columns if col.startswith("target_lag_")]
+    assert b[: len(a)] == a
+    assert c[: len(a)] == a
+    assert b == a + [tsx.TREND_DIFF_COL, tsx.TREND_ROLL_COL]
+    assert tsx.DWT_MEAN_COL in c and tsx.DWT_STD_COL in c
+    assert tsx.TREND_DIFF_COL not in c
+    assert not any(col.startswith("dwt_") for col in b)
+    assert "hour" not in a and "d1" not in a and "duration_sec" not in a
+
+
+def test_compare_feature_sets_reports_point_estimates_without_pvalues_on_a_short_holdout():
+    pytest.importorskip("pywt")
+    pytest.importorskip("xgboost")
+    config = _wave_config(xgb=XGBTrainConfig(n_estimators=5, min_child_weight=1))
+    features = engineer_features(tsx.prepare_route_frame(_synthetic_frame(120), config), config)
+    result = tsx.compare_window_feature_sets(features, config)
+    assert result["significance"] == "insufficient data"
+    assert result["day_blocks"] < tsx.MIN_BLOCKS
+    assert "comparisons" not in result
+    assert [row["feature_set"] for row in result["sets"]] == ["A", "B", "C"]
+    assert result["wavelet"] == "db2" and result["dwt_level"] == 2
+    for row in result["sets"]:
+        assert row["mae_min"] >= 0.0 and row["rmse_min"] >= 0.0
+    assert set(result["columns"]["A"]) < set(result["columns"]["B"])
+    assert set(result["columns"]["A"]) < set(result["columns"]["C"])

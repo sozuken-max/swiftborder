@@ -2,6 +2,15 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-03
+
+- Evaluation freeze: reported rows must have a label or target time at or before 2026-10-19 23:59 SGT. Through the 31 Oct deliverables the remaining work is the frozen-window harness, the report, and the deck. Collectors stay up. Recorded in [docs/roadmap.md](docs/roadmap.md) and [docs/evaluation.md](docs/evaluation.md).
+- `forecastapi/`: undeployed HTTP read of the 30-minute Maps `duration_in_traffic` forecast (`model` and `version` select an allow-list refreshed from BigQuery; 5-minute in-process cache). `GET /?list=models` lists every catalog id; only `lin_h30`, `xgb_h30`, and `persistence` are callable. Runbook: [docs/runbooks/forecast-api.md](docs/runbooks/forecast-api.md). `forecastapi/cloudbuild.yaml` is a separate Cloud Build path (pytest, then Cloud Run `forecast-api` in `asia-southeast1` on `^main$` only). Not deployed from this branch. Trigger `76bbca35` is unchanged.
+- [docs/adr/0001-firebase-client-api-calls.md](docs/adr/0001-firebase-client-api-calls.md): the Firebase travel-time cards keep reading public `traffic-24h.json`. That decision is unchanged, and `camdetect` `detect` is unchanged.
+- [docs/adr/0002-firebase-hosting-source.md](docs/adr/0002-firebase-hosting-source.md): put the Hosting client in this repo once `index.html`, `style.css`, `app.js`, and a recovered `firebase.json` are together. Deploy stays manual. No Hosting workflow, and `app.js` was not copied.
+- Offline XGB window ablation in `eval/timeseries_xgb.py` (Chad, day 2): (A) lags, (B) lags plus a causal first difference and a 60-minute rolling mean, (C) lags plus a per-window z-score Daubechies db2 wavelet at level 2 (level 3 optional; db4 is not the default). `use_dwt` stays off for the promoted report model. `python timeseries_xgb.py` scores the cache; below 10 day-blocks it prints point estimates only.
+- [docs/adr/0003-deep-training-and-feature-matrix.md](docs/adr/0003-deep-training-and-feature-matrix.md): keep LSTM / GRU / Transformer training on the local CPU. The next matrix is trees on the full wavelet and camera-profile factorial; deep models only on the cells importance selects. No GCP job.
+
 ## 2026-10-01
 
 Branch `eval-integrity-overhaul` (PR #2). Work plan and task status: `docs/plan-eval-integrity.md`.

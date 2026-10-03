@@ -16,7 +16,8 @@ Read [AGENTS.md](../AGENTS.md) first. Do not invent services, env vars, or metri
 | `camdetect/requirements.txt` | Pinned `functions-framework`, `requests`, `Pillow` (+ `backports.zoneinfo` on Python 3.8). A push of this file or `main.py` to `main` redeploys `swiftbackend`. | No `Dockerfile` and no `cloudbuild.yaml` in git. |
 | `Causeway/*.py` | Day-by-day CSV history of NEA rainfall and the 2-hour forecast from data.gov.sg (complete days only), and `load_bigquery.py`, a manual append-only loader into `rainfall.rainfall` / `weatherforecast.weatherforecast`. | A scheduled pipeline. The original loader is not in git; nothing runs these on a schedule. |
 | `eval/` | Read-only harnesses: `layer_b.py` (30 min production models), `joined.py`, `layer_a.py`, offline XGB/LSTM, significance, report manifest. | A deploy path. Nothing writes to Cloud Run, BigQuery or `model_registry`. |
-| `.github/workflows/tests.yml` | Fast test suites on push and PR. | A deploy path; it has no secrets. |
+| `.github/workflows/tests.yml` | Fast test suites on push and PR, including `forecastapi`. | A deploy path; it has no secrets and no service-account key. |
+| `forecastapi/cloudbuild.yaml` | Pytest, then Cloud Run `forecast-api` in `asia-southeast1` when a `^main$` trigger sees a `forecastapi/**` change. | A deploy of `swiftbackend`. It does not run on this branch, and the service does not exist until that `main` build. |
 | `docs/` | Report drafts, inventory, roadmap | The Maps fetcher, the backfill job, or the forecast SQL |
 
 Direction names in `camdetect` are `SG-MY` and `MY-SG`. The BigQuery congestion view maps `to_JB` / `to_Woodlands` onto `SG_TO_MY` / `MY_TO_SG`. Any join has to translate those names. Do not assume they already match.
@@ -36,6 +37,7 @@ Re-query [inventory.md](inventory.md) before you edit a service.
 | Cloud Scheduler `Gmap-Woodlands` | `asia-southeast1` | No. It calls the fetcher every 5 minutes. |
 | Cloud Run job `traffic-backfill` | `asia-southeast1` | No |
 | Views and models under `traffic_prediction`, plus the weather and congestion views | BigQuery | **SQL in** [sql/](../sql/); not applied by Cloud Build |
+| Cloud Build trigger `forecast-api` (`949ff029-31c9-4521-8ff4-d0e8d16dfa25`) | global, `^main$` | Config is in git (`forecastapi/cloudbuild.yaml`). The Cloud Run service is **not** created until that trigger runs. It does not deploy `swiftbackend`. |
 
 The latest ready revision and `commit-sha` label are in [inventory.md](inventory.md). Re-check with:
 

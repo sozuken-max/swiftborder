@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Run the camdetect, Causeway, and eval test suites (and repo doc checks).
+  Run the camdetect, Causeway, eval, and forecastapi test suites (and repo doc checks).
 
 .DESCRIPTION
   Uses .venv\Scripts\python.exe at the repo root when present, otherwise
@@ -18,7 +18,7 @@
   Print a coverage report per suite.
 
 .PARAMETER Suite
-  Limit to one or more of: camdetect, Causeway, eval, repo.
+  Limit to one or more of: camdetect, Causeway, eval, forecastapi, repo.
 
 .EXAMPLE
   scripts\run_tests.ps1
@@ -28,7 +28,7 @@
 param(
     [switch]$Slow,
     [switch]$Coverage,
-    [string[]]$Suite = @('camdetect', 'Causeway', 'eval', 'repo')
+    [string[]]$Suite = @('camdetect', 'Causeway', 'eval', 'forecastapi', 'repo')
 )
 
 $ErrorActionPreference = 'Stop'

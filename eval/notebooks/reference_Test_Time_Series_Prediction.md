@@ -11,7 +11,7 @@ Source file (local): `Test_Time_Series_Prediction (1).ipynb` (2026-09-26).
 ## Teammate notes (2026-09-26)
 
 - Best offline scores so far with **updated XGB hyperparameters** (see `XGBTrainConfig`).
-- **DWT (`USE_DWT`) off** for now: only marginal gain; short Maps history is likely insufficient for wavelet features to help reliably.
+- **DWT (`USE_DWT`) off** on the scored path: the 2026-09-26 notebook saw only a marginal gain, and the Maps history is short. The repo experiment that replaced that summary is `compare_window_feature_sets` in [`timeseries_xgb.py`](../timeseries_xgb.py): lags (A) vs lags plus a causal difference and a 60-minute rolling mean (B) vs lags plus a z-scored **db2 level 2** wavelet (C). Level 3 is optional. db4 is not the default because it smooths the bends. See [eval/README.md](../README.md).
 - **Slew-rate limit** 300 s per 5-minute step on `duration_in_traffic_sec` before training.
 
 ## Superseded numbers

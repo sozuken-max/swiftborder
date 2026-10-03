@@ -180,9 +180,11 @@ flowchart LR
 ```
 <!-- /mermaid:eval-layer-b -->
 
+**Report cutoff (2026-10-03).** Score only rows whose label or target time is at or before **2026-10-19 23:59 SGT**. Later rows may exist for the live demo and are out of every table, figure, and comparison on this page. The rule, what can still be finished before that instant, and why the offline 60-minute split still cannot reach 10 day-blocks, are in [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03). 24 hours and <= 15 min MAE stay targets.
+
 ### 1. Production models, 30 minutes (`eval/layer_b.py`)
 
-**Window:** 2026-09-13 00:00 to 2026-09-30 23:50 SGT (forecast origin), both directions. `lin_h30` and `xgb_h30` were trained once on 2026-09-12 (06:15 / 06:19 UTC) with a CUSTOM split on 11–12 Sep; the harness asserts training precedes the window, so every scored row is out-of-sample. **Rows:** 5,184 (2,592 per direction), filtered to `after_gap = 0` and an exact +30-minute label (0 rows excluded). Read-only BigQuery.
+**Window:** 2026-09-13 00:00 to 2026-09-30 23:50 SGT (forecast origin), both directions. The numbers below are that window, not the cutoff. `lin_h30` and `xgb_h30` were trained once on 2026-09-12 (06:15 / 06:19 UTC) with a CUSTOM split on 11–12 Sep; the harness asserts training precedes the window, so every scored row is out-of-sample. **Rows:** 5,184 (2,592 per direction), filtered to `after_gap = 0` and an exact +30-minute label (0 rows excluded). Read-only BigQuery.
 
 | Candidate | Direction | n | MAE (min) | RMSE (min) |
 | --- | --- | --- | --- | --- |
@@ -276,6 +278,8 @@ Plots: `eval/runs/report/joined/joined-mae-diff.png`, `joined/joined-mae-by-feat
 XGBoost vs persistence T-60 on the hold-out: −1.208 min, CI [−1.594, −0.660], two-sided DM p = 6.5e-07. XGBoost vs Maps typical: −11.25 min, CI [−12.32, −10.27]. Both decisions are **insufficient data**: the hold-out spans 5 day-blocks, below the 10 required. The point estimates and all four backtest days favour XGBoost; a significance claim needs a longer hold-out.
 
 Backtest days are full days after the split. These numbers replace the 2026-09-26 offline results, which used the value 115 minutes before the target as "persistence T-60", a target-time Maps feature, smoothed labels, and backtest days inside the training period.
+
+**Window features (not in the table).** Chad's day-2 note suggested a wavelet because trees get a ready-made trend and bend from it. [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py) can score three sets on this same split and the same `XGBTrainConfig`: (A) lags only, (B) lags plus a causal first difference and a 60-minute rolling mean (12 bins of 5 minutes, the same span as `keep_lags` and the horizon), (C) lags plus a per-window z-score wavelet. The default wavelet is Daubechies db2 at level 2; level 3 is a parameter. db4 is not the default because it smooths the bends. Mean and standard deviation of the window are separate columns so normalization does not throw away the level. `use_dwt` stays off for the rows above. Run `python timeseries_xgb.py` from `eval/` against `data/causeway_gdata.csv`. The hold-out in this section has 5 day-blocks, so a significance decision on that split is "insufficient data" (Diebold-Mariano, day-block bootstrap, and Holm need 10). Point estimates from the command are not part of this table.
 
 Plots: `eval/runs/report/offline/backtest-mae.png`, `offline/holdout-sample.png`, `offline/holdout-mae-diff.png`.
 

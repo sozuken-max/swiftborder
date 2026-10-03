@@ -44,6 +44,8 @@ All models use the same rows as offline XGBoost and one training protocol ([`eva
 
 Re-run with `generate_comparison_plots.py --deep` (more seeds via `--deep-seeds`) and promote as usual. Numbers go into the docs only from `run.json`.
 
+The next feature matrix (wavelet and trend columns, XGBoost and Random Forest importance, and the camfc / mpfc arms on this same 60-minute split) is specified in [adr/0003-deep-training-and-feature-matrix.md](adr/0003-deep-training-and-feature-matrix.md). Train it on this machine. The trees cover the full factorial; a new LSTM runs only on the cells whose wavelet or camfc columns both rank above a noise column. GCP stays unused unless the series reaches the three-month bar above or a later model does not fit in memory, and then only under the 10 USD ceiling in that note.
+
 ## Cheaper options first
 
 - LightGBM or tuned XGBoost on the joined feature table (`features.py`).

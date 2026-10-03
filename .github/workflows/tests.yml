@@ -1,7 +1,9 @@
 # Fast test suites on push and pull request. No secrets, no deploy.
 # Deploy of camdetect -> Cloud Run swiftbackend stays on Cloud Build trigger
-# 76bbca35 (see camdetect/README.md). Slow TensorFlow tests: job pytest-slow (manual or weekly),
-# or locally with scripts/run_tests.ps1 -Slow
+# 76bbca35 (see camdetect/README.md). Deploy of forecastapi -> Cloud Run
+# forecast-api stays on Cloud Build (forecastapi/cloudbuild.yaml, branch ^main$
+# only). This workflow has no deploy credentials. Slow TensorFlow tests: job
+# pytest-slow (manual or weekly), or locally with scripts/run_tests.ps1 -Slow
 name: tests
 
 on:
@@ -20,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [camdetect, Causeway, eval, repo]
+        suite: [camdetect, Causeway, eval, forecastapi, repo]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,6 +37,7 @@ jobs:
             camdetect) pip install -r camdetect/requirements-dev.txt ;;
             Causeway)  pip install -r Causeway/requirements-dev.txt ;;
             eval)      pip install -r eval/requirements-dev.txt ;;
+            forecastapi) pip install -r forecastapi/requirements-dev.txt ;;
             repo)      pip install -r scripts/requirements-dev.txt ;;
           esac
       - name: Test (fast; slow marker excluded by pytest.ini)

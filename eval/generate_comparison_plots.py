@@ -157,6 +157,8 @@ def offline_component(
             "max_slew_step_sec": config.max_slew_step_sec,
             "max_ffill_steps": config.max_ffill_steps,
             "use_dwt": config.use_dwt,
+            "dwt_wavelet": config.dwt_wavelet,
+            "dwt_level": config.dwt_level,
             "xgb": dict(config.xgb.__dict__),
             "xgb_seed": XGB_SEED,
             "features": split.feature_cols,
