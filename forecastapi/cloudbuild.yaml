@@ -1,0 +1,128 @@
+# CI/CD for Cloud Run service forecast-api (ADR 0004): test, build, deploy as a no-traffic candidate,
+# smoke-test the candidate, then move traffic. Not swiftbackend. Not trigger 76bbca35. No keys.
+# Trigger 949ff029 runs this on a push to ^main$ that touches forecastapi/**.
+# Images are pinned by digest (resolved 2026-10-03: python:3.11, pack:latest, buildpacks builder:latest,
+# cloud-sdk:slim) so a rebuild of the same commit uses the same toolchain. Refresh the digests deliberately.
+# In bash below, $$ escapes a shell variable from Cloud Build substitution.
+
+steps:
+  - id: Test
+    name: python:3.11@sha256:50ffeeb3884b139e654d2ce95300cf67d016febfb93d54ecf68a00d723fa6fc6
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install -q -r forecastapi/requirements-dev.txt -r eval/requirements-dev.txt
+        python -m pytest -q forecastapi
+        # the served models must equal the harness models (eval/joined.py, eval/bq_replica.py)
+        cd eval && python -m pytest -q tests/test_forecastapi_models.py
+
+  - id: Buildpack
+    name: gcr.io/k8s-skaffold/pack@sha256:221c0c0d9a90f46f108bb888a1da9e99c82ff631e8b1c63b0223ea951752bd53
+    entrypoint: pack
+    args:
+      - build
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --builder=gcr.io/buildpacks/builder@sha256:ee028b481db027435142c27caeb3b4b37738e0665722f72a3f6734ef7ea2a7a9
+      - --network=cloudbuild
+      - --publish
+      - --path=forecastapi
+      - --env=GOOGLE_FUNCTION_TARGET
+      - --env=GOOGLE_PYTHON_VERSION
+    env:
+      - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
+      - GOOGLE_PYTHON_VERSION=3.11
+
+  - id: Deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        args=(
+          --project=$_AR_PROJECT_ID --region=$_DEPLOY_REGION --platform=managed
+          --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+          --min-instances=0 --memory=$_MEMORY --cpu=1 --timeout=120
+          --service-account=$_RUNTIME_SERVICE_ACCOUNT --no-allow-unauthenticated
+          --set-env-vars=BQ_PROJECT=$_AR_PROJECT_ID,COMMIT_SHA=$COMMIT_SHA
+          --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
+          --quiet
+        )
+        if gcloud run services describe $_SERVICE_NAME --project=$_AR_PROJECT_ID --region=$_DEPLOY_REGION >/dev/null 2>&1; then
+          # existing service: new revision gets no traffic until the smoke test passes
+          gcloud run deploy $_SERVICE_NAME "$${args[@]}" --no-traffic --tag=candidate
+          echo existing > /workspace/deploy_mode
+        else
+          # first deploy: there is no earlier revision to keep serving
+          gcloud run deploy $_SERVICE_NAME "$${args[@]}"
+          echo new > /workspace/deploy_mode
+        fi
+
+  - id: Smoke
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        mode=$$(cat /workspace/deploy_mode)
+        gcloud run services describe $_SERVICE_NAME --project=$_AR_PROJECT_ID --region=$_DEPLOY_REGION --format=json > /workspace/service.json
+        url=$$(python3 - "$$mode" <<'PY'
+        import json, sys
+        svc = json.load(open("/workspace/service.json"))
+        if sys.argv[1] == "existing":
+            print(next(t["url"] for t in svc["status"]["traffic"] if t.get("tag") == "candidate"))
+        else:
+            print(svc["status"]["url"])
+        PY
+        )
+        echo "smoke target: $$url"
+        token=$$(gcloud auth print-identity-token --audiences="$$url")
+        code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$$url/?list=models")
+        test "$$code" = "403" || { echo "expected 403 without a token, got $$code"; exit 1; }
+        code=$$(curl -s -o /workspace/list.json -w '%{http_code}' --max-time 60 -H "Authorization: Bearer $$token" "$$url/?list=models")
+        test "$$code" = "200" || { echo "list=models returned $$code"; exit 1; }
+        grep -q '"id": "served"' /workspace/list.json
+        # first call fits the daily models (one BigQuery read plus a fit): allow two minutes
+        code=$$(curl -s -o /workspace/served.json -w '%{http_code}' --max-time 120 -H "Authorization: Bearer $$token" "$$url/?model=served")
+        cat /workspace/served.json; echo
+        case "$$code" in
+          200) grep -q '"source": "local model"' /workspace/served.json ;;
+          503) echo "no recent Maps bin (data gap); the service answered correctly" ;;
+          *) echo "model=served returned $$code"; exit 1 ;;
+        esac
+        code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -g -H "Authorization: Bearer $$token" "$$url/?model=lstm")
+        test "$$code" = "400" || { echo "model=lstm returned $$code, expected 400"; exit 1; }
+
+  - id: Promote
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ "$$(cat /workspace/deploy_mode)" = "existing" ]; then
+          gcloud run services update-traffic $_SERVICE_NAME --project=$_AR_PROJECT_ID --region=$_DEPLOY_REGION --to-latest --quiet
+          gcloud run services update-traffic $_SERVICE_NAME --project=$_AR_PROJECT_ID --region=$_DEPLOY_REGION --remove-tags=candidate --quiet
+        fi
+
+substitutions:
+  _AR_HOSTNAME: asia-southeast1-docker.pkg.dev
+  _AR_PROJECT_ID: swiftborder
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _DEPLOY_REGION: asia-southeast1
+  _FUNCTION_TARGET: forecast
+  _SERVICE_NAME: forecast-api
+  _RUNTIME_SERVICE_ACCOUNT: forecast-api@swiftborder.iam.gserviceaccount.com
+  _MEMORY: 1Gi
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
+
+timeout: 1800s
+
+tags:
+  - forecast-api

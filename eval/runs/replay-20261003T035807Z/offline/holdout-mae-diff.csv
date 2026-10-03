@@ -1,0 +1,3 @@
+display_rank,challenger,reference,n,mean_ae_diff_min,bootstrap_ci_low_min,bootstrap_ci_high_min,decision
+0,XGB (sklearn),Persistence T-60,1428,-1.2076147874641596,-1.593564337813667,-0.6601356218753851,insufficient data
+1,XGB (sklearn),Maps typical duration at origin,1428,-11.245464927520182,-12.319230705353831,-10.266445792934757,insufficient data

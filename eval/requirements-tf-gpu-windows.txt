@@ -1,8 +1,10 @@
-# Windows native GPU for TensorFlow (DirectML). Use with Python 3.8–3.10.
-# Installs tensorflow-intel 2.10.x + DirectML plugin; exposes GPU:0 (e.g. NVIDIA RTX).
+# Windows native GPU for TensorFlow (DirectML). Python 3.8-3.10 only.
+# Installs tensorflow-cpu 2.10.x + the DirectML plugin; exposes GPU:0 (e.g. NVIDIA RTX).
 #
-#   pip install -r requirements-tf-gpu-windows.txt
-#   python check_tf_gpu.py
+#   py -3.10 -m venv .venv-dml
+#   .venv-dml\Scripts\pip install -r requirements-tf-gpu-windows.txt
+#   .venv-dml\Scripts\python check_tf_gpu.py
 #
-# Note: conflicts with tensorflow>=2.12 from requirements-notebook.txt — use a dedicated venv for LSTM.
-tensorflow-directml-plugin
+# Conflicts with tensorflow==2.21.0 in requirements-notebook.txt and with the
+# Python 3.11 test venv. Use a dedicated venv for GPU LSTM runs only.
+tensorflow-directml-plugin==0.4.0.dev230202

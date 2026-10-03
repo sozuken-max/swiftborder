@@ -1,8 +1,6 @@
-# GCP inventory snapshot
+# GCP inventory (dated copy)
 
-**Source of truth:** GCP project `swiftborder`. This file is a dated copy of a read-only query, not the authority. If it disagrees with the project, the project wins; update this file.
-
-**Observed:** 2026-09-26. Full pass ~**13:40 SGT**; **`causeway.travel_times` row count** and **`swiftbackend` revision** re-checked ~**15:00 SGT** (`bq query`, `gcloud run revisions describe`). **No resources or settings were changed** in these passes. Firebase Hosting was not re-checked.
+**Observed:** 2026-10-01 ~00:40 SGT (2026-09-30 16:38 UTC), read-only `gcloud` / `bq` queries of project `swiftborder`, plus model, view and horizon checks from the 2026-09-30 ~21:35 SGT pass. **One change since:** the weather tables were appended on 2026-10-01 ~01:50 SGT (requested by the team; see `rainfall` / `weatherforecast` below). No other resources or settings were changed. Camera and image date ranges, and `model_registry`, were re-queried read-only on 2026-10-01 ~03:30 SGT. **2026-10-03 ~10:48 SGT** re-checked `causeway.travel_times` metadata, `traffic-24h.json`, bucket CORS, Hosting, and the Maps scheduler (see those sections). **2026-10-03 ~11:20 SGT** re-checked `traffic_prediction` models, `model_registry`, and `v_forecast_recent`, and listed Cloud Run services (see those sections). No forecast HTTP service exists. When this file and the project disagree, the project wins; re-query and update this file.
 
 ## Project metadata
 
@@ -12,69 +10,75 @@
 
 ## BigQuery
 
-Seven datasets in `swiftborder`: `cam2701`, `cam2702`, `causeway`, `rainfall`, `traffic_images`, `traffic_prediction`, and `weatherforecast`.
+Seven datasets: `cam2701`, `cam2702`, `causeway`, `rainfall`, `traffic_images`, `traffic_prediction`, `weatherforecast`.
 
-Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, and `weatherforecast` are `asia-southeast1`. `causeway` and `traffic_prediction` are `US`.
+Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, `weatherforecast` are `asia-southeast1`. `causeway` and `traffic_prediction` are `US`. A query cannot join across the two locations, which is why the weather/camera join is done offline in `eval/`.
 
 ### `cam2701`
 
-- **Table `Cam2701`** -- last modified **2026-07-18 10:54 SGT**; **298,137 rows**. Detection-style schema (filename, date/time, night/brightness, class/label, direction, confidence, bbox fields). Not receiving new rows.
-- **View `v_congestion_index_10min`** -- 10-minute vehicle counts from `Cam2701` only. Directions `to_Woodlands` / `to_JB` map to `MY_TO_SG` / `SG_TO_MY`. **Not referenced by `traffic_prediction.v_training_set`.**
+- **Table `Cam2701`** -- last modified **2026-07-18 10:54 SGT**; **298,137 rows**. One row per detection (`filename`, `date`, `time`, `label`, `direction`, `confidence`, boxes). **Frames dated 2026-03-13 to 2026-04-22 (33 days, 3,513 frames)**, queried 2026-10-01. No overlap with `causeway.travel_times`. Not receiving new rows.
+- **View `v_congestion_index_10min`** -- 10-minute vehicle counts from `Cam2701`. Directions `to_Woodlands` / `to_JB` map to `MY_TO_SG` / `SG_TO_MY`. **Not referenced by `v_training_set`.** Its per-frame counts come from detections only, so frames with zero vehicles are dropped. 5,631 rows, bins 2026-03-13 05:10 to 2026-04-22 03:30 UTC.
 
 ### `cam2702`
 
-- **Table `Cam2702`** -- last modified **2026-07-18 11:06 SGT**; **233,463 rows**. Same detection schema family (plus `camera_id`). No congestion view.
+- **Table `Cam2702`** -- last modified **2026-07-18 11:06 SGT**; **233,463 rows**. Same schema plus `camera_id`; frames dated 2026-03-13 to 2026-04-22 (33 days, 3,507 frames). No congestion view.
 
 ### `causeway`
 
-- **Partitioned table `travel_times`** -- created **2026-09-06**, last modified **2026-09-26 13:11 SGT**; location `US`; **11,830 rows** (re-count ~15:00 SGT). Partitioned on `observed_date_sgt`, clustered on `route_id`. Maps Distance Matrix logging (**LIVE**).
-- Coverage at check time: `MY_TO_SG` and `SG_TO_MY`, **5,900 rows each** at the 13:40 pass; latest `observed_at` **2026-09-26 06:50:04 UTC** (~14:50 SGT) at the 15:00 re-count. Mean `duration_in_traffic_sec` about **26.0 min** (`MY_TO_SG`) and **25.5 min** (`SG_TO_MY`) at the 13:40 pass.
+- **Partitioned table `travel_times`** -- location `US`; **14,368 rows** (7,184 per direction), `observed_at` 2026-09-05 17:53 UTC to 2026-09-30 16:35 UTC, as queried 2026-10-01. Partitioned on `observed_date_sgt`, clustered on `route_id`. Maps Distance Matrix logging (**LIVE**). Mean `duration_in_traffic_sec`: **26.0 min** (`MY_TO_SG`), **25.4 min** (`SG_TO_MY`) on that 2026-10-01 snapshot. On **2026-10-03 ~10:48 SGT** table metadata showed **15,760 rows** and **2,742,224** logical bytes (streaming buffer estimated 4 rows). A read-only query of `observed_date_sgt` from the previous Singapore date, `status = 'OK'`, both Woodlands routes, returned **418** rows per route and `MAX(observed_at)` **2026-10-03 02:45:03 UTC**. The means above were not recomputed.
+- Routes: `jb_to_woodlands` = `MY_TO_SG`, `mandai_to_shell_jb` = `SG_TO_MY` (1:1).
 
-### `rainfall`
+### `rainfall` / `weatherforecast`
 
-- **Table `rainfall`** -- last modified **2026-09-03 21:13 SGT**; **95,282 rows** (`timestamp`, `station_id`, `value_mm`).
+Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 2025-09-01 to 2026-08-31 SGT (last modified 3 Sep). On **2026-10-01 ~01:50 SGT** the rows for **1–30 Sep 2026 SGT** were appended with [`Causeway/load_bigquery.py`](../Causeway/load_bigquery.py) from complete data.gov.sg day files (verified after load: no duplicate timestamps).
+
+- **`rainfall.rainfall`** -- **103,922 rows** (+8,640), station `Woodlands Centre Road` (S210), 5-minute readings, 2025-08-31 16:00 to 2026-09-30 15:55 UTC. The appended rows first went in as `Woodlands Centre` (data.gov.sg's current name for S210); a one-off `UPDATE` restricted to those 8,640 appended rows restored `Woodlands Centre Road` so the view keeps one station. The loader now pins that name.
+- **`weatherforecast.weatherforecast`** -- **24,482 rows** (+1,876), area Woodlands, one row per issue, to 2026-09-30 15:30 UTC. New nullable column **`update_timestamp`** (data.gov.sg acquisition time) is set on the appended rows and NULL on older rows.
+- **Snapshots** (expire 2026-10-31): `rainfall.rainfall_snapshot_20261001`, `weatherforecast.weatherforecast_snapshot_20261001` hold the pre-load tables. Revert with `CREATE OR REPLACE TABLE <table> CLONE <snapshot>`.
+- **No scheduled loader** keeps these tables current; re-run the Causeway fetchers and `load_bigquery.py --execute` (it refuses overlapping ranges).
+- **View `v_weather_features_10min`** -- Woodlands forecast flags plus Woodlands Centre Road rainfall on 10-minute bins; now returns bins to 2026-09-30. It bins forecasts by **issue** time, not valid period. **Not referenced by `v_training_set`.**
 
 ### `traffic_images`
 
-- **`backfill_checkpoint`** -- **63,074 rows**; last modified **2026-09-13 04:29 SGT**.
-- **`backfill_failures`** -- **0 rows** (last modified 2026-07-19 11:25 SGT).
-- **`labels`** -- **0 rows** (labelling lives in Roboflow; last modified 2026-07-19 00:00 SGT).
-- **`metadata`** -- **368,905 rows**; last modified **2026-09-13 04:29 SGT**.
+- **`metadata`** -- **368,905 rows**; last modified **2026-09-13 04:29 SGT**. Six cameras (2701, 2702, 2704, 4703, 4712, 4713), about 61.5k frames each, `capture_timestamp` 2025-06-30 23:55 to **2026-09-11 23:55**, images in `gs://sg-lta-traffic-cameras/`. Camera 2701 has 132–144 frames per day on 5–11 Sep (every ~10 min). Frames only; no detections are stored for them.
+- **`labels`** -- **0 rows** (labelling lives in Roboflow).
+- **`backfill_checkpoint`** -- 63,074 rows (2026-09-13 04:29 SGT). **`backfill_failures`** -- 0 rows.
 
 ### `traffic_prediction`
 
-- **`model_registry`** -- **2 rows**, last modified **2026-09-12 14:16 SGT** (`direction`, `serving_model`, reason, decided_on, test_window). Snapshot in git: [sql/bigquery/traffic_prediction/model_registry_reference.sql](../sql/bigquery/traffic_prediction/model_registry_reference.sql). Live rows (2026-09-26): `SG_TO_MY` -> `lin_h30`; `MY_TO_SG` -> `persistence` (reasons cite Sep 11-12 hold-out).
-- **Models (BigQuery ML):** SQL in git under [sql/bigquery/traffic_prediction/](../sql/bigquery/traffic_prediction/) (`bqml_lin_h30.sql`, `bqml_xgb_h30.sql`). Live metadata:
-  - `lin_h30` -- `LINEAR_REGRESSION`, created **2026-09-12**; features include direction, Maps lags, time-of-day flags; label `y_30`.
-  - `xgb_h30` -- `BOOSTED_TREE_REGRESSOR`, created **2026-09-12**; adds `tod_block`; not used in `v_forecast_recent`.
-- **`v_bins_10min`** -- 10-minute averages of `travel_times` where `status = 'OK'`. DDL: [v_bins_10min.sql](../sql/bigquery/traffic_prediction/v_bins_10min.sql).
-- **`v_training_set`** -- lags, rolling means, slope, time-of-day, weekend, and peak flags from those bins. Targets `y_30` and `y_60` (lead 3 and 6 bins). **Maps columns only.** DDL: [v_training_set.sql](../sql/bigquery/traffic_prediction/v_training_set.sql).
-- **`v_forecast_recent`** -- rows from `v_training_set` in the last 24 hours with `lag_60` present. `ML.PREDICT` on `lin_h30`. Output column `forecast_30min_min` is `lin_h30` when `model_registry.serving_model = 'lin_h30'`, otherwise persistence (`y_persistence`). `xgb_h30` is not called. DDL: [v_forecast_recent.sql](../sql/bigquery/traffic_prediction/v_forecast_recent.sql).
-
-### `weatherforecast`
-
-- **Table `weatherforecast`** -- **22,606 rows**; last modified **2026-09-03 21:18 SGT**.
-- **View `v_weather_features_10min`** -- Woodlands forecast text (`rain` / `heavy` flags) plus Woodlands Centre Road rainfall, on 10-minute bins. **Not referenced by `v_training_set`.**
+- **`model_registry`** -- 2 rows, decided 2026-09-12 on the 11–12 Sep window: `SG_TO_MY` -> `lin_h30`; `MY_TO_SG` -> `persistence`. Snapshot: [model_registry_reference.sql](../sql/bigquery/traffic_prediction/model_registry_reference.sql).
+- **Models (BigQuery ML)**, trained once, never retrained:
+  - `lin_h30` -- `LINEAR_REGRESSION`, created **2026-09-12 06:15 UTC**.
+  - `xgb_h30` -- `BOOSTED_TREE_REGRESSOR`, created **2026-09-12 06:19 UTC**; early stop at iteration 28; adds `tod_block`. Not used in `v_forecast_recent`.
+  - Both: `dataSplitMethod = CUSTOM`, `dataSplitColumn = is_val` (11–12 Sep), label `y_30`. BQML-internal eval MAE 3.04 (lin) / 2.87 (xgb) on that split; these are not harness results. Every date from **13 Sep** is out-of-sample for both.
+- **`v_bins_10min`**, **`v_training_set`** (last modified 2026-09-12 13:58 SGT), **`v_forecast_recent`** (2026-09-12 14:16 SGT) -- live SQL matches [sql/](../sql/) (2026-09-30 check). `v_training_set` uses Maps columns only; `LEAD(bin_ts, 3)` was exactly 30 min on every row (0 of 3,572 per direction differ, 2026-09-30).
+- `v_forecast_recent` serves **30 minutes** ahead: `lin_h30` where the registry says so, otherwise persistence.
+- **2026-10-03 ~11:20 SGT** (read-only): `bq ls --models` still only `lin_h30` and `xgb_h30`. `model_registry` still the two rows above. `INFORMATION_SCHEMA.VIEWS` for `v_forecast_recent` still matches the checked-in SQL (`ML.PREDICT` on `lin_h30`, `INTERVAL 30 MINUTE`). `bq show --model` has one training run each and no version list. Resource `creationTime`: `lin_h30` `2026-09-12T06:15:33.163Z`, `xgb_h30` `2026-09-12T06:19:18.783Z`. `gcloud run services list` returned only `gmap-woodlands-fetcher` and `swiftbackend`.
 
 ## Cloud Run / Scheduler / Storage
 
 ### Cloud Run
 
-- `gmap-woodlands-fetcher` -- Cloud Run service, `asia-southeast1`; last transition **2026-09-05 18:14 UTC** (6 Sep SGT). Cloud Functions API is disabled on this project; the service is reached by the scheduler URL below.
-- `swiftbackend` -- Cloud Run service, `europe-west1`; latest ready revision **`swiftbackend-00022-cv4`**, created **2026-09-26 06:33 UTC** (~14:33 SGT). Image label **`commit-sha: cf1c228`** (Cloud Build `8ca80327-156a-4f8a-b913-fe89cb2eefac`), path `camdetect`, function target `detect`. Re-checked ~**15:00 SGT** with `gcloud run services describe swiftbackend --project=swiftborder --region=europe-west1`.
-- Job `traffic-backfill` -- `asia-southeast1`; latest execution **succeeded**, completed **2026-09-12 19:53 UTC** (13 Sep 03:53 SGT). This is a **Cloud Run Job**, not a BigQuery dataset.
+- `gmap-woodlands-fetcher` -- `asia-southeast1`, revision `gmap-woodlands-fetcher-00004-msb`, ingress `all`, last deployed 2026-09-05 18:14 UTC.
+- `swiftbackend` -- `europe-west1`, latest ready revision **`swiftbackend-00023-f8g`** (commit `e49b232`, Cloud Build `33a6d0e5`, created 2026-09-26 07:10 UTC). Function target `detect`.
+  - **Exposure:** `run.googleapis.com/invoker-iam-disabled: true` with an empty IAM policy, and ingress `all`: **anyone can call it**. `ALLOWED_ORIGIN` is not set, so CORS is `*`. Each call can trigger a billed Roboflow inference.
+  - **Env var names:** `ROBOFLOW_API_KEY` (a plain env var, not Secret Manager) and `CACHE_BUCKET` (set, but not read by `camdetect/main.py`; no code in git writes `swiftborder-frame-cache`).
+  - Recorded as a known risk; no change made (see [findings.md](findings.md)).
+- Job `traffic-backfill` -- **Cloud Run Job** (not a dataset), `asia-southeast1`. Three executions on 2026-09-12: two failed, then one succeeded (completed 2026-09-12 19:53 UTC / 13 Sep 03:53 SGT). None since.
 
 ### Cloud Build
 
-- Trigger `76bbca35-c1b4-4836-9f34-d7adda53ea17` (`rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc`), created **2026-08-29**. GitHub `sozuken-max/swiftborder`, push to `^main$`. The build config is **inline on the trigger**, not a file in git. Step **`Test`** (`python:3.11`) runs `pytest` in `camdetect/` before buildpacks deploy `swiftbackend` in `europe-west1`. Updated **2026-09-26 ~14:50 SGT** via `gcloud builds triggers import`.
-- **Path filter:** `includedFiles` is `camdetect/main.py`, `camdetect/requirements.txt`, `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`, and top-level `camdetect/*.{yaml,yml,json,toml}`. Tests, `pytest.ini`, `requirements-dev.txt`, and `README.md` under `camdetect/` do not start this build.
-- The Maps fetcher, backfill job, views, and BQML models are not in this trigger. No GitHub Actions workflows are in the repo.
+- Trigger `76bbca35-c1b4-4836-9f34-d7adda53ea17` (`rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc`). GitHub `sozuken-max/swiftborder`, push to `^main$`. Config is **inline on the trigger**. Step `Test` (`python:3.11`) runs `pytest` in `camdetect/` before buildpacks deploy `swiftbackend`.
+- `includedFiles`: `camdetect/main.py`, `camdetect/requirements.txt`, `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`, `camdetect/*.{yaml,yml,json,toml}`. Tests, `pytest.ini`, `requirements-dev.txt` and `README.md` do not start a build.
+- Latest builds: `33a6d0e5` (2026-09-26 07:07 UTC, SUCCESS, `e49b232`), `8ca80327` (06:31 UTC, SUCCESS, `cf1c228`).
+- The Maps fetcher, backfill job, views and models are not in this trigger. A GitHub Actions test workflow ([.github/workflows/tests.yml](../.github/workflows/tests.yml)) is committed on branch `eval-integrity-overhaul` (PR #2), not yet on `main`; it runs tests only and deploys nothing.
+- **2026-10-03:** a second trigger, `forecast-api` (`949ff029-31c9-4521-8ff4-d0e8d16dfa25`), GitHub `sozuken-max/swiftborder`, push to `^main$`, config `forecastapi/cloudbuild.yaml`. `includedFiles` is `forecastapi/**` and `forecastapi/cloudbuild.yaml`. `ignoredFiles` is `camdetect/**`. It has not run. Cloud Run still lists only `gmap-woodlands-fetcher` and `swiftbackend`. Runtime identity `forecast-api@swiftborder.iam.gserviceaccount.com` has `roles/bigquery.jobUser` on project `swiftborder`, and `roles/bigquery.dataViewer` on datasets `traffic_prediction` and `causeway` only (narrowed 2026-10-03 from project-wide `dataViewer`; the views read `causeway.travel_times` and `traffic_prediction.model_registry`). The trigger itself builds as the default Compute Engine service account. See [runbooks/forecast-api.md](runbooks/forecast-api.md).
 
 ### Cloud Scheduler
 
-- `Gmap-Woodlands` -- `*/5 * * * *` in `Asia/Singapore` -> `gmap-woodlands-fetcher`. State **ENABLED** at check time. Last attempt **2026-09-26 05:30 UTC** (13:30 SGT).
+- `Gmap-Woodlands` -- `*/5 * * * *` `Asia/Singapore` -> `gmap-woodlands-fetcher`. **ENABLED** on 2026-10-03; last attempt recorded here is still 2026-09-30 16:35 UTC because this describe returned an empty `status` and no newer `lastAttemptTime`. The public object below was rewritten at 10:40:05 and 10:45:05 SGT.
 
-### Cloud Storage (six buckets observed)
+### Cloud Storage (six buckets)
 
 | Bucket | Location |
 | --- | --- |
@@ -83,12 +87,27 @@ Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, and `weatherforec
 | `run-sources-swiftborder-asia-southeast1` | `asia-southeast1` |
 | `run-sources-swiftborder-europe-west1` | `europe-west1` |
 | `swiftborder-public` | `asia-southeast1` |
-| `swiftborder_cloudbuild` | `US` |
+| `swiftborder_cloudbuild` | `US` (underscore) |
+
+Public object `gs://swiftborder-public/traffic-24h.json` (`https://storage.googleapis.com/swiftborder-public/traffic-24h.json`). Observed **2026-10-03 10:45 SGT**: **18,478** bytes, `Cache-Control: public, max-age=300`, `updated_at_sgt` `2026-10-03T10:45:03`, **288** points on each of `mandai_to_shell_jb` (`SG_TO_MY`) and `jb_to_woodlands` (`MY_TO_SG`). Point triple: SGT minute timestamp, `duration_in_traffic_sec`, `speed_kmh`. A metadata describe at **10:55 SGT** showed size **18,480** and `update_time` `2026-10-03T02:55:06Z` (the 10:45 body was not re-parsed). Bucket CORS allows `GET` and `HEAD` from `https://swiftborder-92b45.web.app`, `https://swiftborder-92b45.firebaseapp.com`, and `http://localhost:5000`. Serve decision: [adr/0001-firebase-client-api-calls.md](adr/0001-firebase-client-api-calls.md).
 
 ### Firebase / Hosting
 
-Morning Console pass: Firebase showed a setup / terms prompt; **no Hosting resources inventoried**. Not re-checked at 13:40. Treat Firebase as **planned**, not live.
+Checked **2026-10-03 10:57 SGT**. `https://swiftborder-92b45.web.app` and `https://swiftborder-92b45.firebaseapp.com` returned HTTP 200. `/`, `/app.js`, and `/style.css` share `Last-Modified: Sat, 19 Sep 2026 05:54:38 GMT` (15,989, 42,084, and 44,139 bytes). Response `Vary` includes `x-fh-requested-host`. Firebase Management API and Firebase Hosting API are disabled on GCP project `swiftborder` (`gcloud services list --enabled` returned no `firebase*` rows; both REST calls returned `SERVICE_DISABLED`). `gcloud projects describe swiftborder-92b45` returned permission denied for the active account, so that id is not confirmed as a project this account can read. No Cloud Build trigger and no GitHub workflow deploys this site. Decision: [adr/0002-firebase-hosting-source.md](adr/0002-firebase-hosting-source.md).
+
+## Querying this project from a Windows dev box
+
+If `gcloud` fails with `No module named 'six'`, stale `CLOUDSDK_*` variables point at a broken SDK copy. Per session:
+
+```powershell
+$root = "$env:LOCALAPPDATA\Google\Cloud SDK\google-cloud-sdk"
+$env:CLOUDSDK_PYTHON = "$root\platform\bundledpython\python.exe"
+Remove-Item env:CLOUDSDK_ROOT_DIR, env:CLOUDSDK_PYTHON_ARGS, env:CLOUDSDK_GSUTIL_PYTHON -ErrorAction SilentlyContinue
+& "$root\bin\gcloud.cmd" run services list --project swiftborder
+```
+
+Always pass `--project swiftborder` (the local default project may differ).
 
 ## How to use this file
 
-This is the evidence appendix for the final report. Interpretation and the claims register are in [findings.md](findings.md). Metric definitions and result tables are in [evaluation.md](evaluation.md). Design drawings are in [architecture.md](architecture.md). Repo-only changes are in [CHANGELOG.md](../CHANGELOG.md).
+Evidence appendix for the final report. Interpretation and the claims register: [findings.md](findings.md). Methods and result tables: [evaluation.md](evaluation.md). Design: [architecture.md](architecture.md). Repo changes: [CHANGELOG.md](../CHANGELOG.md).

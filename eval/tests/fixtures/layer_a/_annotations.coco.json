@@ -1,0 +1,14 @@
+{
+  "info": {"description": "Hand-built Layer A fixture (3 images). Expected metrics are in tests/test_layer_a.py."},
+  "categories": [{"id": 1, "name": "car"}, {"id": 2, "name": "truck"}],
+  "images": [
+    {"id": 1, "file_name": "img_day.jpg", "width": 1920, "height": 1080},
+    {"id": 2, "file_name": "img_night.jpg", "width": 1920, "height": 1080},
+    {"id": 3, "file_name": "img_empty.jpg", "width": 1920, "height": 1080}
+  ],
+  "annotations": [
+    {"id": 1, "image_id": 1, "category_id": 1, "bbox": [0, 0, 10, 10]},
+    {"id": 2, "image_id": 1, "category_id": 1, "bbox": [20, 20, 10, 10]},
+    {"id": 3, "image_id": 2, "category_id": 2, "bbox": [100, 100, 100, 100]}
+  ]
+}

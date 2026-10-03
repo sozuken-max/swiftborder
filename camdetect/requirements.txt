@@ -1,4 +1,4 @@
-functions-framework
-requests
-Pillow
-backports.zoneinfo; python_version < "3.9"
+functions-framework==3.10.2
+requests==2.34.2
+Pillow==12.3.0
+backports.zoneinfo==0.2.1; python_version < "3.9"

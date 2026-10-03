@@ -5,7 +5,75 @@
 **Dates (briefing; confirm on Canvas):** first presentation **30 Sep 2026, 18:30–22:30**; final deliverables **31 Oct 2026**.  
 **Rubric:** [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md). Methods, a runnable system, and an honest report are the graded work. Region layout is not.
 
+**Active work plan:** [plan-eval-integrity.md](plan-eval-integrity.md) (evaluation fixes, significance upgrades, joined-feature experiment, Layer A scorer, code hardening). Its task table is the current execution order; the steps below are the report-level milestones.
+
 The report describes **one system at two depths** (high-level, then detailed). This page is the sequence that gets the empty tables in [evaluation.md](evaluation.md) filled and the claims in [findings.md](findings.md) updated. It is not a second architecture.
+
+## Evaluation freeze (decided 2026-10-03)
+
+**Label cutoff:** 2026-10-19 23:59 SGT (2026-10-19T15:59:59Z). Final deliverables stay **31 Oct 2026**. From 20 Oct through 31 Oct the work is scoring the frozen window and writing the report, deck, and video.
+
+**Scoring rule.** Every reported table, figure, and comparison uses only rows whose label or target time is at or before that instant. Rows collected later may stay in BigQuery for the live demo. They are out of the report. This is not an outage. Leave Cloud Scheduler `Gmap-Woodlands` (`*/5 * * * *`, Asia/Singapore, writing `traffic-24h.json`) and `swiftbackend` running. Do not delete the scheduler.
+
+**Before 19 Oct 23:59 SGT, if it is to appear in the report**
+
+1. Score a Roboflow Layer A `test` export with [`eval/layer_a.py`](../eval/layer_a.py) (step 4).
+2. Observed September counts only if the Roboflow key holder runs the backfill before the 19th ([handoff-camera-pilot.md](handoff-camera-pilot.md)). The 6-11 Sep frames already exist. The cutoff does not create them. A read on 2026-10-03: `cam2701` / `cam2702` detection rows end 22 Apr 2026, `traffic_images.metadata` has frames through 11 Sep 2026, `traffic_images.labels` is empty, and no detection overlaps the Maps label.
+3. Re-promote the existing 30-minute harness on a longer window that still ends at or before the cutoff (step 2). 13 Sep through 19 Oct is 37 calendar days, so that window has more than 10 day-blocks. The published 13-30 Sep window (18 days) already does.
+4. Train deep models on the local machine ([adr/0003](adr/0003-deep-training-and-feature-matrix.md), Accepted). Do not start a GCP training job.
+
+The promoted offline 60-minute one-route split stays at 5 day-blocks unless that split is extended before the cutoff. The same 80/20 split on a series that starts 6 Sep and ends at this cutoff is still about 9 day-blocks, below 10, so those 60-minute and deep decisions stay **insufficient data**. Do not invent a new split to clear the threshold. A 24-hour horizon and <= 15 min MAE stay targets. The cutoff does not meet them.
+
+### Frozen-window run plan (proposed 2026-10-03; the team confirms before 19 Oct 23:59 SGT)
+
+**After the run:** set `SERVED_SELECTION` in `forecastapi/main.py` by the ADR 0004 rule and push to `main`; Cloud Build tests, deploys a candidate, smoke-tests it and promotes it.
+
+These choices are written down before any October label is scored, so the frozen run tests them rather than fitting them. Re-running the 13–30 Sep window would change nothing: three report runs on it gave identical numbers.
+
+**0. Local only.** BigQuery ML is not part of the evaluation. Its two models are represented by local replicas with the same features, settings and training rows. The replicas forecast as well as BQML on 13–30 Sep, inside ±0.5 min ([evaluation.md §1a](evaluation.md#1a-local-replicas-of-the-bqml-models-evalbqml_paritypy)). The replicas come in two forms: `lin_bq` / `xgb_bq` **[frozen]** are trained once on BQML's 12 Sep rows; **[daily]** refit the same models every day. The served registry mix is rebuilt from the frozen replicas (`Served (registry, local replica)`). BQML and `v_forecast_recent` are no longer maintained; serving moves to local models ([ADR 0004](adr/0004-serve-local-models.md)).
+
+**1. Windows.**
+- **Run A (headline):** 13 Sep 00:00 to the cutoff. It has 37 days, so every 30-minute comparison has well over 10 day-blocks.
+- **Run B (confirmation):** 1–19 Oct only. No model, feature set or "best single" choice was made on these days, so it confirms or rejects the choices made on 13–30 Sep. The rolling folds and stacks still train only on earlier days.
+
+**2. Claims Run B tests** (fixed now). A claim is confirmed when its Run B decision is "challenger", or for C5 and C8 "not significant", under the run-wide Holm check:
+
+| # | Comparison (30 min, both directions) | Family | 13–30 Sep result |
+| --- | --- | --- | --- |
+| C1 | `xgb[maps]` (daily refit) vs Served (registry, local replica) | ensemble | −0.267 vs BQML served, significant run-wide |
+| C2 | Served (registry, local replica) vs persistence | ensemble | −0.099 vs BQML served, not significant |
+| C3 | `xgb_bq[frozen]` vs persistence | replica | BQML `xgb_h30` −0.147, family-level only |
+| C4 | `xgb_bq[daily]` vs `xgb_bq[frozen]` (retraining effect, same model and settings) | replica | new arm, not yet scored |
+| C5 | `xgb[maps+weather]` vs `xgb[maps]` (expected: no gain) | joined | +0.003, not significant |
+| C6 | `xgb[maps+camfc]` vs `xgb[maps]` | camfc | −0.065, family-level only |
+| C7 | `xgb[maps+camfc]` vs `xgb[maps+mpfc]` (camera beyond the Maps profile) | camfc | −0.007, not significant |
+| C8 | Rolling LAD stack vs `xgb[maps]` (expected: no gain; local-only pool) | ensemble | −0.021, not significant |
+
+`xgb[maps]` stays the "best single" reference (`ensemble.BEST_SINGLE_30`). It is not re-picked on October data.
+
+**3. Practical threshold.** A significant result is called product-relevant only if the challenger is significant under run-wide Holm **and** lowers MAE by at least **0.5 min** (30 s). Whether the same bar applies to choosing what `forecast-api` serves is an open question in [ADR 0004](adr/0004-serve-local-models.md#decision-proposed). Applied literally, it would keep persistence in both directions.
+
+**4. Test groups.** The Holm families stay as in [evaluation.md](evaluation.md#significance), one per question, with the new `replica` family of 5 comparisons. The run-wide check (`run.json` → `multiplicity`) is reported beside them. A claim that holds only within its family is labelled "family-level only", as now.
+
+**5. 60-minute offline and deep models: keep the 80/20 split (recommended).** At the cutoff it has about 9 day-blocks, so these decisions stay "insufficient data" by design, consistent with the rule above against inventing a split to clear the threshold. Point estimates are still reported. The alternative is rolling daily folds over 1–19 Oct (19 blocks). It would need new code and roughly 3 CPU hours for the deep models, and it counts only if adopted before the run.
+
+**Commands (on or after 20 Oct, from a clean tree).** First fetch weather to 19 Oct ([Causeway/README.md](../Causeway/README.md)). Then:
+
+```bash
+cd eval
+# Run A: headline. --refresh-bq pulls travel_times; --data-cutoff drops every observation after the cutoff
+python generate_comparison_plots.py --refresh-bq --data-cutoff "2026-10-19 23:59" --joined --joined-end 2026-10-19 --deep --fuzzy --ensemble
+python promote_report_run.py <run_A_id>
+# Run B: confirmation, 1-19 Oct (uses the cache Run A refreshed); no offline component
+python generate_comparison_plots.py --data-cutoff "2026-10-19 23:59" --skip-offline --joined --joined-start 2026-10-01 --joined-end 2026-10-19 --ensemble
+python promote_report_run.py <run_B_id> --target report-confirm
+```
+
+Neither run uses `--bqml`, so the ensemble pool is local (`ensemble.pool_30_local`). An explicit `--joined-end` past the cutoff is refused. `run.json` records the cutoff (`data_cutoff`).
+
+**Signed off by the team on 2026-10-03** (local only, windows, claims C1–C8, threshold, test groups, 60-minute design, ADR 0004). The 0.5-minute threshold governs the report's "product-relevant" wording; the served selection follows the ADR 0004 significance rule.
+
+**After 19 Oct 23:59 SGT:** no new feature arms, no new model families, no expansion to a 24-hour horizon. Run the [frozen-window plan](#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt) (Runs A and B), fill [evaluation.md](evaluation.md) and [findings.md](findings.md) from that run, and finish the deck and video.
 
 ---
 
@@ -16,8 +84,10 @@ The report describes **one system at two depths** (high-level, then detailed). T
 - Weather and camera-2701 congestion views exist and are not joined.
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
-- [`eval/layer_b.py`](../eval/layer_b.py) scores Layer B read-only; [`eval/README.md`](../eval/README.md).
-- Report drafts exist: design, evaluation reasoning, findings, inventory. **Offline** Layer B scores on a full `travel_times` export are in [evaluation.md](evaluation.md). **30 min** BQML rows from `layer_b.py` are optional.
+- Layer B is scored and promoted to [`eval/runs/report/`](../eval/runs/report/): production models at 30 min on 13–30 Sep (`layer_b.py`), the joined weather experiment (`joined.py`), and offline 60-min XGBoost (`timeseries_xgb.py`), all with significance tests (Diebold–Mariano on error differences, Holm correction across models). Numbers are in [evaluation.md](evaluation.md).
+- Weather history for 5–30 Sep is fetched (`Causeway/`) and appended to BigQuery; weather gave no significant gain. The Layer A scorer exists (`eval/layer_a.py`); no export is scored.
+- Also scored in `report/`: LSTM, GRU and a patch Transformer at 60 min (none beats XGBoost), a fuzzy light / moderate / heavy forecast (the XGB → fuzzy hybrid is best), and ensembles / hybrids of the 30-min models (no gain over a daily-refit XGBoost, which beats the served forecast).
+- Report drafts exist: design, evaluation, findings, inventory (2026-10-01).
 
 ---
 
@@ -27,7 +97,9 @@ Do these in order. A later step that needs a number waits on the harness.
 
 ### 1. First presentation (by 30 Sep)
 
-**Done when** the Zoom deck states goals, data, techniques, and progress without a measured MAE.
+**Done (30 Sep).** Kept for the rules that still apply to later decks.
+
+**Done when** the Zoom deck states goals, data, techniques, and progress. Any MAE on a slide must come from `eval/runs/report/run.json` with its window and baseline.
 
 | Use | From |
 | --- | --- |
@@ -39,13 +111,13 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 ### 2. Layer B evaluation — publish and align horizons
 
-**Done (offline):** full `travel_times` export scored with [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py) (60-minute horizon, `jb_to_woodlands`). Numbers are in [evaluation.md](evaluation.md).
+**Done (2026-10-01):** 30-min production models on the fixed 13–30 Sep window, offline 60-min XGBoost (after the baseline and leakage fixes), and the joined weather experiment. Numbers are in [evaluation.md](evaluation.md).
 
 **Remaining**
 
-1. Optionally run [`eval/layer_b.py`](../eval/layer_b.py) for **30-minute** BQML (`lin_h30`, `xgb_h30`) on live `v_training_set` and paste those rows separately.
-2. Keep slide/report wording distinct: **60 min offline XGB** vs **30 min production serve**.
-3. Re-export `causeway_gdata.csv` when the table grows and refresh offline metrics before the final report.
+1. Keep slide/report wording distinct: **60 min offline XGB (one route)** vs **30 min production serve (both directions)**.
+2. Before the [evaluation freeze](#evaluation-freeze-decided-2026-10-03), extend the 30-minute window (more days, more rain events) so it still ends at or before 2026-10-19 23:59 SGT, and re-run `generate_comparison_plots.py --bqml --joined` from a clean tree, then promote (see [eval/README.md](../eval/README.md#reproduce-the-report-run)).
+3. Deep-learning forecasters are scored and not served; see [deep-learning-assessment.md](deep-learning-assessment.md) for when to revisit. The wavelet, importance, and camera-profile matrix, and the decision to keep training local, are in [adr/0003-deep-training-and-feature-matrix.md](adr/0003-deep-training-and-feature-matrix.md).
 
 **Done when** the report cites data source, horizon, and persistence baseline for each table. Do not write "we beat Google." Maps is the label.
 
@@ -61,17 +133,21 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 **How**
 
-1. Export a Roboflow dataset version (Public allows this; weight download is Core). Hold out frames.
-2. Score a pretrained detector and the fine-tuned YOLO on that hold-out. ResNet only if time remains after the tables below are filled.
-3. Record mAP, precision, recall, count-error, and day versus night in the Layer A table.
+1. Export a Roboflow dataset version (Public allows this; weight download is Core) into `eval/data/layer_a/`. Score the `test` split only.
+2. Run [`eval/layer_a.py`](../eval/layer_a.py) for the served (fine-tuned) model (`--predict-with-roboflow` uses credits) and, if available, a pretrained baseline. ResNet only if time remains.
+3. Copy mAP, precision, recall, count error, and day versus night into the Layer A table.
 
 **Done when** Layer A has numbers that are not crossing-time numbers. Keep the two tables separate.
 
 ### 5. Join the features the views already hold
 
-**How:** add `v_weather_features_10min` and `cam2701.v_congestion_index_10min` to the training query. Re-score against the same hold-out and the same persistence baseline. Ship the join only if MAE moves.
+**Done (weather, offline):** [`eval/joined.py`](../eval/joined.py) joins fresh data.gov.sg rainfall and forecasts; no significant MAE gain on 13–30 Sep. The BigQuery views were not used: at run time the weather tables ended on 31 Aug (1–30 Sep was appended on 1 Oct, see [inventory.md](inventory.md)), camera tables end on 18 Jul, and both sit in a different location from `traffic_prediction`.
 
-**Done when** the "joined model" row in the Layer B table is filled, or the findings say the join did not help and the served model stays Maps-only.
+**Done (Layer A forecast):** a queue forecast learned from the Mar–Apr detections is scored as a Layer B input; its gain equals a Maps daily profile ([evaluation.md §7a](evaluation.md#7a-layer-a-forecast-as-a-layer-b-input-evalcamera_forecastpy-scored-in-evaljoinedpy)).
+
+**Remaining:** observed camera 2701 counts for 5–30 Sep (no Layer A output overlaps the Maps window) via [`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py) (Roboflow credits: dry run, 50-call pilot, then budgeted run), then re-run `joined.py`. Ship a join into `v_training_set` only if MAE moves against `maps+mpfc`.
+
+**Before any "camera instead of Distance Matrix" claim:** score the 6–11 Sep frames that overlap the Maps label, add a visibility flag (fog, haze, glare → missing, not zero), and build a camera-only estimate of current travel time scored against a calendar baseline ([evaluation.md §7b](evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)).
 
 Camera 2702 has detections and no congestion view. Add that view before claiming both cameras feed the forecast. The dividing line for a live 2702 demo is a geometry change in `camdetect`, separate from the historical table.
 
@@ -101,7 +177,7 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 | Gap | Why it matters | What to do |
 | --- | --- | --- |
 | No `cloudbuild.yaml` in git | The `swiftbackend` trigger is inline in Cloud Build. It runs **pytest** before deploy; `includedFiles` is runtime paths only (not test-only files). | Treat the live trigger as the source of truth (`gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder`). Behavior is documented in [camdetect/README.md](../camdetect/README.md). History: [CHANGELOG.md](../CHANGELOG.md). Do not add a second trigger. |
-| `Causeway/` writes CSV only | It does not load `rainfall` or `weatherforecast`. The BigQuery weather pipeline is still outside the repo. | Do not wire these scripts up as if they were that pipeline. Recover the loader with the same export procedure. |
+| Weather load is manual | `Causeway/load_bigquery.py` appends to `rainfall` / `weatherforecast` (snapshot first, refuses overlaps). Nothing schedules it, and the original pipeline that filled the tables to 31 Aug is still outside the repo. | Re-run fetchers plus the loader before a report refresh. Add a Cloud Run job or Scheduler only as an approved deploy. |
 | Direction names differ | `camdetect` emits `SG-MY` / `MY-SG`. The congestion view expects `to_JB` / `to_Woodlands` and emits `SG_TO_MY` / `MY_TO_SG`. | Map them in the join (step 5). Do not treat the strings as already aligned. |
 | Camera 2701 line only | 2702 detections become `Unknown`. | Add a line only after it is calibrated on a real frame. |
 
@@ -109,10 +185,10 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 
 | Item | Why it waits |
 | --- | --- |
-| Firebase Hosting | Not in the project. The grade does not require a hosted UI if the demo runs. |
+| Firebase Hosting from git | A site is live at `swiftborder-92b45.web.app` (not in project `swiftborder`; source not in git). Bringing the client into the repo is [ADR 0002](adr/0002-firebase-hosting-source.md). The grade does not require it if the demo runs. |
 | Holiday calendars | No calendar table yet. Add only if a residual error looks like a public holiday. |
 | ResNet | Optional third detector. It does not unblock Layer B. |
-| Blended `lin_h30` + `xgb_h30` | Ensemble is a fourth technique. Score it only after the single models have rows. |
+| Serving a better 30-min model | A daily-refit XGBoost (or the rolling stack) beats the served registry forecast by ~0.27 min on 13–30 Sep ([evaluation.md §6](evaluation.md#6-ensembles-and-hybrids-of-the-layer-b-models-evalensemblepy)); blending on top adds nothing. Serving it needs a daily retrain job and a `v_forecast_recent` change: an approved deploy. |
 | Region consolidation | Not graded. |
 
 ---

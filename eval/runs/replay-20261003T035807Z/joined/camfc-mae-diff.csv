@@ -1,0 +1,19 @@
+display_rank,challenger,reference,n,mean_ae_diff_min,bootstrap_ci_low_min,bootstrap_ci_high_min,decision
+0,xgb[maps+camfc] (both/all),xgb[maps],5184,-0.06511027055022156,-0.10713256659760391,-0.02927994100829198,challenger
+1,xgb[maps+camfc] (both/all),xgb[maps+mpfc],5184,-0.00669060155687999,-0.04497405360632961,0.05676410493904672,not significant
+2,xgb[maps+mpfc+camfc] (both/all),xgb[maps+mpfc],5184,0.02596978886137284,-7.600732117033746e-05,0.04910224393439393,not significant
+3,ridge[maps+camfc] (both/all),ridge[maps],5184,-0.052965482007217304,-0.07731864703569788,-0.02816254568409973,challenger
+4,ridge[maps+camfc] (both/all),ridge[maps+mpfc],5184,0.07767270428374123,-0.005274599925679607,0.1873991867522307,not significant
+5,ridge[maps+mpfc+camfc] (both/all),ridge[maps+mpfc],5184,0.006120536925127858,0.0005006345796022397,0.015722915362574922,not significant
+6,xgb[maps+camfc] (SG_TO_MY/all),xgb[maps],2592,-0.08865147654902293,-0.15268212471479242,-0.04059386883498214,challenger
+7,xgb[maps+camfc] (SG_TO_MY/all),xgb[maps+mpfc],2592,-0.04082019566999047,-0.09585659859602337,0.06787000988000705,not significant
+8,xgb[maps+mpfc+camfc] (SG_TO_MY/all),xgb[maps+mpfc],2592,0.046424461662033456,0.005322627981994381,0.08366873733178094,not significant
+9,ridge[maps+camfc] (SG_TO_MY/all),ridge[maps],2592,-0.012762997102780529,-0.026745609380007487,0.005607978143110113,not significant
+10,ridge[maps+camfc] (SG_TO_MY/all),ridge[maps+mpfc],2592,0.033822219001543516,-0.07127128792040552,0.20013091246568507,not significant
+11,ridge[maps+mpfc+camfc] (SG_TO_MY/all),ridge[maps+mpfc],2592,0.004867432990974686,-0.0005875823688259827,0.012880482276148257,not significant
+12,xgb[maps+camfc] (MY_TO_SG/all),xgb[maps],2592,-0.04156906455142016,-0.08936589781516863,0.016166651248931886,not significant
+13,xgb[maps+camfc] (MY_TO_SG/all),xgb[maps+mpfc],2592,0.027438992556230488,-0.03349624368021033,0.08188982667255792,not significant
+14,xgb[maps+mpfc+camfc] (MY_TO_SG/all),xgb[maps+mpfc],2592,0.005515116060712231,-0.017424418418495718,0.0382306365110747,not significant
+15,ridge[maps+camfc] (MY_TO_SG/all),ridge[maps],2592,-0.09316796691165408,-0.14110225029401002,-0.04742586570498605,challenger
+16,ridge[maps+camfc] (MY_TO_SG/all),ridge[maps+mpfc],2592,0.12152318956593895,-0.04008773999603707,0.24120873635056064,not significant
+17,ridge[maps+mpfc+camfc] (MY_TO_SG/all),ridge[maps+mpfc],2592,0.007373640859281031,-0.003268067638196537,0.023491408481719198,not significant

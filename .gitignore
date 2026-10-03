@@ -3,12 +3,24 @@ __pycache__/
 .pytest_cache/
 pytest-cache-files-*/
 .venv/
+.venv-*/
 venv/
+.coverage
+.coverage.*
+htmlcov/
 
 # Local data extracts and logs
 **/*.csv
+# Figure series replayed from the cited eval run.json (not a data extract).
+!eval/runs/replay-*/*/*.csv
 **/*.log
+# Test fixtures are small, hand-built, and must be committed
+!**/tests/fixtures/**
 Causeway/data/
+# eval data caches and derived tables (only the README and .gitkeep are tracked)
+eval/data/*
+!eval/data/README.md
+!eval/data/.gitkeep
 
 # Secrets (Roboflow and Maps keys stay in the environment)
 .env

@@ -1,0 +1,16 @@
+display_rank,challenger,reference,n,mean_ae_diff_min,bootstrap_ci_low_min,bootstrap_ci_high_min,decision
+0,xgb[maps] (both/all),persistence,5184,-0.365759548851492,-0.4863279179026821,-0.2459869212359813,challenger
+1,xgb[maps] (both/all),maps_typical,5184,-10.540804559139557,-11.523669746317678,-9.615446231580473,challenger
+2,xgb[maps+weather] (both/all),xgb[maps],5184,0.0027398207182746837,-0.015290607239729092,0.022235815055944318,not significant
+3,ridge[maps+weather] (both/all),ridge[maps],5184,0.010806606262806256,-0.0016638868375284813,0.02549439251443628,not significant
+4,ensemble[maps+weather] (both/all),xgb[maps+weather],5184,0.03593078486872318,-0.00255513999581611,0.07471180637132108,not significant
+5,xgb[maps] (SG_TO_MY/all),persistence,2592,-0.37783284366376113,-0.5566768609361404,-0.23655346054721868,challenger
+6,xgb[maps] (SG_TO_MY/all),maps_typical,2592,-9.72576558543331,-11.43517952075465,-8.232284509366696,challenger
+7,xgb[maps+weather] (SG_TO_MY/all),xgb[maps],2592,-0.008241961203484884,-0.03192991065022386,0.022940599519774736,not significant
+8,ridge[maps+weather] (SG_TO_MY/all),ridge[maps],2592,0.014290282277628944,-0.002845555239709165,0.03284903632825096,not significant
+9,ensemble[maps+weather] (SG_TO_MY/all),xgb[maps+weather],2592,-0.0039279083863946835,-0.06294887459397143,0.04462218996877684,not significant
+10,xgb[maps] (MY_TO_SG/all),persistence,2592,-0.3536862540392228,-0.49751379072298324,-0.13167118806529973,challenger
+11,xgb[maps] (MY_TO_SG/all),maps_typical,2592,-11.355843532845807,-12.345296787390314,-10.258856760207088,challenger
+12,xgb[maps+weather] (MY_TO_SG/all),xgb[maps],2592,0.013721602640034252,-0.013268483060377591,0.03927862790754308,not significant
+13,ridge[maps+weather] (MY_TO_SG/all),ridge[maps],2592,0.007322930247983567,-0.010609059455125892,0.030172137072357233,not significant
+14,ensemble[maps+weather] (MY_TO_SG/all),xgb[maps+weather],2592,0.07578947812384104,0.023152672416857988,0.13390555260903184,not significant

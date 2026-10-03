@@ -1,4 +1,4 @@
-# AGENTS.md â€” SwiftBorder
+# AGENTS.md — SwiftBorder
 
 Harness-agnostic guidance for coding agents (Cursor, Claude Code, Copilot, Codex, etc.).
 Read this before changing docs, diagrams, architecture notes, or reviewing code.

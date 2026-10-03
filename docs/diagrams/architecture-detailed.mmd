@@ -1,0 +1,74 @@
+flowchart LR
+  subgraph Ext["External sources"]
+    LTA["LTA / data.gov.sg<br/>traffic cameras"]
+    NEA["NEA rainfall +<br/>2h forecast"]
+    GMAP["Google Maps<br/>Distance Matrix"]
+  end
+
+  subgraph Ingest["Ingest / compute"]
+    GH["Cloud Build<br/>pytest then deploy<br/>camdetect to swiftbackend"]
+    SCH["Cloud Scheduler<br/>Gmap-Woodlands */5"]
+    GFN["Cloud Run<br/>gmap-woodlands-fetcher<br/>asia-southeast1"]
+    SB["Cloud Run<br/>swiftbackend<br/>europe-west1<br/>calls Roboflow detect<br/>public: no invoker auth"]
+    BF["Cloud Run Job<br/>traffic-backfill<br/>last success 13 Sep SGT"]
+  end
+
+  subgraph RF["Layer A - Roboflow"]
+    ROB["Label - Train YOLO - Serve"]
+  end
+
+  subgraph BQ["BigQuery - project swiftborder"]
+    C1["cam2701.Cam2701<br/>frozen 18 Jul<br/>+ v_congestion_index_10min"]
+    C2["cam2702.Cam2702<br/>frozen 18 Jul<br/>no congestion view"]
+    TT["causeway.travel_times LIVE<br/>see inventory.md"]
+    RF2["rainfall.rainfall<br/>Woodlands, to 30 Sep<br/>manual append"]
+    WX["weatherforecast<br/>Woodlands, to 30 Sep<br/>+ v_weather_features_10min"]
+    TI["traffic_images<br/>metadata 368905 (13 Sep)<br/>labels = 0 rows"]
+    TP["traffic_prediction US<br/>Maps-only v_training_set<br/>lin_h30 + xgb_h30<br/>v_forecast_recent = 30 min"]
+  end
+
+  subgraph GCS["Cloud Storage"]
+    CAM["sg-lta-traffic-cameras"]
+    CACHE["swiftborder-frame-cache"]
+    RS1["run-sources-...-asia-southeast1"]
+    RS2["run-sources-...-europe-west1"]
+    PUB["swiftborder-public"]
+    CB["swiftborder_cloudbuild"]
+  end
+
+  LTA --> CAM
+  LTA --> SB
+  GH --> SB
+  CAM --> BF
+  BF --> TI
+  ROB --> SB
+  NEA --> RF2
+  NEA --> WX
+  SCH --> GFN
+  GMAP --> GFN
+  GFN --> TT
+  TT --> TP
+  C1 -.->|"congestion view exists, not joined"| TP
+  WX -.->|"weather view exists, not joined"| TP
+  SB -.->|"no live writes since 18 Jul"| C1
+  SB -.->|"no live writes since 18 Jul"| C2
+  CAM -.->|"writer not in git"| CACHE
+  SB -.->|"CACHE_BUCKET set, unused in code"| CACHE
+
+  GH -.->|"camdetect build source"| RS2
+  RS2 -.->|"deploy archive"| SB
+  GH -.->|"build artifacts"| CB
+  RS1 -.->|"asia Run deploy source"| GFN
+  RS1 -.->|"asia Run deploy source"| BF
+  PUB -.->|"fetched by browser"| FH["Firebase Hosting site<br/>swiftborder-92b45, not in this project<br/>source not in git"]
+
+  subgraph EV["Evaluation - repo eval/, read-only"]
+    HAR["layer_b.py fixed window<br/>joined.py offline join<br/>layer_a.py scorer"]
+    CSV["Causeway/ CSV backfill<br/>rainfall + 2h forecast"]
+  end
+  NEA -.->|"data.gov.sg API"| CSV
+  CSV -.->|"load_bigquery.py manual append"| RF2
+  CSV -.->|"load_bigquery.py manual append"| WX
+  CSV -.-> HAR
+  TP -.->|"ML.PREDICT read-only"| HAR
+  TT -.->|"export read-only"| HAR

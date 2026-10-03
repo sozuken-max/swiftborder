@@ -29,7 +29,7 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 | `README.md` | Short pitch, Layer A/B, links into docs and inventory |
 | `CHANGELOG.md` | Dated repo and deploy history |
 | `docs/architecture.md` | Report: tools, techniques, system design |
-| `docs/evaluation.md` | Report: performance methods, reasoning, empty result tables |
+| `docs/evaluation.md` | Report: performance methods, reasoning, scored result tables (numbers only from `eval/runs/report/run.json`) |
 | `docs/findings.md` | Report: findings, discussion, claims register |
 | `docs/roadmap.md` | Ordered remaining work. Not a second architecture. |
 | `docs/agent-deploy.md` | How to export a teammate's live deploy into git and Cloud Build. |
@@ -41,15 +41,20 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 
 ## Diagram rules
 
-- **Style:** polished GCP-icon architecture (Cloud Run, BigQuery, Scheduler, Storage icons; Layer A/B bands). Prefer this over Mermaid screenshots for slide assets.
+**Topology source of truth:** `docs/diagrams/*.mmd`. Pair each file with a deck PNG under `docs/images/` (see [docs/diagrams/README.md](../../../docs/diagrams/README.md)). After editing `.mmd`, run `python docs/diagrams/sync_mermaid.py`, then regen the PNG if layout or facts changed.
+
+For any PNG under `docs/images/`, **read [../diagram-image-generation/SKILL.md](../diagram-image-generation/SKILL.md) first** and follow it.
+That skill owns style lock, edit strategy, bucket strip, and acceptance checks. PNG **topology** (nodes and edges) must match the `.mmd` file; do not invent nodes or joins absent from it. Annotation panels that carry no topology (Gaps/risks, Serve TODAY, Status) are allowed in deck PNGs if every statement in them matches inventory or `run.json`.
+
+Prose / Mermaid only (still apply here):
+
 - **One system, two depths.** High-level and detailed diagrams describe the same queried system. Do not add an as-is / to-be or proposal-target pair. Unfinished scope is prose in `docs/findings.md` and the order of work is `docs/roadmap.md`.
 - Do not invent joins. If training is Maps-only, do not draw weather or camera congestion into `traffic_prediction`.
-- Show present-but-unused sources as dashed callouts in deck PNGs and as `-.->` edges in the detailed Mermaid. Do not draw them as inputs to training.
+- Show present-but-unused sources as `-.->` edges in detailed Mermaid. Do not draw them as inputs to training.
 - `traffic_images.labels` is the empty table. `traffic_images.metadata` is populated. Do not swap them.
 - `traffic-backfill` is a Cloud Run Job that rebuilds metadata and `backfill_checkpoint`.
 - Label serve horizon from a fresh query of project `swiftborder` (live horizon vs 24h intent). Do not hard-code that result into `AGENTS.md`.
-- Include risks that matter for grading (missing harness, honesty on targets), not region-consolidation theatre.
-- Layer A and Layer B each need an evaluation diagram under `docs/images/eval-layer-a.png` and `eval-layer-b.png`.
+
 
 ## Proposal language
 
@@ -66,3 +71,4 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 - [ ] Grading weights / deliverables not contradicted
 - [ ] At least three module technique categories are nameable for the system (see grading lens)
 - [ ] This file's body copied to `.cursor/skills/documentation-generation/SKILL.md` with `../../` rewritten to `../../../`
+

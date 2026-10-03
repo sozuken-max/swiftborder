@@ -1,1 +1,2 @@
-google-cloud-bigquery>=3.0.0
+google-cloud-bigquery==3.45.2
+scipy==1.17.1
