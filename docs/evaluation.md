@@ -180,7 +180,7 @@ flowchart LR
 ```
 <!-- /mermaid:eval-layer-b -->
 
-**Frozen run.** The windows, the claims the October-only confirmation run tests (C1–C7), the 0.5-minute practical threshold and the 60-minute design are fixed in advance in [roadmap.md](roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt). `generate_comparison_plots.py --data-cutoff` enforces the cutoff on every component.
+**Frozen run.** It is local only (BigQuery ML is represented by local replicas, §1a). The windows, the claims the October-only confirmation run tests (C1–C8), the 0.5-minute practical threshold and the 60-minute design are fixed in advance in [roadmap.md](roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt). `generate_comparison_plots.py --data-cutoff` enforces the cutoff on every component.
 
 **Report cutoff (2026-10-03).** Score only rows whose label or target time is at or before **2026-10-19 23:59 SGT**. Later rows may exist for the live demo and are out of every table, figure, and comparison on this page. The rule, what can still be finished before that instant, and why the offline 60-minute split still cannot reach 10 day-blocks, are in [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03). 24 hours and <= 15 min MAE stay targets.
 
@@ -224,6 +224,30 @@ flowchart LR
 **What this supports:** the live registry choice (`SG_TO_MY` → `lin_h30`, `MY_TO_SG` → persistence) beats or matches persistence in each direction on this window. `xgb_h30` would improve `MY_TO_SG` over the served persistence, and the ensemble improves `SG_TO_MY` over persistence; neither is served. Registry changes are a separate, approved write.
 
 Plots: `eval/runs/report/bqml/mae-by-direction.png`, `bqml/mae-diff-ci.png` (forest plot coloured by decision).
+
+### 1a. Local replicas of the BQML models (`eval/bqml_parity.py`)
+
+**Question:** do local copies of `lin_h30` and `xgb_h30` forecast like the BigQuery ML models? If they do, the evaluation can stay on one platform and BQML need not be maintained.
+
+**Source:** [`eval/runs/parity-bqml/run.json`](../eval/runs/parity-bqml/run.json), run `20261003T065653Z_bqml-parity`, committed code `89996bd`, clean tree. It uses the same 5,184 rows as section 1.
+
+**Replicas** ([`eval/bq_replica.py`](../eval/bq_replica.py)). Features, settings and training rows are read from `bq show --model` and match [`sql/bigquery/traffic_prediction/bqml_*_h30.sql`](../sql/bigquery/traffic_prediction/):
+
+- **Training rows:** the 1,406 rows whose label was observed by 12 Sep 06:15 UTC, with 11–12 Sep held out as in BQML's custom split.
+- **Linear:** ridge, L2 0.1, on standardised features.
+- **Boosted trees:** 28 trees (where BQML early-stopped), learning rate 0.1, depth 4, subsample 0.8, L2 1, five seeds averaged. Trees start from 0.5 as in XGBoost 0.9, which BQML runs; current XGBoost starts from the label mean, which alone moved the replica's MAE to 2.716.
+
+| Model | MAE both | `SG_TO_MY` | `MY_TO_SG` | Replica − BQML (CI) | Mean gap between forecasts | Correlation |
+| --- | --- | --- | --- | --- | --- | --- |
+| `lin_h30` (BQML) | 2.777 | 2.580 | 2.974 | | | |
+| `lin_h30` (local replica) | 2.697 | 2.604 | 2.789 | −0.080 [−0.137, −0.033] | 0.43 min | 0.998 |
+| `xgb_h30` (BQML) | 2.493 | 2.653 | 2.333 | | | |
+| `xgb_h30` (local replica) | 2.448 | 2.603 | 2.294 | −0.045 [−0.080, −0.011] | 0.64 min | 0.995 |
+| Persistence | 2.640 | 2.777 | 2.504 | | | |
+
+**Equivalence rule** (stated in the module): the 95% day-block CI of the MAE difference lies inside ±0.5 min, the practical threshold. Both replicas pass, and both are slightly better than BQML. The replica differences are also "challenger" under Holm over the two pairs, but they are 3–5 seconds. Individual forecasts still differ by about half a minute on average (different library versions, random subsampling), so the replicas are models of the same quality, not identical copies.
+
+**Consequence:** the frozen run is local only. `lin_bq` / `xgb_bq` [frozen] stand in for the September BQML models, and [daily] measures the retraining effect on the same platform ([roadmap.md](roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt)). Serving moves to local models ([ADR 0004](adr/0004-serve-local-models.md)).
 
 ### 2. Joined features, 30 minutes (`eval/joined.py`)
 

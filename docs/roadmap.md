@@ -28,27 +28,30 @@ The promoted offline 60-minute one-route split stays at 5 day-blocks unless that
 
 These choices are written down before any October label is scored, so the frozen run tests them rather than fitting them. Re-running the 13–30 Sep window would change nothing: three report runs on it gave identical numbers.
 
+**0. Local only.** BigQuery ML is not part of the evaluation. Its two models are represented by local replicas with the same features, settings and training rows. The replicas forecast as well as BQML on 13–30 Sep, inside ±0.5 min ([evaluation.md §1a](evaluation.md#1a-local-replicas-of-the-bqml-models-evalbqml_paritypy)). The replicas come in two forms: `lin_bq` / `xgb_bq` **[frozen]** are trained once on BQML's 12 Sep rows; **[daily]** refit the same models every day. The served registry mix is rebuilt from the frozen replicas (`Served (registry, local replica)`). BQML and `v_forecast_recent` are no longer maintained; serving moves to local models ([ADR 0004](adr/0004-serve-local-models.md)).
+
 **1. Windows.**
 - **Run A (headline):** 13 Sep 00:00 to the cutoff. It has 37 days, so every 30-minute comparison has well over 10 day-blocks.
-- **Run B (confirmation):** 1–19 Oct only. No model, feature set or "best single" choice was made on these days. Choices made on 13–30 Sep are confirmed or not here. `lin_h30` and `xgb_h30` were trained on 12 Sep, so both windows are out of sample. The rolling folds and stacks still train only on earlier days.
+- **Run B (confirmation):** 1–19 Oct only. No model, feature set or "best single" choice was made on these days, so it confirms or rejects the choices made on 13–30 Sep. The rolling folds and stacks still train only on earlier days.
 
-**2. Claims Run B tests** (fixed now from the 13–30 Sep results). A claim is confirmed when its Run B decision is "challenger", or for C4 and C7 "not significant", under the run-wide Holm check:
+**2. Claims Run B tests** (fixed now). A claim is confirmed when its Run B decision is "challenger", or for C5 and C8 "not significant", under the run-wide Holm check:
 
-| # | Comparison (30 min, both directions) | 13–30 Sep result |
-| --- | --- | --- |
-| C1 | `xgb[maps]` (daily refit) vs served (registry) | −0.267, significant run-wide |
-| C2 | `ensemble_mean` vs persistence | −0.182, significant run-wide |
-| C3 | `xgb_h30` vs persistence | −0.147, family-level only |
-| C4 | `xgb[maps+weather]` vs `xgb[maps]` (expected: no gain) | +0.003, not significant |
-| C5 | `xgb[maps+camfc]` vs `xgb[maps]` | −0.065, family-level only |
-| C6 | `xgb[maps+camfc]` vs `xgb[maps+mpfc]` (camera beyond the Maps profile) | −0.007, not significant |
-| C7 | Rolling LAD stack vs `xgb[maps]` (expected: no gain) | −0.021, not significant |
+| # | Comparison (30 min, both directions) | Family | 13–30 Sep result |
+| --- | --- | --- | --- |
+| C1 | `xgb[maps]` (daily refit) vs Served (registry, local replica) | ensemble | −0.267 vs BQML served, significant run-wide |
+| C2 | Served (registry, local replica) vs persistence | ensemble | −0.099 vs BQML served, not significant |
+| C3 | `xgb_bq[frozen]` vs persistence | replica | BQML `xgb_h30` −0.147, family-level only |
+| C4 | `xgb_bq[daily]` vs `xgb_bq[frozen]` (retraining effect, same model and settings) | replica | new arm, not yet scored |
+| C5 | `xgb[maps+weather]` vs `xgb[maps]` (expected: no gain) | joined | +0.003, not significant |
+| C6 | `xgb[maps+camfc]` vs `xgb[maps]` | camfc | −0.065, family-level only |
+| C7 | `xgb[maps+camfc]` vs `xgb[maps+mpfc]` (camera beyond the Maps profile) | camfc | −0.007, not significant |
+| C8 | Rolling LAD stack vs `xgb[maps]` (expected: no gain; local-only pool) | ensemble | −0.021, not significant |
 
 `xgb[maps]` stays the "best single" reference (`ensemble.BEST_SINGLE_30`). It is not re-picked on October data.
 
-**3. Practical threshold.** Serving a different 30-minute model is recommended only if the challenger is significant under run-wide Holm **and** lowers MAE by at least **0.5 min** (30 s). Below that, a significant result is reported as evidence about signal, not as a product win.
+**3. Practical threshold.** A significant result is called product-relevant only if the challenger is significant under run-wide Holm **and** lowers MAE by at least **0.5 min** (30 s). Whether the same bar applies to choosing what `forecast-api` serves is an open question in [ADR 0004](adr/0004-serve-local-models.md#decision-proposed). Applied literally, it would keep persistence in both directions.
 
-**4. Test groups.** The Holm families stay as in [evaluation.md](evaluation.md#significance) (one per question). The run-wide check (`run.json` → `multiplicity`) is reported beside them. A claim that holds only within its family is labelled "family-level only", as now.
+**4. Test groups.** The Holm families stay as in [evaluation.md](evaluation.md#significance), one per question, with the new `replica` family of 5 comparisons. The run-wide check (`run.json` → `multiplicity`) is reported beside them. A claim that holds only within its family is labelled "family-level only", as now.
 
 **5. 60-minute offline and deep models: keep the 80/20 split (recommended).** At the cutoff it has about 9 day-blocks, so these decisions stay "insufficient data" by design, consistent with the rule above against inventing a split to clear the threshold. Point estimates are still reported. The alternative is rolling daily folds over 1–19 Oct (19 blocks). It would need new code and roughly 3 CPU hours for the deep models, and it counts only if adopted before the run.
 
@@ -57,16 +60,16 @@ These choices are written down before any October label is scored, so the frozen
 ```bash
 cd eval
 # Run A: headline. --refresh-bq pulls travel_times; --data-cutoff drops every observation after the cutoff
-python generate_comparison_plots.py --refresh-bq --data-cutoff "2026-10-19 23:59" --bqml --joined --joined-end 2026-10-19 --deep --fuzzy --ensemble
+python generate_comparison_plots.py --refresh-bq --data-cutoff "2026-10-19 23:59" --joined --joined-end 2026-10-19 --deep --fuzzy --ensemble
 python promote_report_run.py <run_A_id>
-# Run B: confirmation, 1-19 Oct (uses the cache Run A refreshed)
-python generate_comparison_plots.py --data-cutoff "2026-10-19 23:59" --bqml-only --window-start "2026-10-01 00:00" --joined --joined-start 2026-10-01 --joined-end 2026-10-19 --ensemble
+# Run B: confirmation, 1-19 Oct (uses the cache Run A refreshed); no offline component
+python generate_comparison_plots.py --data-cutoff "2026-10-19 23:59" --skip-offline --joined --joined-start 2026-10-01 --joined-end 2026-10-19 --ensemble
 python promote_report_run.py <run_B_id> --target report-confirm
 ```
 
-With `--data-cutoff`, the BQML window end defaults to the last origin whose 30-minute label is observed by the cutoff (19 Oct 23:10 SGT). An explicit `--window-end` or `--joined-end` past the cutoff is refused. `run.json` records the cutoff (`data_cutoff`).
+Neither run uses `--bqml`, so the ensemble pool is local (`ensemble.pool_30_local`). An explicit `--joined-end` past the cutoff is refused. `run.json` records the cutoff (`data_cutoff`).
 
-Team sign-off: windows ☐ claims C1–C7 ☐ threshold ☐ test groups ☐ 60-minute design ☐. By ______ on ______.
+Team sign-off: local only ☐ windows ☐ claims C1–C8 ☐ threshold ☐ test groups ☐ 60-minute design ☐ ADR 0004 ☐. By ______ on ______.
 
 **After 19 Oct 23:59 SGT:** no new feature arms, no new model families, no expansion to a 24-hour horizon. Run the [frozen-window plan](#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt) (Runs A and B), fill [evaluation.md](evaluation.md) and [findings.md](findings.md) from that run, and finish the deck and video.
 

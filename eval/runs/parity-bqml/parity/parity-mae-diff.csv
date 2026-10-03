@@ -1,0 +1,3 @@
+display_rank,challenger,reference,n,mean_ae_diff_min,bootstrap_ci_low_min,bootstrap_ci_high_min,decision
+0,lin_h30 (local replica),lin_h30 (BQML),5184,-0.0803371250366666,-0.1373100508939511,-0.03324590013669563,challenger
+1,xgb_h30 (local replica),xgb_h30 (BQML),5184,-0.044815709782235404,-0.07970655434477472,-0.010880801158922674,challenger

@@ -22,6 +22,8 @@ Evaluation harnesses for Layer A and Layer B. Nothing here deploys `swiftbackend
 | [`layer_a.py`](layer_a.py) | Layer A scorer: mAP, precision/recall, count error (overall and per direction), day/night |
 | [`backfill_camera_counts.py`](backfill_camera_counts.py) | Camera 2701 counts per 10-min bin via `camdetect.detect_frame` (**billed Roboflow**) |
 | [`generate_comparison_plots.py`](generate_comparison_plots.py) | One run folder with offline + BQML + joined components and figures |
+| [`bq_replica.py`](bq_replica.py) | Local replicas of BQML `lin_h30` / `xgb_h30` (same features, settings and 12 Sep training rows); `joined.py` scores them frozen and daily-refit |
+| [`bqml_parity.py`](bqml_parity.py) | One-off: BQML vs local replica on the same rows (`--bqml-only --bqml-parity`, promoted to `runs/parity-bqml/`) |
 | [`replay_series.py`](replay_series.py) | Write figure CSVs from an existing `run.json` (no fit, no BigQuery); refuses `runs/report/` |
 | [`run_artifacts.py`](run_artifacts.py), [`promote_report_run.py`](promote_report_run.py) | Schema-v2 `run.json` (provenance, windows, metrics, significance), validation, promotion to `runs/report/` |
 | [`plots.py`](plots.py), [`metrics.py`](metrics.py) | Figures and MAE/RMSE helpers. Each PNG is written with a same-stem CSV of the plotted series |
