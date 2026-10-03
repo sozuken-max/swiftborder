@@ -229,3 +229,75 @@ def test_training_rows_follow_the_harness_folds():
     assert (frozen["bin_ts"] + lm.LABEL_LAG <= lm.BQML_TRAINED_AT).all()
     assert not frozen["date_sgt"].isin(lm.BQML_VAL_DAYS).any()
     assert lm.version_for("xgb[maps]", dt.datetime(2026, 10, 3, 4, tzinfo=UTC)) == "labels_before=2026-10-03T00:00:00+08:00"
+
+
+def _install_selection(monkeypatch):
+    calls = []
+
+    def fake(chosen):
+        calls.append(dict(chosen))
+        return {
+            "source": "fixture",
+            "rows": [
+                {"direction": d, "forecast_min": 30.0, "forecast_for": "2026-10-03T04:00:00Z", "origin_ts": "2026-10-03T03:30:00Z", "model": m}
+                for d, m in chosen.items()
+            ],
+        }
+
+    monkeypatch.setattr(main, "query_selection", fake)
+    return calls
+
+
+def test_model_defaults_to_served(monkeypatch):
+    calls = _install(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={})))
+    assert status == 200 and payload["model"] == "served"
+    assert calls == [("served", ("SG_TO_MY", "MY_TO_SG"))]
+
+
+def test_per_direction_override(monkeypatch):
+    calls = _install_selection(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "xgb[maps]", "model_my_to_sg": "persistence"})))
+    assert status == 200 and payload["model"] == "custom"
+    assert calls == [{"SG_TO_MY": "xgb[maps]", "MY_TO_SG": "persistence"}]
+    assert payload["directions"]["SG_TO_MY"]["model"] == "xgb[maps]"
+    assert payload["directions"]["MY_TO_SG"]["model"] == "persistence"
+    assert payload["version"].startswith("SG_TO_MY=xgb[maps]:labels_before=")
+    assert "MY_TO_SG=persistence:latest-bin" in payload["version"]
+
+
+def test_override_with_served_base_resolves_the_selection(monkeypatch):
+    calls = _install_selection(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={"model_sg_to_my": "xgb_bq[daily]"})))
+    assert status == 200
+    assert calls == [{"SG_TO_MY": "xgb_bq[daily]", "MY_TO_SG": main.SERVED_SELECTION["MY_TO_SG"]}]
+
+
+def test_override_errors(monkeypatch):
+    calls = _install_selection(monkeypatch)
+    cases = [
+        ({"model_sg_to_my": "nope"}, "unknown model in model_sg_to_my"),
+        ({"model_sg_to_my": "lstm"}, "model in model_sg_to_my is not deployed"),
+        ({"direction": "MY_TO_SG", "model_sg_to_my": "xgb[maps]"}, "a per-direction model is set for a direction that was not requested"),
+        ({"model_sg_to_my": "xgb[maps]", "version": "x"}, "version cannot be combined with a per-direction model"),
+    ]
+    for query, message in cases:
+        payload, status, _ = _json(main.forecast(_request(query=query)))
+        assert status == 400 and payload["error"] == message, query
+    assert calls == []
+
+
+def test_catalog_lists_selection_parameters(monkeypatch):
+    _install(monkeypatch)
+    payload, _, _ = _json(main.forecast(_request(query={"list": "models"})))
+    assert {"model", "model_sg_to_my", "model_my_to_sg"} <= set(payload["parameters"])
+
+
+def test_live_path_with_override(monkeypatch):
+    view = _view()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, view, now)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "persistence", "model_sg_to_my": "ridge[maps]"})))
+    assert status == 200 and payload["source"] == "local model"
+    assert payload["directions"]["SG_TO_MY"]["model"] == "ridge[maps]"
+    assert set(payload["model_meta"]) == {"ridge[maps]", "persistence"}

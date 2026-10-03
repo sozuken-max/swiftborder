@@ -12,6 +12,10 @@ Callable ids:
   harness fold for that day, so a served forecast equals what ``eval/joined.py`` scored.
 
 Other ids are listed from the eval harness and are not callable (``artifact`` / ``code-only``).
+
+Manual selection: ``model`` (default ``served``) picks one id for every requested direction;
+``model_sg_to_my`` / ``model_my_to_sg`` override it for one direction. A request with an override
+answers ``model: custom`` and names the model used in each direction.
 BigQuery ML (``lin_h30``, ``xgb_h30``, ``v_forecast_recent``) is no longer called.
 """
 
@@ -44,6 +48,7 @@ CALLABLE_STATES = frozenset({"production", "local"})
 SERVED_SELECTION = {"SG_TO_MY": "lin_bq[frozen]", "MY_TO_SG": "persistence"}
 SELECTION_ID = "registry-2026-09-12-local-replica"
 PERSISTENCE_VERSION = "latest-bin"
+OVERRIDE_PARAMS = {"SG_TO_MY": "model_sg_to_my", "MY_TO_SG": "model_my_to_sg"}
 
 _LATEST_SQL = f"""
 SELECT direction, bin_ts, {", ".join(lm.VIEW_COLUMNS)}
@@ -196,13 +201,23 @@ def fitted_model(model_id):
         return model
 
 
+def resolve(model_id, direction):
+    """The concrete model behind an id in one direction (``served`` -> its selection)."""
+    return SERVED_SELECTION[direction] if model_id == "served" else model_id
+
+
 def query_forecast(model_id, directions):
     """Forecast rows for one callable id. Tests replace this function."""
     spec = MODELS[model_id]
     if not spec["callable"]:
         raise RuntimeError("model is not deployed")
+    return query_selection({d: resolve(model_id, d) for d in directions})
+
+
+def query_selection(chosen):
+    """Forecast rows for a direction -> concrete model mapping. Tests replace this function."""
+    directions = list(chosen)
     latest = lm.prepare(fetch_latest(directions))
-    chosen = {d: (SERVED_SELECTION[d] if model_id == "served" else model_id) for d in directions}
     rows, meta = [], {}
     for direction in directions:
         sub = latest[latest["direction"] == direction]
@@ -290,7 +305,17 @@ def list_models():
         if spec["id"] == "served":
             row["selection"] = dict(SERVED_SELECTION)
         models.append(row)
-    return {"models": models}
+    return {
+        "models": models,
+        "parameters": {
+            "model": "callable id for every requested direction (default served)",
+            "model_sg_to_my": "callable id for SG_TO_MY only (overrides model)",
+            "model_my_to_sg": "callable id for MY_TO_SG only (overrides model)",
+            "direction": "SG_TO_MY, MY_TO_SG or both (default both)",
+            "version": "optional; must equal the current version (not allowed with an override)",
+            "horizon_min": "30",
+        },
+    }
 
 
 def _cache_get(key):
@@ -417,24 +442,45 @@ def forecast(request):
         return (json.dumps(list_models()), 200, headers)
 
     model_raw = _param(body, args, "model")
-    if model_raw is None or str(model_raw).strip() == "":
-        return _error("model is required", 400)
-    model_id = str(model_raw).strip()
+    model_id = "served" if model_raw is None or str(model_raw).strip() == "" else str(model_raw).strip()
     spec = MODELS.get(model_id)
     if spec is None:
         return _error("unknown model", 400)
     if not spec["callable"]:
         return _error("model is not deployed", 400)
 
-    version_now = current_version(model_id)
+    overrides = {}
+    for direction, name in OVERRIDE_PARAMS.items():
+        raw = _param(body, args, name)
+        if raw is None or str(raw).strip() == "":
+            continue
+        mid = str(raw).strip()
+        if mid not in MODELS:
+            return _error("unknown model in %s" % name, 400)
+        if not MODELS[mid]["callable"]:
+            return _error("model in %s is not deployed" % name, 400)
+        overrides[direction] = mid
+
     version_raw = _param(body, args, "version")
-    if version_raw is not None and str(version_raw).strip() != "" and str(version_raw).strip() != version_now:
-        return _error("unknown version", 400)
-    version_id = version_now
+    has_version = version_raw is not None and str(version_raw).strip() != ""
 
     directions = _parse_directions(_param(body, args, "direction"))
     if directions is None or any(direction not in spec["directions"] for direction in directions):
         return _error("direction must be SG_TO_MY, MY_TO_SG, or both", 400)
+    if any(d not in directions for d in overrides):
+        return _error("a per-direction model is set for a direction that was not requested", 400)
+
+    if overrides:
+        if has_version:
+            return _error("version cannot be combined with a per-direction model", 400)
+        chosen = {d: resolve(overrides.get(d, model_id), d) for d in directions}
+        model_id = "custom"
+        version_id = ",".join("%s=%s:%s" % (d, m, current_version(m)) for d, m in chosen.items())
+    else:
+        chosen = None
+        version_id = current_version(model_id)
+        if has_version and str(version_raw).strip() != version_id:
+            return _error("unknown version", 400)
 
     horizon = _parse_horizon(_param(body, args, "horizon_min"), spec)
     if horizon is None:
@@ -444,7 +490,7 @@ def forecast(request):
     cached = _cache_get(cache_key)
     if cached is None:
         try:
-            result = query_forecast(model_id, directions)
+            result = query_selection(chosen) if chosen else query_forecast(model_id, directions)
             payload = _assemble(model_id, version_id, horizon, directions, result)
         except NoRecentForecast:
             return _error("No recent forecast for the requested direction", 503)

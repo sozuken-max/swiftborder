@@ -37,11 +37,19 @@ What it is not:
 
 | Parameter | Default | Values |
 | --- | --- | --- |
-| `list` | none | `models` returns the catalog |
-| `model` | required | `served`, `persistence`, or a model id above; other catalog ids return 400 |
-| `version` | current | must equal the current version, otherwise 400 |
+| `list` | none | `models` returns the catalog and a description of these parameters |
+| `model` | `served` | `served`, `persistence`, or a model id above, used for every requested direction; other catalog ids return 400 |
+| `model_sg_to_my` | none | a callable id for `SG_TO_MY` only; overrides `model` there |
+| `model_my_to_sg` | none | a callable id for `MY_TO_SG` only; overrides `model` there |
+| `version` | current | must equal the current version, otherwise 400; not allowed with a per-direction override |
 | `direction` | `both` | `SG_TO_MY`, `MY_TO_SG`, `both` |
 | `horizon_min` | 30 | 30 only |
+
+**Manual selection.**
+- `?model=xgb[maps]` uses one model for both directions.
+- `?model=xgb[maps]&model_my_to_sg=persistence` mixes models: the response says `"model": "custom"`, names the model in each direction, and its `version` lists each direction's model and version.
+- An override for a direction that was not requested (`direction=MY_TO_SG&model_sg_to_my=...`) returns 400.
+- With no parameters at all, the request returns `served`.
 
 **Versions:**
 - daily models: `labels_before=YYYY-MM-DDT00:00:00+08:00`;
@@ -66,7 +74,7 @@ What it is not:
 
 | Status | When |
 | --- | --- |
-| 400 | Missing or unknown `model`, model not deployed, stale `version`, bad `direction` or `horizon_min`, `list` other than `models` |
+| 400 | Unknown model (in `model` or an override), model not deployed, stale `version`, `version` with an override, an override for a direction not requested, bad `direction` or `horizon_min`, `list` other than `models` |
 | 405 | Method other than `GET` / `OPTIONS` |
 | 502 | BigQuery read or fit failed (`{"error": "Forecast query failed"}`; details stay in the log) |
 | 503 | No recent row for a requested direction (a data gap, not a failed deploy) |
@@ -100,6 +108,7 @@ $u = gcloud run services describe forecast-api --region asia-southeast1 --projec
 $t = gcloud auth print-identity-token
 curl.exe -s -H "Authorization: Bearer $t" "$u/?model=served"
 curl.exe -g -s -H "Authorization: Bearer $t" "$u/?model=xgb[maps]&direction=SG_TO_MY"
+curl.exe -g -s -H "Authorization: Bearer $t" "$u/?model=xgb_bq[daily]&model_my_to_sg=persistence"
 ```
 
 - **Roll back:** `gcloud run services update-traffic forecast-api --region asia-southeast1 --project swiftborder --to-revisions <previous-revision>=100`.
