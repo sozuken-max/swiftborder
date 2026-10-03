@@ -22,7 +22,7 @@ def test_step_order_gates_traffic_on_the_smoke_test():
 def test_images_are_pinned_by_digest():
     for s in CFG["steps"]:
         assert "@sha256:" in s["name"], s["id"]
-    assert any("--builder=gcr.io/buildpacks/builder@sha256:" in a for a in _step("Buildpack")["args"])
+    assert any(re.match(r"--builder=gcr\.io/buildpacks/builder(:[\w.-]+)?@sha256:", a) for a in _step("Buildpack")["args"])
 
 
 def test_tests_include_the_harness_equivalence_check():
@@ -51,3 +51,10 @@ def test_smoke_checks_auth_catalog_served_and_undeployed():
     script = _step("Smoke")["args"][-1]
     for needle in ('test "$$code" = "403"', "?list=models", "?model=served", "?model=lstm", '"source": "local model"'):
         assert needle in script
+
+
+def test_builder_ships_the_python_the_tests_use():
+    # builder:latest is google-24 (Python 3.13 / 3.14 only); the suites and the harness run 3.11.
+    step = _step("Buildpack")
+    assert any(a.startswith("--builder=gcr.io/buildpacks/builder:google-22@sha256:") for a in step["args"])
+    assert "GOOGLE_PYTHON_VERSION=3.11.x" in step["env"]
