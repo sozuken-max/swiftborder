@@ -1,9 +1,9 @@
-> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble`.
+> **Committed report snapshot.** Ephemeral runs stay gitignored; this folder is the citation target for the final report. Promoted from `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble`.
 
-# Eval run `20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble`
+# Eval run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble`
 
-Created (UTC): 2026-09-30T20:36:22Z. Schema v2.
-Git `eb435ddb71f3` (dirty: False); code SHA-256 `f01342300d23`.
+Created (UTC): 2026-10-03T04:08:12Z. Schema v2.
+Git `b3b656293df4` (dirty: False); code SHA-256 `39fa1c24397f`.
 
 ## offline
 

@@ -9,10 +9,10 @@
     "ensemble"
   ],
   "provenance": {
-    "git_sha": "eb435ddb71f31ee958489201d767aaab0931d16c",
+    "git_sha": "b3b656293df44d2237d15c6742905871015e1f25",
     "git_branch": "eval-integrity-overhaul",
     "git_dirty": false,
-    "code_sha256": "f01342300d230559d83beae927b1965ca4a95cc796db2f876d27c0fa35a26cd5",
+    "code_sha256": "39fa1c24397f475a1ad5274b80d71736719c1227bc75529592dfe86d2b38f72e",
     "python": "3.11.9",
     "packages": {
       "numpy": "2.4.6",
@@ -173,6 +173,8 @@
       "max_slew_step_sec": 300,
       "max_ffill_steps": 6,
       "use_dwt": false,
+      "dwt_wavelet": "db2",
+      "dwt_level": 2,
       "xgb": {
         "n_estimators": 200,
         "learning_rate": 0.03,
@@ -6160,7 +6162,7 @@
             "epochs_run": 12,
             "best_epoch": 2,
             "best_val_loss": 0.18300412595272064,
-            "train_seconds": 18.9,
+            "train_seconds": 31.0,
             "mae_min": 4.120297144570785
           },
           {
@@ -6169,7 +6171,7 @@
             "epochs_run": 26,
             "best_epoch": 16,
             "best_val_loss": 0.165280282497406,
-            "train_seconds": 32.1,
+            "train_seconds": 49.4,
             "mae_min": 3.9715094310122807
           },
           {
@@ -6178,7 +6180,7 @@
             "epochs_run": 14,
             "best_epoch": 4,
             "best_val_loss": 0.2016281634569168,
-            "train_seconds": 22.1,
+            "train_seconds": 31.4,
             "mae_min": 4.347162989658642
           }
         ]
@@ -6202,7 +6204,7 @@
             "epochs_run": 13,
             "best_epoch": 3,
             "best_val_loss": 0.17825908958911896,
-            "train_seconds": 13.3,
+            "train_seconds": 21.8,
             "mae_min": 4.19447684482394
           },
           {
@@ -6211,7 +6213,7 @@
             "epochs_run": 12,
             "best_epoch": 2,
             "best_val_loss": 0.17416802048683167,
-            "train_seconds": 12.4,
+            "train_seconds": 20.4,
             "mae_min": 4.074022314701678
           },
           {
@@ -6220,7 +6222,7 @@
             "epochs_run": 12,
             "best_epoch": 2,
             "best_val_loss": 0.17338036000728607,
-            "train_seconds": 12.6,
+            "train_seconds": 20.9,
             "mae_min": 3.9746857935807953
           }
         ]
@@ -6244,7 +6246,7 @@
             "epochs_run": 27,
             "best_epoch": 17,
             "best_val_loss": 0.2210802435874939,
-            "train_seconds": 34.9,
+            "train_seconds": 52.9,
             "mae_min": 4.528190732481573
           },
           {
@@ -6253,7 +6255,7 @@
             "epochs_run": 16,
             "best_epoch": 6,
             "best_val_loss": 0.23401257395744324,
-            "train_seconds": 22.1,
+            "train_seconds": 32.9,
             "mae_min": 4.325416397297081
           },
           {
@@ -6262,7 +6264,7 @@
             "epochs_run": 17,
             "best_epoch": 7,
             "best_val_loss": 0.19277049601078033,
-            "train_seconds": 23.8,
+            "train_seconds": 35.7,
             "mae_min": 4.161371505268468
           }
         ]
@@ -6286,7 +6288,7 @@
             "epochs_run": 39,
             "best_epoch": 29,
             "best_val_loss": 0.08004460483789444,
-            "train_seconds": 48.1,
+            "train_seconds": 73.4,
             "mae_min": 4.7534403212375445
           },
           {
@@ -6295,7 +6297,7 @@
             "epochs_run": 25,
             "best_epoch": 15,
             "best_val_loss": 0.10723841935396194,
-            "train_seconds": 32.5,
+            "train_seconds": 48.7,
             "mae_min": 4.883104365301622
           },
           {
@@ -6304,7 +6306,7 @@
             "epochs_run": 18,
             "best_epoch": 8,
             "best_val_loss": 0.09813723713159561,
-            "train_seconds": 25.1,
+            "train_seconds": 40.3,
             "mae_min": 4.598586560987513
           }
         ]
@@ -9910,6 +9912,6 @@
       }
     ]
   },
-  "run_id": "20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble",
-  "created_at_utc": "2026-09-30T20:36:22Z"
+  "run_id": "20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble",
+  "created_at_utc": "2026-10-03T04:08:12Z"
 }

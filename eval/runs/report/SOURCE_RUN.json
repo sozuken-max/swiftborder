@@ -1,7 +1,7 @@
 {
-  "promoted_from": "20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble",
-  "source_path": "20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble",
-  "git_sha": "eb435ddb71f31ee958489201d767aaab0931d16c",
+  "promoted_from": "20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble",
+  "source_path": "20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble",
+  "git_sha": "b3b656293df44d2237d15c6742905871015e1f25",
   "git_dirty": false,
-  "code_sha256": "f01342300d230559d83beae927b1965ca4a95cc796db2f876d27c0fa35a26cd5"
+  "code_sha256": "39fa1c24397f475a1ad5274b80d71736719c1227bc75529592dfe86d2b38f72e"
 }

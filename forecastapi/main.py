@@ -105,7 +105,7 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY direction ORDER BY bin_ts DESC) = 1
 
 # Promoted harness snapshot. Version label for models that run scored and saved
 # nothing a Cloud Run service can load. Not a semver.
-REPORT_RUN_ID = "20260930T202959Z_offline-bqml-joined-deep-fuzzy-ensemble"
+REPORT_RUN_ID = "20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble"
 NOT_DEPLOYED_VERSION = "not-deployed"
 BOTH = ("SG_TO_MY", "MY_TO_SG")
 MY_ONLY = ("MY_TO_SG",)
