@@ -4,12 +4,12 @@ PR #2 touches four live things: a `swiftbackend` redeploy and a first `forecast-
 
 | Item | State | Owner | Deadline |
 | --- | --- | --- | --- |
-| `swiftbackend` credential / public access ([findings.md](findings.md#known-risk-public-swiftbackend-documented-not-changed)) | Open. Not changed by this PR | _team to assign_ | Before merge if the team treats it as a blocker (see below) |
+| `swiftbackend` credential / public access ([findings.md](findings.md#known-risk-public-swiftbackend-documented-not-changed)) | **Accepted as is** (team decision 2026-10-03): settings unchanged, not a merge blocker | — | Revisit if credit use looks abnormal |
 | `swiftbackend` redeploy on merge | Pending merge | _team to assign_ | At merge |
 | `forecast-api` first deploy on merge (trigger `949ff029`) | Pending merge | _team to assign_ | At merge |
 | Weather append (1–30 Sep 2026) | Applied 2026-10-01 ~01:50 SGT | _team to assign_ | Retention decision before snapshots expire |
 | Snapshots `*_snapshot_20261001` | Expire **2026-10-31 01:41 SGT** | same | 2026-10-30 |
-| Deck PNGs `docs/images/*.png` | Stale; regenerate per [diagram skill](../skills/diagram-image-generation/SKILL.md) | Implementer; Yingzhao signs off | Before the next deck |
+| Deck PNGs `docs/images/*.png` | Stale; **handled separately from this PR** (team decision 2026-10-03). Regenerate per [diagram skill](../skills/diagram-image-generation/SKILL.md) | Implementer; Yingzhao signs off | Before the next deck |
 
 Commands below assume the Windows gcloud setup in [inventory.md](inventory.md#querying-this-project-from-a-windows-dev-box) and `--project swiftborder`.
 
@@ -83,7 +83,7 @@ All other access to project `swiftborder` was read-only.
 | 2026-10-03 (by the `ae5d034` author) | Cloud Build trigger `forecast-api` (`949ff029`, `^main$`, `forecastapi/**`, ignores `camdetect/**`); service account `forecast-api@` with project `bigquery.jobUser` and `bigquery.dataViewer` | `gcloud builds triggers delete 949ff029-31c9-4521-8ff4-d0e8d16dfa25`; `gcloud iam service-accounts delete forecast-api@swiftborder.iam.gserviceaccount.com` |
 | 2026-10-03 | `forecast-api@`: removed project-wide `bigquery.dataViewer`; granted `dataViewer` on datasets `traffic_prediction` and `causeway` only | `REVOKE` the two dataset grants and re-add the project binding |
 
-Still open: the trigger builds as the default Compute Engine service account, which usually holds broad project roles. A dedicated build identity (Cloud Run admin on the one service, `iam.serviceAccountUser` on `forecast-api@`, Artifact Registry writer, logs writer) is the narrower option, and it needs approval.
+Build identity: the trigger builds as the default Compute Engine service account, which usually holds broad project roles. **Accepted for this student project** (team decision 2026-10-03). A dedicated build identity (Cloud Run admin on the one service, `iam.serviceAccountUser` on `forecast-api@`, Artifact Registry writer, logs writer) is the narrower option if that changes.
 
 ## 2. Weather append: verify, keep or revert
 
@@ -119,7 +119,9 @@ CREATE OR REPLACE TABLE `swiftborder.weatherforecast.weatherforecast` CLONE `swi
 
 Decision: ______ Date: ______ By: ______
 
-## 3. Credential and public access (open)
+## 3. Credential and public access (accepted, unchanged)
+
+**Team decision 2026-10-03:** keep `swiftbackend` as it is and merge without changing it. The steps below are recorded for later; none is planned.
 
 `swiftbackend` accepts unauthenticated calls, allows any origin, and holds `ROBOFLOW_API_KEY` as a plain env var. This PR documents that and does not change it. The redeploy keeps the current settings. Each fix below changes production and needs the team's approval. The first two also need the Roboflow workspace owner.
 
@@ -129,7 +131,7 @@ Decision: ______ Date: ______ By: ______
 
 ## 4. Merge order
 
-1. Section 3: decide whether it blocks the merge. If it does, do steps 1–2 first; they do not depend on this PR.
+1. Section 3 is accepted as is and does not block the merge. The PR stays as one PR (team decision 2026-10-03).
 2. Merge PR #2, then work through section 1 steps 3–5 and section 1b.
 3. Section 2 retention decision by 2026-10-30.
 4. Regenerate the deck PNGs before the next presentation.

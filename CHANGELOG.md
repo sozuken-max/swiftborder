@@ -4,6 +4,8 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-03
 
+- Team decisions on the review: the default Compute Engine build identity for `forecast-api` is accepted; `swiftbackend` credential and public-access settings stay as they are and do not block the merge; the PR stays as one PR; deck PNGs are handled separately. Recorded in `docs/release-pr2.md`.
+
 - Review of `ae5d034`: `forecastapi` catalog states renamed. New id `served` (`production`) returns the `v_forecast_recent` registry mix; `lin_h30`, `xgb_h30` and `persistence` are `api` (direct query, not necessarily what is served). `forecastapi/cloudbuild.yaml` pins all four images by digest. `forecast-api@` runtime identity narrowed in GCP: project-wide `bigquery.dataViewer` removed, `dataViewer` granted on `traffic_prediction` and `causeway` only. `docs/release-pr2.md` adds the `forecast-api` first-deploy checks and rollback and a table of every GCP change for this PR. Firebase wording aligned with the observed Hosting site. Report re-run and re-promoted from the current tree: `20261003T035807Z` from `b3b6562` (every metric and decision identical to the previous report).
 
 - Evaluation freeze: reported rows must have a label or target time at or before 2026-10-19 23:59 SGT. Through the 31 Oct deliverables the remaining work is the frozen-window harness, the report, and the deck. Collectors stay up. Recorded in [docs/roadmap.md](docs/roadmap.md) and [docs/evaluation.md](docs/evaluation.md).

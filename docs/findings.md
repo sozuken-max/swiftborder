@@ -22,7 +22,7 @@
 
 ## Known risk: public `swiftbackend` (documented, not changed)
 
-`swiftbackend` has the IAM invoker check disabled with an empty policy, ingress `all`, CORS `*` (`ALLOWED_ORIGIN` unset) and `ROBOFLOW_API_KEY` as a plain env var ([inventory.md](inventory.md)). Anyone who finds the URL can trigger billed Roboflow inference and exhaust the free-tier credits the camera backfill also needs. The team chose to document this rather than change the live service. Minimum mitigation when approved: set `ALLOWED_ORIGIN`, move the key to Secret Manager, require an invoker identity or an API key.
+`swiftbackend` has the IAM invoker check disabled with an empty policy, ingress `all`, CORS `*` (`ALLOWED_ORIGIN` unset) and `ROBOFLOW_API_KEY` as a plain env var ([inventory.md](inventory.md)). Anyone who finds the URL can trigger billed Roboflow inference and exhaust the free-tier credits the camera backfill also needs. The team chose to document this rather than change the live service, and confirmed on 2026-10-03 that it does not block merging PR #2. Minimum mitigation when approved: set `ALLOWED_ORIGIN`, move the key to Secret Manager, require an invoker identity or an API key.
 
 ---
 
