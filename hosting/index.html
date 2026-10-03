@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwiftBorder | SG-MY Checkpoint Traffic Dashboard</title>
+    <meta name="description"
+        content="Real-time live camera feeds, transit estimates, AI congestion forecasts, and toll calculator for Woodlands Causeway and Tuas Second Link.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Favicon -->
+    <link rel="icon" type="image/png"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+
+<body>
+    <!-- Navbar -->
+    <header class="navbar" id="navbar">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">Swift<span>Border</span></span>
+            </a>
+            <nav class="nav-links">
+                <a href="#dashboard" class="nav-link">Live Status</a>
+                <a href="#predictions" class="nav-link">AI Forecasts</a>
+                <a href="#calculator" class="nav-link">Toll &amp; Fuel</a>
+            </nav>
+            <div class="nav-academic-badge">
+                <img src="https://www.iss.nus.edu.sg/annual-report/2022/images/NUS-ISS-Logo-2022(FullColour).png"
+                    alt="NUS-ISS Logo" class="nav-nus-logo">
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Section -->
+    <section id="dashboard" class="dashboard-section" style="padding-top: 7rem;">
+        <div class="section-container">
+            <div class="section-header">
+                <h1 class="section-title">Live Border Status</h1>
+                <p class="section-desc">Real-time transit estimates and live camera feeds for both checkpoints.</p>
+            </div>
+
+
+
+            <!-- Tab Switcher -->
+            <div class="tab-container">
+                <button class="tab-btn active" data-checkpoint="woodlands">
+                    <span class="tab-icon">🌉</span> Woodlands Causeway (First Link)
+                </button>
+                <button class="tab-btn" data-checkpoint="tuas">
+                    <span class="tab-icon">🌉</span> Tuas Second Link
+                </button>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Transit Times Card -->
+                <div class="dashboard-card status-card">
+                    <div class="card-header">
+                        <h3>Traffic Summary <span class="card-subnote">last 60 min</span></h3>
+                    </div>
+
+                    <!-- Populated from the same live feed as the congestion chart -->
+                    <div class="time-breakdowns" id="transit-breakdowns">
+                        <div class="time-item direction" id="row-sg">
+                            <div class="vehicle-info">
+                                <span class="vehicle-icon dir-dot sg">&#9679;</span>
+                                <div class="dir-label">
+                                    <span class="vehicle-name">SG &rarr; JB</span>
+                                    <span class="dir-route">Mandai &rarr; Shell JB</span>
+                                </div>
+                            </div>
+                            <div class="time-figure">
+                                <div class="time-value" id="sg-time">&mdash;</div>
+                                <div class="time-sub" id="sg-sub">Loading&hellip;</div>
+                            </div>
+                            <div class="dir-badges">
+                                <span class="status-indicator-badge normal" id="sg-status">Loading&hellip;</span>
+                                <span class="time-trend stable" id="sg-trend">&#9644; Stable</span>
+                            </div>
+                        </div>
+
+                        <div class="time-item direction" id="row-jb">
+                            <div class="vehicle-info">
+                                <span class="vehicle-icon dir-dot jb">&#9679;</span>
+                                <div class="dir-label">
+                                    <span class="vehicle-name">JB &rarr; SG</span>
+                                    <span class="dir-route">JB &rarr; Woodlands</span>
+                                </div>
+                            </div>
+                            <div class="time-figure">
+                                <div class="time-value" id="jb-time">&mdash;</div>
+                                <div class="time-sub" id="jb-sub">Loading&hellip;</div>
+                            </div>
+                            <div class="dir-badges">
+                                <span class="status-indicator-badge normal" id="jb-status">Loading&hellip;</span>
+                                <span class="time-trend stable" id="jb-trend">&#9644; Stable</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shown instead of the rows when the selected checkpoint has no feed -->
+                    <div class="transit-unavailable" id="transit-unavailable" style="display:none;"></div>
+
+                    <div class="card-footer-info">
+                        <span>Last updated: <strong id="last-updated">Loading&hellip;</strong></span>
+                        <button class="refresh-btn" id="refresh-dashboard">&#128260; Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Live Camera Card -->
+                <div class="dashboard-card camera-card">
+                    <div class="card-header">
+                        <h3>Live Camera Feed</h3>
+                        <div class="cam-live-badge"><span class="rec-dot-inline">●</span> LIVE — data.gov.sg</div>
+                    </div>
+                    <!-- Live Camera Grid populated by JS on DOMContentLoaded -->
+                    <div class="live-cam-grid" id="live-cam-grid">
+                        <!-- Spinner injected dynamically by fetchLiveCameras() -->
+                    </div>
+                    <div class="cam-grid-footer">
+                        <span id="cam-last-fetched">Loading...</span>
+                        <button class="refresh-btn" id="refresh-cameras">🔄 Refresh Cameras</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Vehicle Detection Image (from backend) -->
+            <div class="dashboard-card ai-detection-card" id="ai-detection-panel">
+                <div class="card-header">
+                    <h3>🤖 AI Vehicle Detection</h3>
+                    <div class="cam-live-badge"><span class="rec-dot-inline">●</span> AI Model — Live Result</div>
+                </div>
+                <div class="ai-detection-body">
+                    <p class="ai-detection-status" id="ai-detection-status">Fetching AI detection result…</p>
+                    <img id="ai-detection-img" class="ai-detection-img" alt="AI detected vehicles at checkpoint"
+                        style="display:none;" />
+                </div>
+                <div class="cam-grid-footer">
+                    <span id="ai-detection-timestamp"></span>
+                    <button class="refresh-btn" id="refresh-ai-detection">🔄 Refresh Detection</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Live Congestion Chart Section -->
+    <section id="predictions" class="predictions-section">
+        <div class="section-container">
+            <div class="section-header">
+                <h2 class="section-title">Live Congestion Data</h2>
+                <p class="section-desc">Real-time travel duration on the Woodlands Causeway — both directions. Data
+                    refreshes every few minutes.</p>
+            </div>
+
+            <div class="live-chart-card dashboard-card">
+                <div class="lc-header">
+                    <div class="lc-title-group">
+                        <h3>Woodlands Causeway — Travel Time (min)</h3>
+                        <span class="lc-badge" id="lc-updated">Loading…</span>
+                    </div>
+                    <div class="lc-legend">
+                        <span class="lc-legend-dot sg"></span><span>SG → JB</span>
+                        <span class="lc-legend-dot jb"></span><span>JB → SG</span>
+                    </div>
+                </div>
+
+                <div class="lc-chart-area" id="lc-chart-area">
+                    <!-- SVG line chart injected by JS -->
+                    <div class="lc-loading" id="lc-loading">Fetching live data…</div>
+                </div>
+
+                <div class="lc-footer" id="lc-footer" style="display:none;">
+                    <div class="lc-stat" id="lc-stat-sg"></div>
+                    <div class="lc-stat" id="lc-stat-jb"></div>
+                </div>
+            </div>
+
+            <!-- 30-minute forecast (forecast-api) -->
+            <div class="live-chart-card dashboard-card" id="forecast-widget" style="margin-top: 1.5rem;">
+                <div class="lc-header">
+                    <div class="lc-title-group">
+                        <h3>Woodlands Causeway &mdash; 30-min Forecast (min)</h3>
+                        <span class="lc-badge" id="fc-updated">Loading&hellip;</span>
+                    </div>
+                </div>
+
+                <p class="ai-dir-note" id="fc-status">Fetching forecast&hellip;</p>
+                <div class="ai-dir-grid" id="fc-cards"></div>
+
+                <p class="ai-dir-note">Forecast of the Google Maps travel-time estimate 30 minutes ahead, not a
+                    measured crossing time.</p>
+
+                <div class="cam-grid-footer">
+                    <span id="fc-meta"></span>
+                    <button class="refresh-btn" id="refresh-forecast">&#128260; Refresh Forecast</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Toll & Compliance Calculator Section -->
+    <section id="calculator" class="calculator-section">
+        <div class="section-container">
+            <div class="section-header">
+                <h2 class="section-title">Toll &amp; Compliance Calculator</h2>
+                <p class="section-desc">Calculate total tolls (SG + MY sides) and check the Singapore 3/4 tank rule
+                    requirements before you drive.</p>
+            </div>
+
+            <div class="calculator-grid">
+                <!-- Settings Input -->
+                <div class="dashboard-card calc-input-card">
+                    <h3>Trip Details</h3>
+                    <form id="calc-form" class="calc-form">
+                        <div class="form-group">
+                            <label for="calc-route">Route</label>
+                            <select id="calc-route" class="form-select">
+                                <option value="woodlands">Woodlands Causeway</option>
+                                <option value="tuas">Tuas Second Link</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="calc-vehicle">Vehicle Type</label>
+                            <select id="calc-vehicle" class="form-select">
+                                <option value="car">Car (Private)</option>
+                                <option value="motorcycle">Motorcycle</option>
+                                <option value="van">Van / Light Goods</option>
+                                <option value="bus">Bus / Heavy Vehicle</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="calc-direction">Direction</label>
+                            <div class="toggle-switch">
+                                <label class="switch-option">
+                                    <input type="radio" name="direction" value="sg-to-my" checked>
+                                    <span>SG → MY</span>
+                                </label>
+                                <label class="switch-option">
+                                    <input type="radio" name="direction" value="my-to-sg">
+                                    <span>MY → SG</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="tank-group">
+                            <label for="fuel-level">Singapore Fuel Gauge Level (3/4 Tank Rule)</label>
+                            <input type="range" id="fuel-level" class="fuel-slider" min="0" max="100" value="85">
+                            <div class="slider-labels">
+                                <span>Empty</span>
+                                <span>50%</span>
+                                <span class="marker">75% (3/4)</span>
+                                <span>Full</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Calc Output -->
+                <div class="dashboard-card calc-output-card">
+                    <h3>Summary Report</h3>
+                    <div class="report-box">
+                        <div class="report-row">
+                            <span class="report-label">Singapore Toll:</span>
+                            <span class="report-val" id="sg-toll">SGD 0.00</span>
+                        </div>
+                        <div class="report-row">
+                            <span class="report-label">Malaysia Toll / Road Charge:</span>
+                            <span class="report-val" id="my-toll">MYR 2.50</span>
+                        </div>
+                        <hr class="report-divider">
+                        <div class="report-row total">
+                            <span class="report-label">Total Cost (approx):</span>
+                            <span class="report-val text-gradient" id="total-cost">SGD 0.77</span>
+                        </div>
+                    </div>
+
+                    <!-- Compliance Alert -->
+                    <div class="compliance-alert" id="compliance-alert">
+                        <div class="alert-icon">✅</div>
+                        <div class="alert-content">
+                            <p class="alert-title">Fuel Gauge Compliant</p>
+                            <p class="alert-desc">Your fuel level is above 75%. You will comply with the Singapore 3/4
+                                tank rule at the border checkpoints.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-container">
+            <div class="footer-brand">
+                <a href="#" class="footer-logo">
+                    <span class="logo-icon">⚡</span>
+                    <span class="logo-text">Swift<span>Border</span></span>
+                </a>
+                <p class="footer-tagline">Making border crossings simple, predictable, and stress-free.</p>
+                <div class="footer-academic-partner">
+                    <p>Academic Project — Practice Module</p>
+                    <div class="footer-logo-wrapper">
+                        <img src="assets/nus_iss_logo.jpg" alt="NUS ISS Logo" class="footer-academic-logo">
+                    </div>
+                </div>
+            </div>
+            <div class="footer-links">
+                <div class="links-column">
+                    <h4>Navigation</h4>
+                    <a href="#dashboard">Live Dashboard</a>
+                    <a href="#predictions">AI Predictions</a>
+                    <a href="#calculator">Toll Calculator</a>
+                </div>
+                <div class="links-column">
+                    <h4>Academic</h4>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">NUS-ISS PPUP</span>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Group 3 Project</span>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 SwiftBorder. Practice Module for PPUP program (Group 3). Developed for educational purposes.
+                Data sources include LTA and LLM analysis.</p>
+        </div>
+    </footer>
+
+    <!-- App Logic Script -->
+    <script src="app.js"></script>
+</body>
+
+</html>
