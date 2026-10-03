@@ -52,29 +52,39 @@ def _install(monkeypatch):
     return calls
 
 
-def _view(start="2026-09-05 16:00", days=30, seed=0):
-    """Synthetic v_training_set rows (both directions, 10-minute bins)."""
+ROUTES = {"SG_TO_MY": "woodlands_sg_to_my", "MY_TO_SG": "woodlands_my_to_sg"}
+# 03:42 UTC: origin 03:30 closed at 03:40, the fixture target 04:00 is 18 minutes ahead
+FIXTURE_NOW = dt.datetime(2026, 10, 3, 3, 42, tzinfo=UTC)
+
+
+def _bins(start="2026-09-05 16:00", days=30, seed=0, drop=()):
+    """Synthetic v_bins_10min rows (both directions, 10-minute bins); ``drop`` removes bin times."""
     rng = np.random.default_rng(seed)
     t0 = pd.Timestamp(start, tz="UTC")
+    dropped = {pd.Timestamp(x, tz="UTC") for x in drop}
     rows = []
     for d in main.DIRECTIONS:
         for i in range(days * 144):
             ts = t0 + pd.Timedelta(minutes=10 * i)
+            if ts in dropped:
+                continue
             base = 25 + 8 * np.sin(2 * np.pi * i / 144) + rng.normal(0, 0.5)
-            row = {"direction": d, "bin_ts": ts, "y_30": base + 1.0, "after_gap": 0}
-            for c in lm.VIEW_COLUMNS:
-                row[c] = base + rng.normal(0, 0.3)
-            row["dow"] = float(ts.dayofweek)
-            rows.append(row)
+            rows.append(
+                {
+                    "route_id": ROUTES[d], "direction": d, "bin_ts": ts, "dur_min": base,
+                    "congestion_ratio": 1 + rng.normal(0, 0.05), "speed_kmh": 40 + rng.normal(0, 2),
+                }
+            )
     return pd.DataFrame(rows)
 
 
 @pytest.fixture(autouse=True)
-def _reset():
+def _reset(monkeypatch):
     main._cache.clear()
     main._fitted.clear()
     main._training.clear()
     main._clock = time.monotonic
+    monkeypatch.setattr(main, "_now", lambda: FIXTURE_NOW)
     yield
     main._cache.clear()
     main._fitted.clear()
@@ -175,16 +185,19 @@ def test_query_failure_is_502_without_detail(monkeypatch):
 # --- local models end to end (fetchers replaced) ---------------------------------------------
 
 
-def _fake_bigquery(monkeypatch, view, now):
-    reads = {"training": 0}
+def _fake_bigquery(monkeypatch, bins, now):
+    """Replace both reads with the SQL filters applied to ``bins``."""
+    reads = {"training": 0, "latest": []}
 
     def fetch_training(labels_before):
         reads["training"] += 1
-        return view[view["bin_ts"] + pd.Timedelta(minutes=40) <= labels_before].copy()
+        return bins[bins["bin_ts"] + main.BIN <= labels_before].copy()
 
-    def fetch_latest(directions):
-        past = view[(view["bin_ts"] <= pd.Timestamp(now["t"])) & view["direction"].isin(directions)]
-        return past.sort_values("bin_ts").groupby("direction").tail(1).copy()
+    def fetch_latest(directions, at):
+        reads["latest"].append(at)
+        ts = bins["bin_ts"]
+        keep = bins["direction"].isin(directions) & (ts >= at - main.LATEST_WINDOW) & (ts + main.BIN + main.INGEST_GRACE <= at)
+        return bins[keep].copy()
 
     monkeypatch.setattr(main, "fetch_training", fetch_training)
     monkeypatch.setattr(main, "fetch_latest", fetch_latest)
@@ -192,23 +205,114 @@ def _fake_bigquery(monkeypatch, view, now):
     return reads
 
 
+def _dur(bins, direction, ts):
+    row = bins[(bins["direction"] == direction) & (bins["bin_ts"] == pd.Timestamp(ts, tz="UTC"))]
+    return float(row["dur_min"].iloc[0])
+
+
 def test_served_uses_the_selection_per_direction(monkeypatch):
-    view = _view()
+    bins = _bins()
     now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
-    _fake_bigquery(monkeypatch, view, now)
+    _fake_bigquery(monkeypatch, bins, now)
     payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
     assert status == 200 and payload["source"] == "local model"
     for d, mid in main.SERVED_SELECTION.items():
         assert payload["directions"][d]["model"] == mid
     assert set(payload["model_meta"]) == set(main.SERVED_SELECTION.values())
-    latest_my = view[(view["direction"] == "MY_TO_SG") & (view["bin_ts"] <= pd.Timestamp(now["t"]))].iloc[-1]
-    assert payload["directions"]["MY_TO_SG"]["forecast_min"] == round(latest_my["y_persistence"], 1)
+    # 03:50 closes at 04:00 (+ grace): the newest servable origin is 03:40
+    my = payload["directions"]["MY_TO_SG"]
+    assert my["origin_ts"] == "2026-10-03T03:40:00Z" and my["forecast_for"] == "2026-10-03T04:10:00Z"
+    assert my["forecast_min"] == round(_dur(bins, "MY_TO_SG", "2026-10-03 03:40"), 1)
+
+
+def test_an_open_bin_is_never_an_origin(monkeypatch):
+    # the readiness review's live case: generated 15:32:49 UTC used the 15:30 bin before it closed
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 15, 32, 49, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 200
+    for d in main.DIRECTIONS:
+        row = payload["directions"][d]
+        assert row["origin_ts"] == "2026-10-03T15:20:00Z" and row["origin_closed_at"] == "2026-10-03T15:30:00Z"
+        assert row["forecast_for"] == "2026-10-03T15:50:00Z" and row["forecast_window_end"] == "2026-10-03T16:00:00Z"
+        assert row["observation_age_min"] == 2.8 and row["lead_min"] == 17.2
+    # and the grace minute: at 15:30:30 the 15:20 bin is not yet servable either
+    main._cache.clear()
+    now["t"] = dt.datetime(2026, 10, 3, 15, 30, 30, tzinfo=UTC)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert payload["directions"]["SG_TO_MY"]["origin_ts"] == "2026-10-03T15:10:00Z"
+
+
+def test_stale_observations_are_503_not_an_expired_forecast(monkeypatch):
+    bins = _bins()
+    bins = bins[bins["bin_ts"] < pd.Timestamp("2026-10-03 02:00", tz="UTC")]  # ingestion stops
+    now = {"t": dt.datetime(2026, 10, 3, 2, 25, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    # 01:50 is the newest bin; its target 02:20 has started
+    payload, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 503 and payload == {"error": "No recent forecast for the requested direction"}
+    # one missed fetch is still servable: at 02:15 the 01:50 origin targets 02:20
+    now["t"] = dt.datetime(2026, 10, 3, 2, 15, tzinfo=UTC)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 200 and payload["directions"]["SG_TO_MY"]["lead_min"] == 5.0
+
+
+def test_stale_direction_alone_is_503(monkeypatch):
+    bins = _bins()
+    cut = (bins["direction"] == "MY_TO_SG") & (bins["bin_ts"] >= pd.Timestamp("2026-10-03 02:00", tz="UTC"))
+    now = {"t": dt.datetime(2026, 10, 3, 3, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins[~cut], now)
+    assert _json(main.forecast(_request(query={"model": "persistence", "direction": "SG_TO_MY"})))[1] == 200
+    assert _json(main.forecast(_request(query={"model": "persistence", "direction": "MY_TO_SG"})))[1] == 503
+    assert _json(main.forecast(_request(query={"model": "persistence"})))[1] == 503
+
+
+def test_origin_inside_an_hour_after_a_gap_is_503(monkeypatch):
+    gap = [f"2026-10-03 02:{m:02d}" for m in (0, 10, 20)]  # 40-minute gap: > 25
+    bins = _bins(drop=gap)
+    now = {"t": dt.datetime(2026, 10, 3, 3, 0, tzinfo=UTC)}  # origin 02:40, right after the gap
+    _fake_bigquery(monkeypatch, bins, now)
+    assert _json(main.forecast(_request(query={"model": "persistence"})))[1] == 503
+    main._cache.clear()
+    now["t"] = dt.datetime(2026, 10, 3, 3, 52, tzinfo=UTC)  # origin 03:40: seven bins after the gap
+    assert _json(main.forecast(_request(query={"model": "persistence"})))[1] == 200
+
+
+def test_a_single_skipped_bin_gives_missing_lags_not_shifted_ones():
+    bins = _bins(days=1, drop=["2026-09-06 02:00"])
+    f = lm.features_from_bins(bins)
+    sg = f[f["direction"] == "SG_TO_MY"].set_index("bin_ts")
+    at = lambda s: sg.loc[pd.Timestamp(s, tz="UTC")]  # noqa: E731
+    assert np.isnan(at("2026-09-06 02:10")["lag_10"])  # positional LAG would return 01:50
+    assert at("2026-09-06 02:10")["lag_20"] == _dur(bins, "SG_TO_MY", "2026-09-06 01:50")
+    assert np.isnan(at("2026-09-06 01:30")["y_30"])  # positional LEAD would return 02:10
+    assert at("2026-09-06 02:10")["after_gap"] == 0  # a 20-minute gap is not > 25
+
+
+def test_cached_forecast_expires_with_its_target(monkeypatch):
+    calls = _install(monkeypatch)
+    now = {"t": FIXTURE_NOW}
+    monkeypatch.setattr(main, "_now", lambda: now["t"])
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(main, "_clock", lambda: clock["t"])
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert status == 200 and payload["directions"]["SG_TO_MY"]["lead_min"] == 18.0
+    assert payload["directions"]["SG_TO_MY"]["observation_age_min"] == 2.0
+    now["t"] += dt.timedelta(minutes=3)
+    clock["t"] += 180
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert status == 200 and payload["directions"]["SG_TO_MY"]["lead_min"] == 15.0 and len(calls) == 1
+    now["t"] = dt.datetime(2026, 10, 3, 4, 0, 30, tzinfo=UTC)  # the fixture target has started
+    clock["t"] += 60
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert status == 503 and len(calls) == 2  # cache dropped, re-queried, still expired
 
 
 def test_daily_fit_is_reused_within_a_day_and_refit_next_day(monkeypatch):
-    view = _view()
+    bins = _bins()
     now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
-    reads = _fake_bigquery(monkeypatch, view, now)
+    reads = _fake_bigquery(monkeypatch, bins, now)
     a = main.query_forecast("xgb[maps]", ["SG_TO_MY"])
     now["t"] = dt.datetime(2026, 10, 3, 15, 0, tzinfo=UTC)  # 23:00 SGT, same day
     main.query_forecast("xgb[maps]", ["SG_TO_MY"])
@@ -221,7 +325,7 @@ def test_daily_fit_is_reused_within_a_day_and_refit_next_day(monkeypatch):
 
 
 def test_training_rows_follow_the_harness_folds():
-    view = lm.prepare(_view())
+    view = lm.prepare(lm.features_from_bins(_bins()))
     day = pd.Timestamp("2026-10-02 16:00", tz="UTC")  # 00:00 SGT 3 Oct
     daily = lm.training_rows(view, "daily", day)
     assert (daily["bin_ts"] + lm.LABEL_LAG <= day).all()
@@ -294,9 +398,9 @@ def test_catalog_lists_selection_parameters(monkeypatch):
 
 
 def test_live_path_with_override(monkeypatch):
-    view = _view()
+    bins = _bins()
     now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
-    _fake_bigquery(monkeypatch, view, now)
+    _fake_bigquery(monkeypatch, bins, now)
     payload, status, _ = _json(main.forecast(_request(query={"model": "persistence", "model_sg_to_my": "ridge[maps]"})))
     assert status == 200 and payload["source"] == "local model"
     assert payload["directions"]["SG_TO_MY"]["model"] == "ridge[maps]"

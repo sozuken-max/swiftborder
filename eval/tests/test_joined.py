@@ -61,8 +61,9 @@ def test_scorable_drops_after_gap_and_unlabelled():
 
 
 def test_weather_ablation_detects_a_real_effect():
-    data = jx.scorable(_frame(days=10))
-    oof = jx.run_folds(data, "2026-09-10", "2026-09-15", min_train_rows=200)
+    # 10 shared calendar days: the pooled gate counts days, not days x directions
+    data = jx.scorable(_frame(days=14))
+    oof = jx.run_folds(data, "2026-09-10", "2026-09-19", min_train_rows=200)
     assert "xgb[maps+weather+camera]" not in oof.columns  # no camera history -> skipped
     mae = lambda c: (oof["y_30"] - oof[c]).abs().mean()  # noqa: E731
     # Rain (10% of bins) adds 3 min, so the attainable MAE gain is about 0.3 min.
@@ -70,8 +71,19 @@ def test_weather_ablation_detects_a_real_effect():
     assert mae("ridge[maps+weather]") < mae("ridge[maps]") - 0.15
     comps, notes = jx.significance(oof, n_bootstrap=200)
     weather = next(c for c in comps if c.label_challenger == "xgb[maps+weather] (both/all)")
-    assert weather.decision == "challenger"
+    assert weather.decision == "challenger" and weather.calendar_days == 10
+    assert weather.joint_ci_high_min < 0 and weather.day_cluster_pvalue < 0.05
     assert weather.family_size == len(comps)
+
+
+def test_pooled_gate_counts_shared_days_not_direction_blocks():
+    # 6 test days in both directions: 12 per-direction blocks, but only 6 days of traffic
+    data = jx.scorable(_frame(days=10))
+    oof = jx.run_folds(data, "2026-09-10", "2026-09-15", min_train_rows=200)
+    comps, _ = jx.significance(oof, n_bootstrap=200)
+    pooled = next(c for c in comps if c.label_challenger == "xgb[maps+weather] (both/all)")
+    assert pooled.blocks_per_resample >= 10 and pooled.calendar_days == 6
+    assert pooled.decision == "insufficient data"
 
 
 def test_camera_comparison_is_limited_to_covered_rows_and_flagged(tmp_path):

@@ -49,7 +49,7 @@ Do **not** create a Diagram Craft or Technical Diagram Reviewer bot unless Yingz
 | --- | --- | --- |
 | Layer A — Vision | cool blue wash | LTA cameras, Roboflow, swiftbackend, BQ vision tables |
 | Layer B — Forecasting | warm tan / gold wash | Scheduler, Maps fetcher, travel_times, traffic_prediction |
-| GCS strip | neutral grey wash | detailed: exactly six buckets (see below); high-level: the two data-path buckets plus a pointer to the detailed figure |
+| GCS strip | neutral grey wash | detailed: the seven verified buckets (see below); high-level: the camera, cache and public-history buckets plus a pointer to the detailed figure |
 | Gaps / risks | light red / rose card, red border | numbered honesty list |
 | Serve TODAY (if present) | light green card | live serve horizon only |
 
@@ -121,7 +121,7 @@ As of 2026-09-26, GenerateImage with a reference PNG often **redesigns** topolog
 
 ## Canonical GCS bucket strip
 
-When the diagram includes the bucket strip, use **exactly** these six names (same order). Do not invent, rename, split, or insert a seventh:
+When the diagram includes the bucket strip, use the seven verified names below. Re-query inventory before accepting a fixed count; do not invent or rename buckets:
 
 1. `sg-lta-traffic-cameras`
 2. `swiftborder-frame-cache`
@@ -129,6 +129,7 @@ When the diagram includes the bucket strip, use **exactly** these six names (sam
 4. `run-sources-swiftborder-europe-west1`
 5. `swiftborder-public`
 6. `swiftborder_cloudbuild` (underscore, as in the project)
+7. `swiftborder_asia-southeast1_cloudbuild`
 
 Use the exact bucket names from a fresh query / inventory. Never rewrite `swiftborder_cloudbuild` with a hyphen. `swiftborder-frame-cache` has no writer in git: draw edges into it dashed.
 
@@ -152,9 +153,9 @@ Before changing or **accepting** counts, joins, serve horizon, Cloud Build wordi
 | Serve | Horizon from inventory (often 30 min); 24h = intent until measured |
 | MAE / 24h | Targets until harness proves otherwise |
 | Harnesses | Layer B: `eval/layer_b.py`, `eval/joined.py` -> `eval/runs/report/`. Layer A: `eval/layer_a.py` present; results pending until an export is scored |
-| Cloud Build | pytest then deploy `camdetect` then `swiftbackend`; forecast outside path filter — no stale "no tests" / "No CI/CD" |
+| Cloud Build | separate tested pipelines for `camdetect` -> `swiftbackend` and `forecastapi` -> `forecast-api` |
 | Cams | cam2701/2702 frozen date from inventory when still frozen |
-| Firebase | Hosting unset / planned if inventory says so |
+| Firebase | Hosting UI and forecast API connection as verified in inventory |
 
 ## Per-file intents
 
@@ -188,7 +189,7 @@ These are **craft rejects**, not nits. The 2026-09-26 Mode C redraws failed this
 
 - [ ] Matches clean reference topology (bands, panels, icon set) — no reinvented graph
 - [ ] No overlapping text, double labels, or ghost glyphs
-- [ ] Bucket strip (detailed): exactly six names spelled as in inventory (`swiftborder_cloudbuild`); `swiftborder-frame-cache` not split
+- [ ] Bucket strip (detailed): all seven names spelled as in inventory (`swiftborder_cloudbuild`); `swiftborder-frame-cache` not split
 - [ ] Mode C redraws still read as GCP-icon language (not bare PowerPoint tiles), or are explicitly flagged as interim **and** still pass clipping rules above
 
 ### Facts (also reject on fail)

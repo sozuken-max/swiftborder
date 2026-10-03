@@ -187,6 +187,10 @@ def multiplicity_summary(manifest: Dict[str, Any]) -> Dict[str, Any]:
         if decision != "insufficient data":
             alpha = float(s.get("alpha", 0.05))
             diff, lo, hi = s["mean_ae_diff_min"], s["bootstrap_ci_low_min"], s["bootstrap_ci_high_min"]
+            # pooled rows (significance.py after 2026-10-04) also need the joint calendar-day CI
+            jlo, jhi = s.get("joint_ci_low_min"), s.get("joint_ci_high_min")
+            if jlo is not None and jhi is not None:
+                lo, hi = min(lo, jlo), max(hi, jhi)  # both CIs must exclude 0 on the same side
             if p < alpha and diff < 0 and hi < 0:
                 decision = "challenger"
             elif p < alpha and diff > 0 and lo > 0:

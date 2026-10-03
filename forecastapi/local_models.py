@@ -14,6 +14,9 @@ Training rows follow the harness folds:
 - The ``*_bq`` models train only on rows with ``lag_60`` (BQML's filter); the ``[maps]`` models on
   every row with a label and no gap (``joined.scorable``).
 
+Features are built here from ``v_bins_10min`` (``features_from_bins``) with the harness's time-based
+lags, not read from ``v_training_set``, whose positional LAG/LEAD differ after a skipped bin.
+
 Nothing here imports google-cloud; ``main.py`` supplies the rows.
 """
 
@@ -81,6 +84,67 @@ def version_for(model_id: str, now: Optional[dt.datetime] = None) -> str:
     if LOCAL_MODELS[model_id]["rows"] == "frozen":
         return "bqml-replica-2026-09-12"
     return "labels_before=" + serving_day_start(now).tz_convert(SGT).isoformat()
+
+
+BIN = pd.Timedelta(minutes=10)
+
+
+def _shift_time(g: pd.DataFrame, col: str, steps: int) -> pd.Series:
+    """Value of ``col`` at bin_ts + steps*10 min in the same route (NaN when that bin is missing)."""
+    lookup = g.set_index("bin_ts")[col]
+    return pd.Series(lookup.reindex(g["bin_ts"] + steps * BIN).to_numpy(), index=g.index)
+
+
+def features_from_bins(bins: pd.DataFrame, *, unknown_first_gap: bool = False) -> pd.DataFrame:
+    """``v_bins_10min`` rows -> ``v_training_set`` columns with **time-based** lags and labels.
+
+    A copy of ``eval/features.maps_features`` (the harness), not of the view: the view uses positional
+    LAG/LEAD, so one skipped bin shifts its lags and its ``y_30`` by ten minutes. Here a missing bin is
+    NaN, exactly as in the harness. ``gap_min`` is recomputed from the rows given, so pass every bin of
+    the period. The first row has no gap, as in the harness export; with ``unknown_first_gap`` (a
+    window cut from a longer history) it counts as a gap, so the six rows after it are ``after_gap``.
+    Columns: ``direction``, ``bin_ts``, ``VIEW_COLUMNS``, ``after_gap``, ``y_30``.
+    """
+    b = bins.copy()
+    b["bin_ts"] = pd.to_datetime(b["bin_ts"], utc=True)
+    for col in ("dur_min", "congestion_ratio", "speed_kmh"):
+        b[col] = pd.to_numeric(b[col], errors="coerce").astype(float)
+    parts = []
+    for _, g in b.groupby("route_id", sort=False):
+        g = g.sort_values("bin_ts").copy()
+        gap_min = g["bin_ts"].diff().dt.total_seconds() / 60.0
+        if unknown_first_gap:
+            gap_min.iloc[0] = np.inf
+        lag = {k: _shift_time(g, "dur_min", -k) for k in (1, 2, 3, 4, 5, 6)}
+        f = pd.DataFrame(index=g.index)
+        f["direction"] = g["direction"]
+        f["bin_ts"] = g["bin_ts"]
+        f["y_persistence"] = g["dur_min"]
+        f["congestion_ratio"] = g["congestion_ratio"]
+        f["speed_kmh"] = g["speed_kmh"]
+        f["lag_10"], f["lag_20"], f["lag_30"], f["lag_60"] = lag[1], lag[2], lag[3], lag[6]
+        f["roll_mean_30"] = pd.concat([lag[1], lag[2], lag[3]], axis=1).mean(axis=1, skipna=True)
+        f["roll_mean_60"] = pd.concat([lag[k] for k in range(1, 7)], axis=1).mean(axis=1, skipna=True)
+        f["slope_30"] = lag[1] - lag[4]
+        big_gap = (gap_min > 25).astype(int)
+        f["after_gap"] = big_gap.rolling(7, min_periods=1).max().astype(int).to_numpy()
+        f["y_30"] = _shift_time(g, "dur_min", 3)
+        parts.append(f)
+    if not parts:
+        return pd.DataFrame(columns=["direction", "bin_ts", *VIEW_COLUMNS, "after_gap", "y_30"])
+    out = pd.concat(parts).sort_values(["direction", "bin_ts"]).reset_index(drop=True)
+    for col in ("lag_10", "lag_20", "lag_30", "lag_60", "roll_mean_30", "roll_mean_60", "slope_30"):
+        out.loc[out["after_gap"] == 1, col] = np.nan
+    sgt = out["bin_ts"].dt.tz_convert("Asia/Singapore")
+    tod_min = sgt.dt.hour * 60 + sgt.dt.minute
+    out["tod_sin"] = np.sin(2 * np.pi * tod_min / 1440)
+    out["tod_cos"] = np.cos(2 * np.pi * tod_min / 1440)
+    out["tod_block"] = tod_min / 5.0
+    out["dow"] = (sgt.dt.dayofweek + 1) % 7 + 1  # BigQuery DAYOFWEEK: Sunday=1 .. Saturday=7
+    out["is_weekend"] = out["dow"].isin([1, 7]).astype(int)
+    out["is_morning_peak"] = sgt.dt.hour.between(6, 10).astype(int)
+    out["is_evening_peak"] = sgt.dt.hour.between(16, 21).astype(int)
+    return out[["direction", "bin_ts", *VIEW_COLUMNS, "after_gap", "y_30"]]
 
 
 def prepare(frame: pd.DataFrame) -> pd.DataFrame:

@@ -19,17 +19,16 @@ Edit **only** the `.mmd` files, then run the sync script before commit. Volatile
 | `eval-layer-a.mmd` | `evaluation.md` (Layer A) | `eval-layer-a.png` |
 | `eval-layer-b.mmd` | `evaluation.md` (Layer B) | `eval-layer-b.png` |
 
-## PNG exports are stale (regenerate before the deck)
+## PNG exports refreshed: 4 Oct 2026
 
-The `.mmd` files were corrected on 2026-10-01 against a fresh query of project `swiftborder`. The PNGs predate that and **fail the diagram-skill fact review** on these points:
+All four deck PNGs were regenerated with built-in image generation and visually checked against the updated Mermaid topology and the fresh serving/storage observations in [inventory.md](../inventory.md). They retain the GCP icon language, blue/gold bands, rounded cards and explicit pending-results caveats.
 
-| PNG | Stale content |
-| --- | --- |
-| `architecture-detailed.png` | Bucket shown as `swiftborder-cloudbuild` (live name `swiftborder_cloudbuild`); `LIVE 11,830`; frame-cache drawn as a live data path (no writer in git); no `eval/` block; "Layer A scoring missing" |
-| `architecture-high-level.png` | `LIVE 11,830`; frame-cache "cached frames for detect path"; "Layer A scoring missing"; no public-exposure note |
-| `eval-layer-a.png` | "Layer A scoring script MISSING" (`eval/layer_a.py` now exists; results still pending) |
-| `eval-layer-b.png` | `LIVE 11,830`; candidates without the ensemble; no fixed window, joined experiment or significance step |
+- High-level architecture: local forecast API, shared Hosting UI, separate deploy pipelines, historical BQML and offline evaluation.
+- Detailed architecture: camera backfill job and metadata, local serving, explicit deployment/offline references, and all seven buckets. References are repeated in the evaluation/deployment panel to avoid crossing connectors; they are not extra resources.
+- Layer A: scorer present, held-out results pending, correct stage icons.
+- Layer B: paired scoring, recorded run evidence, current local serving, and the open pooled-day inference caveat.
 
-Until they are regenerated, cite the Mermaid figures (rendered by GitHub and in `architecture.md` / `evaluation.md`) rather than these PNGs.
+The detailed architecture required a full-canvas structured redraw after two reference-based drafts failed topology review. Rejected drafts were not copied into this repository. Final files retain the generator's native 1672 x 941 resolution (approximately 16:9), rather than resampling text to the requested 1280 x 720. No post-generation paint-over or image manipulation was used.
 
+Prompts: [image-generation-prompts.json](image-generation-prompts.json). Visual QA checked node/edge meaning, bucket spelling, pending-versus-scored status, panel containment, clear captions and readable text. This refresh does not resolve the application or evaluation issues listed in the readiness review. Yingzhao remains final on presentation acceptance.
 **Preview:** VS Code Mermaid preview, GitHub rendering on the markdown fences, or `npx @mermaid-js/mermaid-cli` against a `.mmd` file.
