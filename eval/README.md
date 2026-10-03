@@ -65,6 +65,8 @@ python replay_series.py path/to/run_dir --output-dir path/to/csv_dir
 
 That command writes the CSVs only and refuses `runs/report/`. Omit `--output-dir` to write next to the source `run.json` when that directory is not the snapshot. Older schema-v2 promotions (`20260930T202959Z`, `20260930T194805Z`, `20260930T191544Z`, `20260930T175104Z`) replay the same way from the `run.json` in the commit that promoted them. `20260926T073406Z` is schema v1 and is not replayable. The hold-out tail (timestamps, actual minutes, and the XGB and persistence traces) was never stored, so `offline/holdout-sample` is absent from the replay and that one CSV needs a new run.
 
+**Data cutoff.** `--data-cutoff "2026-10-19 23:59"` (SGT) drops every `travel_times` observation, rainfall reading and forecast acquired after that time in all components, so no scored label is later than the cutoff. It also sets the BQML `--window-end` to the last origin whose 30-minute label is observed by then, refuses an explicit `--window-end` or `--joined-end` past it, and records `data_cutoff` in `run.json`. `promote_report_run.py --target report-confirm` promotes the October-only confirmation run beside `runs/report/`. The frozen-run commands are in [docs/roadmap.md](../docs/roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt).
+
 Individual harnesses:
 
 ```bash

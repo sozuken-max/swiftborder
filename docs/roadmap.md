@@ -24,7 +24,51 @@ The report describes **one system at two depths** (high-level, then detailed). T
 
 The promoted offline 60-minute one-route split stays at 5 day-blocks unless that split is extended before the cutoff. The same 80/20 split on a series that starts 6 Sep and ends at this cutoff is still about 9 day-blocks, below 10, so those 60-minute and deep decisions stay **insufficient data**. Do not invent a new split to clear the threshold. A 24-hour horizon and <= 15 min MAE stay targets. The cutoff does not meet them.
 
-**After 19 Oct 23:59 SGT:** no new feature arms, no new model families, no expansion to a 24-hour horizon. Re-run the existing harness on the frozen window, fill [evaluation.md](evaluation.md) and [findings.md](findings.md) from that run, and finish the deck and video.
+### Frozen-window run plan (proposed 2026-10-03; the team confirms before 19 Oct 23:59 SGT)
+
+These choices are written down before any October label is scored, so the frozen run tests them rather than fitting them. Re-running the 13–30 Sep window would change nothing: three report runs on it gave identical numbers.
+
+**1. Windows.**
+- **Run A (headline):** 13 Sep 00:00 to the cutoff. It has 37 days, so every 30-minute comparison has well over 10 day-blocks.
+- **Run B (confirmation):** 1–19 Oct only. No model, feature set or "best single" choice was made on these days. Choices made on 13–30 Sep are confirmed or not here. `lin_h30` and `xgb_h30` were trained on 12 Sep, so both windows are out of sample. The rolling folds and stacks still train only on earlier days.
+
+**2. Claims Run B tests** (fixed now from the 13–30 Sep results). A claim is confirmed when its Run B decision is "challenger", or for C4 and C7 "not significant", under the run-wide Holm check:
+
+| # | Comparison (30 min, both directions) | 13–30 Sep result |
+| --- | --- | --- |
+| C1 | `xgb[maps]` (daily refit) vs served (registry) | −0.267, significant run-wide |
+| C2 | `ensemble_mean` vs persistence | −0.182, significant run-wide |
+| C3 | `xgb_h30` vs persistence | −0.147, family-level only |
+| C4 | `xgb[maps+weather]` vs `xgb[maps]` (expected: no gain) | +0.003, not significant |
+| C5 | `xgb[maps+camfc]` vs `xgb[maps]` | −0.065, family-level only |
+| C6 | `xgb[maps+camfc]` vs `xgb[maps+mpfc]` (camera beyond the Maps profile) | −0.007, not significant |
+| C7 | Rolling LAD stack vs `xgb[maps]` (expected: no gain) | −0.021, not significant |
+
+`xgb[maps]` stays the "best single" reference (`ensemble.BEST_SINGLE_30`). It is not re-picked on October data.
+
+**3. Practical threshold.** Serving a different 30-minute model is recommended only if the challenger is significant under run-wide Holm **and** lowers MAE by at least **0.5 min** (30 s). Below that, a significant result is reported as evidence about signal, not as a product win.
+
+**4. Test groups.** The Holm families stay as in [evaluation.md](evaluation.md#significance) (one per question). The run-wide check (`run.json` → `multiplicity`) is reported beside them. A claim that holds only within its family is labelled "family-level only", as now.
+
+**5. 60-minute offline and deep models: keep the 80/20 split (recommended).** At the cutoff it has about 9 day-blocks, so these decisions stay "insufficient data" by design, consistent with the rule above against inventing a split to clear the threshold. Point estimates are still reported. The alternative is rolling daily folds over 1–19 Oct (19 blocks). It would need new code and roughly 3 CPU hours for the deep models, and it counts only if adopted before the run.
+
+**Commands (on or after 20 Oct, from a clean tree).** First fetch weather to 19 Oct ([Causeway/README.md](../Causeway/README.md)). Then:
+
+```bash
+cd eval
+# Run A: headline. --refresh-bq pulls travel_times; --data-cutoff drops every observation after the cutoff
+python generate_comparison_plots.py --refresh-bq --data-cutoff "2026-10-19 23:59" --bqml --joined --joined-end 2026-10-19 --deep --fuzzy --ensemble
+python promote_report_run.py <run_A_id>
+# Run B: confirmation, 1-19 Oct (uses the cache Run A refreshed)
+python generate_comparison_plots.py --data-cutoff "2026-10-19 23:59" --bqml-only --window-start "2026-10-01 00:00" --joined --joined-start 2026-10-01 --joined-end 2026-10-19 --ensemble
+python promote_report_run.py <run_B_id> --target report-confirm
+```
+
+With `--data-cutoff`, the BQML window end defaults to the last origin whose 30-minute label is observed by the cutoff (19 Oct 23:10 SGT). An explicit `--window-end` or `--joined-end` past the cutoff is refused. `run.json` records the cutoff (`data_cutoff`).
+
+Team sign-off: windows ☐ claims C1–C7 ☐ threshold ☐ test groups ☐ 60-minute design ☐. By ______ on ______.
+
+**After 19 Oct 23:59 SGT:** no new feature arms, no new model families, no expansion to a 24-hour horizon. Run the [frozen-window plan](#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt) (Runs A and B), fill [evaluation.md](evaluation.md) and [findings.md](findings.md) from that run, and finish the deck and video.
 
 ---
 

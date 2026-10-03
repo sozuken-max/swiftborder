@@ -19,6 +19,10 @@ from typing import List, Optional
 
 from run_artifacts import RUNS_ROOT, code_fingerprint, load_manifest, validate_manifest
 
+# Committed snapshots: ``report`` is the headline citation target; ``report-confirm`` holds the
+# confirmation run on the period no model choice was tuned on (docs/roadmap.md, frozen-window plan).
+TARGETS = ("report", "report-confirm")
+
 
 class PromotionError(RuntimeError):
     pass
@@ -103,6 +107,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--allow-dirty", action="store_true", help="Promote a run made from uncommitted code")
     parser.add_argument("--check", action="store_true", help="Validate only; do not copy")
+    parser.add_argument("--target", choices=TARGETS, default="report", help="Snapshot folder under eval/runs (default report)")
     args = parser.parse_args(argv)
 
     if args.run_id:
@@ -122,12 +127,12 @@ def main(argv=None) -> int:
         return 0 if not problems else 1
 
     try:
-        promote(source, RUNS_ROOT / "report", allow_dirty=args.allow_dirty)
+        promote(source, RUNS_ROOT / args.target, allow_dirty=args.allow_dirty)
     except PromotionError as exc:
         print(exc, file=sys.stderr)
         return 1
-    print(f"Promoted {source.name} -> {RUNS_ROOT / 'report'}")
-    print("Commit eval/runs/report/ when docs/evaluation.md cites the same numbers.")
+    print(f"Promoted {source.name} -> {RUNS_ROOT / args.target}")
+    print(f"Commit eval/runs/{args.target}/ when docs/evaluation.md cites the same numbers.")
     return 0
 
 

@@ -302,6 +302,33 @@ def sync_canonical_travel_times(
     return ensure_observed_at_sgt(frame)
 
 
+CUTOFF_TZ = "Asia/Singapore"
+LABEL_LAG_30 = pd.Timedelta(minutes=40)  # a 30-min label bin [t+30, t+40) is observed by origin + 40 min
+
+
+def parse_data_cutoff(value: Optional[str]) -> Optional[pd.Timestamp]:
+    """'YYYY-MM-DD HH:MM[:SS]' (naive = SGT) -> tz-aware UTC, or None."""
+    if value is None or str(value).strip() == "":
+        return None
+    ts = pd.Timestamp(str(value).strip())
+    if ts.tzinfo is None:
+        ts = ts.tz_localize(CUTOFF_TZ)
+    return ts.tz_convert("UTC")
+
+
+def apply_data_cutoff(export: pd.DataFrame, cutoff: Optional[pd.Timestamp]) -> pd.DataFrame:
+    """Drop observations after ``cutoff`` (UTC). Labels after it then do not exist, so no scored row
+    has a label later than the cutoff. Uses ``observed_at`` (UTC) when present, else ``observed_at_sgt``.
+    """
+    if cutoff is None:
+        return export
+    if "observed_at" in export.columns:
+        ts = pd.to_datetime(export["observed_at"], utc=True, format="mixed")
+    else:
+        ts = _parse_sgt(export["observed_at_sgt"]).dt.tz_localize(CUTOFF_TZ).dt.tz_convert("UTC")
+    return export[(ts <= cutoff).to_numpy()].reset_index(drop=True)
+
+
 def prepare_route_frame(
     export: pd.DataFrame,
     config: Optional[TimeSeriesConfig] = None,

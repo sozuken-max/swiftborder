@@ -233,6 +233,7 @@ def deep_component(
     recurrent_dropout: float = 0.1,
     transformer_config=None,
     keep: Optional[Dict[str, Any]] = None,
+    data_cutoff=None,
 ) -> Tuple[List[Path], Dict[str, Any]]:
     """``keep``: optional dict that receives per-row test predictions (seconds) for reuse by ``ensemble``."""
     try:
@@ -256,7 +257,7 @@ def deep_component(
 
     out = subdir(run_dir, "deep")
     config = tsx.TimeSeriesConfig()
-    export = tsx.sync_canonical_travel_times(cache, project=project, refresh=False)
+    export = tsx.apply_data_cutoff(tsx.sync_canonical_travel_times(cache, project=project, refresh=False), data_cutoff)
     raw = tsx.prepare_route_frame(export, config)
     features = tsx.engineer_features(raw, config)
     xs = tsx.split_supervised(features, config)
@@ -347,6 +348,7 @@ def deep_component(
             "route_scope": tsx.OFFLINE_ROUTE_LABEL,
             "supervised_rows": {"train": int(len(split.y_train)), "test": int(len(y))},
             "sequence_channels": split.cols,
+            "data_cutoff_utc": None if data_cutoff is None else data_cutoff.isoformat(),
         },
         "window": {
             "timezone": "Asia/Singapore",

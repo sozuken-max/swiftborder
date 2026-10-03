@@ -366,15 +366,32 @@ def _plot_mae_bars(metrics: List[dict], path: Path) -> List[Path]:
     return [path, csv_path]
 
 
-def load_inputs(refresh_bq: bool = False) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    from run_artifacts import file_fingerprint
-    from timeseries_xgb import sync_canonical_travel_times
+def cut_weather(rain: Optional[pd.DataFrame], fc: Optional[pd.DataFrame], cutoff) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """Drop rainfall readings stamped after ``cutoff`` and forecasts acquired after it."""
+    if cutoff is None:
+        return rain, fc
+    if rain is not None:
+        rain = rain[rain["ts"] <= cutoff].reset_index(drop=True)
+    if fc is not None:
+        col = "available_at" if "available_at" in fc.columns else "issue_timestamp"
+        fc = fc[fc[col] <= cutoff].reset_index(drop=True)
+    return rain, fc
 
-    tt = sync_canonical_travel_times(fx.TT_CACHE, refresh=refresh_bq)
+
+def load_inputs(refresh_bq: bool = False, data_cutoff=None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    from run_artifacts import file_fingerprint
+    from timeseries_xgb import apply_data_cutoff, sync_canonical_travel_times
+
+    tt = apply_data_cutoff(sync_canonical_travel_times(fx.TT_CACHE, refresh=refresh_bq), data_cutoff)
     rain = fx.load_rain() if fx.RAIN_CSV.exists() else None
     fc = fx.load_forecast() if fx.FORECAST_CSV.exists() else None
+    rain, fc = cut_weather(rain, fc, data_cutoff)
     cam = fx.load_camera()
-    info: Dict[str, Any] = {"travel_times": file_fingerprint(fx.TT_CACHE), "refreshed_from_bq": refresh_bq}
+    info: Dict[str, Any] = {
+        "travel_times": file_fingerprint(fx.TT_CACHE),
+        "refreshed_from_bq": refresh_bq,
+        "data_cutoff_utc": None if data_cutoff is None else data_cutoff.isoformat(),
+    }
     for name, p in (("rainfall_S210", fx.RAIN_CSV), ("forecast_woodlands", fx.FORECAST_CSV), ("camera_2701", fx.CAMERA_CSV)):
         info[name] = file_fingerprint(p) if p.exists() else None
     frame = fx.build(tt, rain, fc, cam)

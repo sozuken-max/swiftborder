@@ -7,6 +7,7 @@ Each harness run writes one folder `eval/runs/<run_id>/` with figures and a **sc
 | Path | Git | Role |
 | --- | --- | --- |
 | **`report/`** | **Yes** | Canonical snapshot cited in the report (figures + `run.json` + `SOURCE_RUN.json`). |
+| `report-confirm/` | **Yes** | Confirmation run on the period no choice was tuned on (`promote_report_run.py --target report-confirm`); created by the frozen run. |
 | `replay-<run_id>/*/*.csv` | **Yes** | Series tables replayed from a cited snapshot's `run.json` (now `replay-20261003T035807Z/`). No copied `run.json`, no PNGs. |
 | `<run_id>/` | No | Local experiment runs (regenerate freely). |
 | `LATEST.json` | No | Local pointer to the most recent run (written by every harness). |

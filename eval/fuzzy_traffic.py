@@ -466,13 +466,14 @@ def fuzzy_component(
     alpha: float = 0.05,
     partition: LevelPartition = LevelPartition(),
     min_support: float = 2.0,
+    data_cutoff=None,
 ) -> Tuple[List[Path], Dict[str, Any]]:
     import timeseries_xgb as tsx
     from run_artifacts import artifact_relpath, file_fingerprint, subdir
     from significance import apply_holm, compare_absolute_errors, format_comparison_table
 
     out_dir = subdir(run_dir, "fuzzy")
-    export = tsx.sync_canonical_travel_times(cache, project=project, refresh=False)
+    export = tsx.apply_data_cutoff(tsx.sync_canonical_travel_times(cache, project=project, refresh=False), data_cutoff)
     s = score_routes(export, partition=partition, min_support=min_support)
     config = s["config"]
     y = s["y"]
@@ -510,6 +511,7 @@ def fuzzy_component(
         "dataset": {
             "source": f"{project}.causeway.travel_times",
             "cache": file_fingerprint(cache),
+            "data_cutoff_utc": None if data_cutoff is None else data_cutoff.isoformat(),
             "routes": info,
         },
         "window": {

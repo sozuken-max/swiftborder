@@ -3,6 +3,8 @@
 !README.md
 !report/
 !report/**
+!report-confirm/
+!report-confirm/**
 # Series CSVs replayed from a cited run.json (replay-<run_id>/). No run.json, no PNGs.
 !replay-*/
 replay-*/*

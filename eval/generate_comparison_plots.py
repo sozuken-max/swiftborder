@@ -41,6 +41,7 @@ def offline_component(
     cache: Path = CACHE,
     project: str = "swiftborder",
     alpha: float = 0.05,
+    data_cutoff=None,
 ) -> Tuple[List[Path], Dict[str, Any]]:
     """Train on the chronological 80% (by target time); score the rest and full backtest days."""
     import numpy as np
@@ -52,6 +53,7 @@ def offline_component(
     out = subdir(run_dir, "offline")
     config = tsx.TimeSeriesConfig()
     export = tsx.sync_canonical_travel_times(cache, project=project, refresh=refresh_bq)
+    export = tsx.apply_data_cutoff(export, data_cutoff)
     raw = tsx.prepare_route_frame(export, config)
     features = tsx.engineer_features(raw, config)
     split = tsx.split_supervised(features, config)
@@ -133,6 +135,7 @@ def offline_component(
             "source": f"{project}.causeway.travel_times",
             "cache": file_fingerprint(cache),
             "refreshed_from_bq": refresh_bq,
+            "data_cutoff_utc": None if data_cutoff is None else data_cutoff.isoformat(),
             "canonical_rows": int(len(export)),
             "route_id": config.route_id,
             "route_scope": tsx.OFFLINE_ROUTE_LABEL,
@@ -170,6 +173,28 @@ def offline_component(
     return written, meta
 
 
+def cutoff_window_end(cutoff, window_end: Optional[str]) -> Optional[str]:
+    """BQML window end under a data cutoff: the last origin whose 30-min label is observed by the cutoff.
+
+    Returns ``window_end`` unchanged without a cutoff. Raises ValueError when an explicit window end
+    would score a label after the cutoff.
+    """
+    import pandas as pd
+
+    from layer_b import parse_sgt
+    from timeseries_xgb import CUTOFF_TZ, LABEL_LAG_30
+
+    if cutoff is None:
+        return window_end
+    if window_end:
+        end = pd.Timestamp(parse_sgt(window_end))
+        if end + LABEL_LAG_30 > cutoff:
+            raise ValueError(f"--window-end {window_end} scores labels after --data-cutoff")
+        return window_end
+    last = (cutoff - LABEL_LAG_30).floor("10min")
+    return last.tz_convert(CUTOFF_TZ).strftime("%Y-%m-%d %H:%M")
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--runs-root", type=Path, default=None, help="Parent directory for run folders (default: eval/runs)")
@@ -188,10 +213,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--deep-seeds", type=int, nargs="+", default=None, help="seeds per deep model (default deep_forecast.DEFAULT_SEEDS)")
     parser.add_argument("--fuzzy", action="store_true", help="Also score the fuzzy traffic-level classifier (60 min, both directions)")
     parser.add_argument("--ensemble", action="store_true", help="Also score ensembles / hybrids of the Layer B models (needs --bqml and --joined; uses --deep if given)")
+    parser.add_argument("--data-cutoff", default=None, help="Drop observations after this time (SGT, e.g. '2026-10-19 23:59'); no scored label is later")
     parser.add_argument("--alpha", type=float, default=0.05)
     args = parser.parse_args(argv)
-    if args.ensemble and not (args.bqml and args.joined):
+    if args.ensemble and not ((args.bqml or args.bqml_only) and args.joined):
         parser.error("--ensemble needs --bqml and --joined (it reuses their out-of-sample rows)")
+    import timeseries_xgb as tsx
+
+    cutoff = tsx.parse_data_cutoff(args.data_cutoff)
+    try:
+        args.window_end = cutoff_window_end(cutoff, args.window_end)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if cutoff is not None and args.joined:
+        import joined as _joined
+
+        last_day = cutoff.tz_convert(tsx.CUTOFF_TZ).strftime("%Y-%m-%d")
+        if (args.joined_end or _joined.DEFAULT_TEST_END) > last_day:
+            parser.error(f"--joined-end is after the --data-cutoff day {last_day}")
 
     components = ["bqml"] if args.bqml_only else (["offline", "bqml"] if args.bqml else ["offline"])
     if args.joined:
@@ -204,12 +243,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         components.append("ensemble")
     run_dir = create_run_dir(components=components, run_id=args.run_id, runs_root=args.runs_root, exist_ok=args.reuse_run)
     manifest = new_manifest(components)
+    if cutoff is not None:
+        manifest["data_cutoff"] = {
+            "utc": cutoff.isoformat(),
+            "sgt": cutoff.tz_convert(tsx.CUTOFF_TZ).isoformat(),
+            "rule": "observations after the cutoff are dropped, so every scored label is at or before it",
+            "bqml_window_end_sgt": args.window_end,
+        }
     written: List[Path] = []
     kept: Dict[str, Dict[str, Any]] = {"bqml": {}, "joined": {}, "deep": {}}
 
     if "offline" in components:
         try:
-            paths, meta = offline_component(run_dir, refresh_bq=args.refresh_bq, project=args.project, alpha=args.alpha)
+            paths, meta = offline_component(run_dir, refresh_bq=args.refresh_bq, project=args.project, alpha=args.alpha, data_cutoff=cutoff)
         except FileNotFoundError as exc:
             print(f"Offline skipped: {exc}. Place eval/data/causeway_gdata.csv or use --refresh-bq.", file=sys.stderr)
             return 1
@@ -231,7 +277,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         import features
 
-        frame, info = joined.load_inputs(refresh_bq=False)  # offline step already refreshed the cache if asked
+        frame, info = joined.load_inputs(refresh_bq=False, data_cutoff=cutoff)  # offline step already refreshed the cache if asked
         parity = features.parity_with_live_view(frame, project=args.project)
         info["parity_with_live_v_training_set"] = parity
         print("Parity with live v_training_set (max abs diff per column):", parity)
@@ -251,14 +297,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         import deep_forecast
 
         seeds = tuple(args.deep_seeds) if args.deep_seeds else deep_forecast.DEFAULT_SEEDS
-        paths, meta = deep_forecast.deep_component(run_dir, project=args.project, seeds=seeds, alpha=args.alpha, keep=kept["deep"])
+        paths, meta = deep_forecast.deep_component(run_dir, project=args.project, seeds=seeds, alpha=args.alpha, keep=kept["deep"], data_cutoff=cutoff)
         written.extend(paths)
         manifest["deep"] = meta
 
     if "fuzzy" in components:
         import fuzzy_traffic
 
-        paths, meta = fuzzy_traffic.fuzzy_component(run_dir, project=args.project, alpha=args.alpha)
+        paths, meta = fuzzy_traffic.fuzzy_component(run_dir, project=args.project, alpha=args.alpha, data_cutoff=cutoff)
         written.extend(paths)
         manifest["fuzzy"] = meta
 

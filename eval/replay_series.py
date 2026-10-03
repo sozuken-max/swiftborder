@@ -25,6 +25,7 @@ from plots import write_series_csv
 from run_artifacts import EVAL_ROOT, load_manifest
 
 REPORT_SNAPSHOT = EVAL_ROOT / "runs" / "report"
+SNAPSHOTS = (REPORT_SNAPSHOT, EVAL_ROOT / "runs" / "report-confirm")
 HOLDOUT_SAMPLE = "offline/holdout-sample.png"
 DIRECTIONS_WITH_BOTH = ("SG_TO_MY", "MY_TO_SG", "both")
 FOREST_COLUMNS = (
@@ -53,8 +54,11 @@ class ReplayResult:
 
 def _writes_into_report(path: Path) -> bool:
     resolved = path.resolve()
-    snapshot = REPORT_SNAPSHOT.resolve()
-    return resolved == snapshot or snapshot in resolved.parents
+    for snap in SNAPSHOTS:
+        snapshot = snap.resolve()
+        if resolved == snapshot or snapshot in resolved.parents:
+            return True
+    return False
 
 
 def replay_series_csvs(

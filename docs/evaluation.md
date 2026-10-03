@@ -180,6 +180,8 @@ flowchart LR
 ```
 <!-- /mermaid:eval-layer-b -->
 
+**Frozen run.** The windows, the claims the October-only confirmation run tests (C1–C7), the 0.5-minute practical threshold and the 60-minute design are fixed in advance in [roadmap.md](roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt). `generate_comparison_plots.py --data-cutoff` enforces the cutoff on every component.
+
 **Report cutoff (2026-10-03).** Score only rows whose label or target time is at or before **2026-10-19 23:59 SGT**. Later rows may exist for the live demo and are out of every table, figure, and comparison on this page. The rule, what can still be finished before that instant, and why the offline 60-minute split still cannot reach 10 day-blocks, are in [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03). 24 hours and <= 15 min MAE stay targets.
 
 ### 1. Production models, 30 minutes (`eval/layer_b.py`)
