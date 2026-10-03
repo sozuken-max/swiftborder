@@ -138,13 +138,17 @@ def test_light_uses_sgt_hours():
 
 
 def test_families_are_holm_adjusted_separately():
-    result = lb.run_harness(FakeSource(days=6), n_bootstrap=200)  # >= 10 day-blocks for "both"
+    # "both" needs >= 10 shared calendar days; 6 days x 2 directions is not enough any more
+    result = lb.run_harness(FakeSource(days=11), n_bootstrap=200)
     head = result["families"]["headline"]
     assert len(head) == 3 * 3 + 2
     assert all(c.family_size == len(head) for c in head)
     assert all(c.block == "day" and c.block_size == 144 for c in head if "/all" in c.label_challenger and "both" not in c.label_challenger)
     # Models are ~3x more accurate than the fake persistence, so they should win the headline.
-    assert next(c for c in head if c.label_challenger == "lin_h30 (both/all)").decision == "challenger"
+    both = next(c for c in head if c.label_challenger == "lin_h30 (both/all)")
+    assert both.decision == "challenger" and both.calendar_days >= 10
+    short = lb.run_harness(FakeSource(days=6), n_bootstrap=200)["families"]["headline"]
+    assert next(c for c in short if c.label_challenger == "lin_h30 (both/all)").decision == "insufficient data"
 
 
 def test_component_validates_as_schema_v2(tmp_path):

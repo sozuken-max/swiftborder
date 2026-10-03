@@ -1,6 +1,6 @@
 # Runbook: `forecast-api`
 
-A private HTTP read of the Woodlands 30-minute forecast of Google Maps `duration_in_traffic`. It is served from **local models** that the service fits itself ([ADR 0004](../adr/0004-serve-local-models.md)). BigQuery ML (`lin_h30`, `xgb_h30`, `v_forecast_recent`) is no longer called.
+A **public** HTTP read of the Woodlands 30-minute forecast (the invoker IAM check has been disabled since 2026-10-03, so the Firebase page can call it from the browser) of Google Maps `duration_in_traffic`. It is served from **local models** that the service fits itself ([ADR 0004](../adr/0004-serve-local-models.md)). BigQuery ML (`lin_h30`, `xgb_h30`, `v_forecast_recent`) is no longer called.
 
 - **Code:** [`forecastapi/main.py`](../../forecastapi/main.py) and [`forecastapi/local_models.py`](../../forecastapi/local_models.py).
 - **CI/CD:** [`forecastapi/cloudbuild.yaml`](../../forecastapi/cloudbuild.yaml), run by trigger `forecast-api` (`949ff029`) on a push to `main` that touches `forecastapi/**`.
@@ -13,7 +13,7 @@ What it is not:
 
 ## How a forecast is made
 
-1. **Latest inputs.** The latest `v_training_set` row per direction: `lag_60` present, within the last 24 hours. This is one BigQuery read per request; responses are cached for 5 minutes.
+1. **Latest inputs and the availability contract.** Each uncached request reads the last 3 hours of **closed** `v_bins_10min` bins. A bin `[t, t+10)` counts as closed once `t + 10 min + INGEST_GRACE` (60 s, env `INGEST_GRACE_SECONDS`) has passed; the harness treats a bin as known at `t + 10`. The features (lags, rolling means, `after_gap`) are built in Python with the harness's time-based rules (`local_models.features_from_bins`, a copy of `eval/features.maps_features`). They are not read from `v_training_set`, whose positional LAG/LEAD shift by a bin after a skipped bin. The origin is the newest closed bin. It is served only while its target bin `[t+30, t+40)` has not started, and only when no gap of more than 25 minutes lies in the six bins before it (`after_gap = 0`, as in the scored rows). Otherwise that direction answers **503**; a 200 never carries an expired forecast. With current ingestion the target is 9–19 minutes ahead of the request. One missed fetch still leaves an earlier origin servable, with less lead. Responses are cached for 5 minutes, and a cached answer is dropped as soon as its target bin starts.
 2. **Model.** Each model is fitted in the process and cached until the SGT day changes. The rows and settings are those of the harness fold for that day ([`eval/joined.py`](../../eval/joined.py)):
 
 | `model` | Harness column | Training rows | Settings |
@@ -62,10 +62,14 @@ What it is not:
 ```json
 {
   "model": "served", "version": "registry-2026-09-12-local-replica", "horizon_min": 30,
-  "source": "local model", "label": "maps_duration_in_traffic_min", "commit": "<git sha>",
+  "source": "local model", "label": "maps_duration_in_traffic_min", "target_offset_min": [30, 40],
+  "commit": "<git sha>",
   "directions": {
-    "SG_TO_MY": {"forecast_min": 34.6, "forecast_for": "...Z", "origin_ts": "...Z", "model": "lin_bq[frozen]"},
-    "MY_TO_SG": {"forecast_min": 48.5, "forecast_for": "...Z", "origin_ts": "...Z", "model": "persistence"}
+    "SG_TO_MY": {"forecast_min": 19.9, "model": "lin_bq[frozen]",
+                 "origin_ts": "2026-10-03T16:40:00Z", "origin_closed_at": "2026-10-03T16:50:00Z",
+                 "forecast_for": "2026-10-03T17:10:00Z", "forecast_window_end": "2026-10-03T17:20:00Z",
+                 "observation_age_min": 10.8, "lead_min": 9.2},
+    "MY_TO_SG": {"forecast_min": 35.5, "model": "persistence", "...": "same timing fields"}
   },
   "model_meta": {"lin_bq[frozen]": {"eval_id": "lin_bq[frozen]", "version": "bqml-replica-2026-09-12", "training_rows": 1406, "seeds": []},
                  "persistence": {"eval_id": "persistence", "version": "latest-bin"}}
@@ -77,7 +81,9 @@ What it is not:
 | 400 | Unknown model (in `model` or an override), model not deployed, stale `version`, `version` with an override, an override for a direction not requested, bad `direction` or `horizon_min`, `list` other than `models` |
 | 405 | Method other than `GET` / `OPTIONS` |
 | 502 | BigQuery read or fit failed (`{"error": "Forecast query failed"}`; details stay in the log) |
-| 503 | No recent row for a requested direction (a data gap, not a failed deploy) |
+| 503 | No servable origin for a requested direction: ingestion stale (the newest closed bin's target has started), or within an hour after a gap of more than 25 minutes. A data condition, not a failed deploy |
+
+**Timing fields.** `forecast_for` / `forecast_window_end` bound the target bin; the forecast is its mean Maps duration. `origin_closed_at` is when the newest observation bin closed. `observation_age_min` and `lead_min` are measured when the response is sent, including from the cache. The example is a local run against live BigQuery at 2026-10-03 17:00:17 UTC: the 16:50 bin had not cleared its grace minute, so the origin was 16:40.
 
 ## Performance
 
@@ -91,12 +97,14 @@ The fitted daily models are reused until 00:00 SGT. Memory is 1 GiB.
 
 1. **Test:** `pytest forecastapi`, then the harness equivalence test.
 2. **Buildpack:** builds the image from `forecastapi/` (Python 3.11; all images pinned by digest).
-3. **Deploy:** if the service exists, the new revision is deployed with **no traffic** and tag `candidate`. The first deploy takes traffic directly, because there is no earlier revision. The service is private (`--no-allow-unauthenticated`) and runs as `forecast-api@`. It sets `BQ_PROJECT` and `COMMIT_SHA`.
-4. **Smoke:** against the candidate URL with an identity token, the build checks the cases below. Inside Cloud Build, `gcloud auth print-identity-token` fails and the metadata identity endpoint returns 404. The step therefore mints the token with the IAM Credentials `generateIdToken` API. That needs the build SA (`1095552466513-compute@`) to hold `roles/iam.serviceAccountOpenIdTokenCreator` on itself (granted 2026-10-03).
-   - no token → 403;
-   - `list=models` → 200 and lists `served`;
-   - `model=served` → 200 with `"source": "local model"` (503 is accepted as a data gap);
+3. **Deploy:** if the service exists, the new revision is deployed with **no traffic** and tag `candidate`. The first deploy takes traffic directly, because there is no earlier revision. The service is **public** (`--no-invoker-iam-check`, matching the live setting since 2026-10-03), is capped at `_MAX_INSTANCES` (3), and runs as `forecast-api@`. It sets `BQ_PROJECT` and `COMMIT_SHA`.
+4. **Smoke:** against the candidate URL, anonymously and with the Hosting `Origin`, as the browser calls it:
+   - the service annotation `run.googleapis.com/invoker-iam-disabled` is `true`;
+   - `list=models` → 200 with an `Access-Control-Allow-Origin` header, and lists `served`;
+   - `model=served` → 200 with `"source": "local model"` and `lead_min` (503 is accepted as a data condition);
    - `model=lstm` → 400.
+
+   The earlier token-based smoke test (403 without a token) contradicted the live access setting and was dropped. The build SA's `roles/iam.serviceAccountOpenIdTokenCreator` on itself, granted for it on 2026-10-03, is no longer used. It can be removed with the command in [release-pr2.md](../release-pr2.md#gcp-changes-made-for-this-pr).
 5. **Promote:** traffic moves to the new revision and the `candidate` tag is removed.
 
 If Test, Deploy or Smoke fails, traffic stays on the previous revision. GitHub Actions runs the same `forecastapi` suite, the equivalence test, and a static check of the build file (`scripts/tests/test_forecastapi_cloudbuild.py`) on every push and PR.
@@ -105,15 +113,12 @@ If Test, Deploy or Smoke fails, traffic stays on the previous revision. GitHub A
 
 ```powershell
 $u = gcloud run services describe forecast-api --region asia-southeast1 --project swiftborder --format="value(status.url)"
-$t = gcloud auth print-identity-token
-curl.exe -s -H "Authorization: Bearer $t" "$u/?model=served"
-curl.exe -g -s -H "Authorization: Bearer $t" "$u/?model=xgb[maps]&direction=SG_TO_MY"
-curl.exe -g -s -H "Authorization: Bearer $t" "$u/?model=xgb_bq[daily]&model_my_to_sg=persistence"
+curl.exe -s "$u/?model=served"
+curl.exe -g -s "$u/?model=xgb[maps]&direction=SG_TO_MY"
+curl.exe -g -s "$u/?model=xgb_bq[daily]&model_my_to_sg=persistence"
 ```
-
-On 2026-10-03 a user token from `gcloud auth print-identity-token` got 401 from this service. If yours does too, call it through a service account you may impersonate (`--impersonate-service-account=<sa> --audiences=$u`). That needs `roles/iam.serviceAccountOpenIdTokenCreator` on that SA, and the SA needs invoke rights on the service.
 
 - **Roll back:** `gcloud run services update-traffic forecast-api --region asia-southeast1 --project swiftborder --to-revisions <previous-revision>=100`.
 - **Remove:** `gcloud run services delete forecast-api --region asia-southeast1 --project swiftborder`. Then disable trigger `949ff029` so the next push does not recreate it.
-- **Access:** callers need `roles/run.invoker` on the service. A browser on Firebase Hosting cannot attach an identity token by itself; publishing the service is a separate decision.
+- **Access:** public by decision (invoker IAM check disabled; CORS `*`). An empty service IAM policy does not make it private. To make it private again, deploy with `--invoker-iam-check`. Then restore a token-based smoke test, and give the Firebase page a way to call the service, because a browser cannot attach an identity token. Risk note: [findings.md](../findings.md#known-risk-public-forecast-api-by-decision).
 - **Identity:** `forecast-api@swiftborder.iam.gserviceaccount.com`: BigQuery job user on the project and data viewer on `traffic_prediction` and `causeway` only. It holds no keys.

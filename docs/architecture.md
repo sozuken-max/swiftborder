@@ -9,12 +9,12 @@
 
 ## Techniques
 
-The module asks the system to demonstrate at least three of these. All four are present; the ensemble is scored in evaluation but not served (`v_forecast_recent` selects `lin_h30` or persistence).
+The module asks the system to demonstrate at least three of these. All four are present; ensembles are scored offline. The live `forecast-api` serves local models, currently `lin_bq[frozen]` for SG_TO_MY and persistence for MY_TO_SG.
 
 | Category | In this design |
 | --- | --- |
 | Supervised learning | Roboflow vehicle labels; BigQuery ML and offline regression of later Maps duration (`y_30`, 60-min offline) |
-| Machine learning / deep learning | YOLO served through Roboflow; `lin_h30` (linear regression), `xgb_h30` (boosted tree), offline XGBoost; LSTM code exists but is unscored |
+| Machine learning / deep learning | YOLO served through Roboflow; `lin_h30` (linear regression), `xgb_h30` (boosted tree), offline XGBoost; LSTM, GRU and a patch Transformer are scored offline |
 | Intelligent sensing | LTA frame to directional occupancy. Dividing line in `camdetect` is camera 2701 only |
 | Hybrid / ensemble | Mean of `lin_h30` and `xgb_h30`, and ridge+XGBoost in the joined experiment, scored against the single models in [evaluation.md](evaluation.md). Not in the serve path |
 
@@ -39,54 +39,30 @@ Two layers. Layer A turns an LTA frame into directional occupancy through Robofl
 ```mermaid
 flowchart LR
   subgraph LA["Layer A - Vision"]
-    LTA["LTA cameras"]
-    ROB["Roboflow<br/>Label - Train - Serve"]
-    GH["Cloud Build<br/>pytest then deploy<br/>camdetect to swiftbackend"]
-    SB["Cloud Run<br/>swiftbackend<br/>public: no invoker auth"]
-    JBF["Cloud Run Job<br/>traffic-backfill"]
-    TI["traffic_images<br/>metadata populated<br/>labels = 0 rows"]
-    C12["cam2701 / cam2702<br/>frozen - see inventory"]
-    ROB -->|"detect API"| SB
-    GH --> SB
-    LTA --> SB
-    JBF --> TI
-    SB -.->|"no live writes"| C12
-    VCI["v_congestion_index_10min"]
+    LTA["LTA cameras"] --> SB["Cloud Run swiftbackend<br/>directional counts: 2701"]
+    RF["Roboflow YOLO<br/>label - train - serve"] --> SB
+    SB --> UI["Firebase Hosting UI<br/>source outside git"]
   end
-
   subgraph LB["Layer B - Forecasting"]
-    SCH["Cloud Scheduler<br/>Gmap-Woodlands */5"]
-    GFN["Cloud Run<br/>gmap-woodlands-fetcher"]
-    TT["causeway.travel_times<br/>LIVE - see inventory.md"]
-    LBTP["traffic_prediction<br/>Maps-only BQML<br/>lin_h30 + xgb_h30"]
-    GMAP["Google Maps<br/>Distance Matrix"]
-    SCH --> GFN
-    GMAP --> GFN
-    GFN --> TT
-    TT --> LBTP
-    WX["weather feature views"] -.->|"present, not joined"| LBTP
+    SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
+    GM["Google Maps<br/>Distance Matrix"] --> ING
+    ING --> TT["BigQuery travel_times<br/>Maps-only 10-minute bins"]
+    TT --> API["Cloud Run forecast-api, public<br/>local models<br/>target: bin 30-40 min after<br/>the newest closed bin"]
+    API --> UI
+    OLD["Historical BQML retained<br/>lin_h30 / xgb_h30<br/>v_forecast_recent"]
   end
-
-  subgraph GCS["Object storage - data path"]
+  BUILD["Cloud Build<br/>two test/deploy pipelines"] --> SB
+  BUILD --> API
+  subgraph GCS["Storage - data path"]
     CAM["sg-lta-traffic-cameras"]
-    CACHE["swiftborder-frame-cache"]
+    CACHE["swiftborder-frame-cache<br/>no writer in git"]
+    PUB["swiftborder-public<br/>traffic-24h.json history"] --> UI
   end
-
-  subgraph SERVE["Serve today"]
-    VF["v_forecast_recent<br/>30 min - lin_h30 or persistence"]
+  subgraph EV["Evaluation - repo"]
+    HAR["eval/ harnesses<br/>vision scorer ready<br/>forecast experiments scored"] --> REP["eval/runs/report/run.json"]
   end
-
-  subgraph EVAL["Evaluation - repo eval/, read-only"]
-    HAR["layer_b.py / joined.py / layer_a.py<br/>eval/runs/report/"]
-  end
-
-  LTA --> CAM
-  CAM --> JBF
-  CAM -.->|"writer not in git"| CACHE
-  VCI -.->|"not joined"| LBTP
-  LBTP --> VF
-  LBTP -.->|"ML.PREDICT read-only"| HAR
-  TT -.->|"export read-only"| HAR
+  TT -.->|"read-only export"| HAR
+  UNUSED["Weather and camera features<br/>offline experiments only"] -.-> HAR
 ```
 <!-- /mermaid:architecture-high-level -->
 
@@ -94,9 +70,9 @@ flowchart LR
 
 ![High-level architecture](images/architecture-high-level.png)
 
-This PNG predates the 2026-10-01 fact pass and is stale (see [diagrams/README.md](diagrams/README.md#png-exports-are-stale-regenerate-before-the-deck)); the Mermaid above is current. Do not pair these figures with a second "target" architecture figure.
+Regenerated on 4 Oct 2026 after a fresh serving and storage check; see [diagrams/README.md](diagrams/README.md). **Stale since then:** the `forecast-api` input is now `v_bins_10min` (closed bins, harness features), not `v_training_set`, and the service is labelled public. The Mermaid above already shows this. Regenerate both PNGs before the deck.
 
-The high-level Mermaid omits the four deploy/public buckets on purpose (grading focus is Layer A/B ML, not GCS topology). Camera ingest uses `sg-lta-traffic-cameras` and `swiftborder-frame-cache`; full bucket wiring is in the detailed diagram below.
+The high-level figure shows camera, cache and public-history storage. The detailed figure names all seven verified buckets. Storage inventory nodes have no inferred data-flow edges.
 
 ## Detailed
 
@@ -105,96 +81,57 @@ The high-level Mermaid omits the four deploy/public buckets on purpose (grading 
 <!-- mermaid:architecture-detailed -->
 ```mermaid
 flowchart LR
-  subgraph Ext["External sources"]
-    LTA["LTA / data.gov.sg<br/>traffic cameras"]
-    NEA["NEA rainfall +<br/>2h forecast"]
-    GMAP["Google Maps<br/>Distance Matrix"]
+  subgraph LA["Layer A - Vision"]
+    LTA["LTA cameras"] --> SB["Cloud Run swiftbackend<br/>2701 directional counts"]
+    RF["Roboflow YOLO<br/>label - train - serve"] --> SB
+    CAM["sg-lta-traffic-cameras"] --> JOB["Cloud Run Job<br/>traffic-backfill"]
+    JOB --> META["traffic_images<br/>metadata populated; labels empty"]
+    HIST["cam2701 / cam2702<br/>historical detections<br/>congestion view: 2701"]
   end
-
-  subgraph Ingest["Ingest / compute"]
-    GH["Cloud Build<br/>pytest then deploy<br/>camdetect to swiftbackend"]
-    SCH["Cloud Scheduler<br/>Gmap-Woodlands */5"]
-    GFN["Cloud Run<br/>gmap-woodlands-fetcher<br/>asia-southeast1"]
-    SB["Cloud Run<br/>swiftbackend<br/>europe-west1<br/>calls Roboflow detect<br/>public: no invoker auth"]
-    BF["Cloud Run Job<br/>traffic-backfill<br/>last success 13 Sep SGT"]
+  subgraph LB["Layer B - Forecasting"]
+    SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
+    MAPS["Google Maps Distance Matrix"] --> ING
+    ING --> TT["causeway.travel_times"]
+    TT --> FEATURES["v_bins_10min<br/>closed bins only"]
+    FEATURES --> API["Cloud Run forecast-api, public<br/>harness features, local fit<br/>SG_TO_MY: lin_bq frozen<br/>MY_TO_SG: persistence"]
+    LEGACY["Historical BQML retained<br/>lin_h30 / xgb_h30<br/>model_registry / v_forecast_recent"]
   end
-
-  subgraph RF["Layer A - Roboflow"]
-    ROB["Label - Train YOLO - Serve"]
+  subgraph DELIVERY["Delivery and evaluation"]
+    BUILD["Cloud Build<br/>two test/deploy pipelines"] --> SB
+    BUILD --> API
+    UI["Firebase Hosting UI<br/>source outside git"]
+    SB --> UI
+    API --> UI
+    PUB["swiftborder-public<br/>traffic-24h.json history"] --> UI
+    EVAL["eval/ read-only harnesses<br/>run.json and report figures"]
+    WX["NEA weather<br/>Causeway manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
+    HIST -.->|"historical queue profile"| EVAL
+    TT -.->|"read-only export"| EVAL
   end
-
-  subgraph BQ["BigQuery - project swiftborder"]
-    C1["cam2701.Cam2701<br/>frozen 18 Jul<br/>+ v_congestion_index_10min"]
-    C2["cam2702.Cam2702<br/>frozen 18 Jul<br/>no congestion view"]
-    TT["causeway.travel_times LIVE<br/>see inventory.md"]
-    RF2["rainfall.rainfall<br/>Woodlands, to 30 Sep<br/>manual append"]
-    WX["weatherforecast<br/>Woodlands, to 30 Sep<br/>+ v_weather_features_10min"]
-    TI["traffic_images<br/>metadata 368905 (13 Sep)<br/>labels = 0 rows"]
-    TP["traffic_prediction US<br/>Maps-only v_training_set<br/>lin_h30 + xgb_h30<br/>v_forecast_recent = 30 min"]
-  end
-
-  subgraph GCS["Cloud Storage"]
-    CAM["sg-lta-traffic-cameras"]
-    CACHE["swiftborder-frame-cache"]
-    RS1["run-sources-...-asia-southeast1"]
-    RS2["run-sources-...-europe-west1"]
-    PUB["swiftborder-public"]
+  subgraph STORAGE["Other storage - inventory only, no inferred data edges"]
+    CACHE["swiftborder-frame-cache<br/>no writer in git"]
+    RS1["run-sources-swiftborder-asia-southeast1"]
+    RS2["run-sources-swiftborder-europe-west1"]
     CB["swiftborder_cloudbuild"]
+    CBA["swiftborder_asia-southeast1_cloudbuild"]
   end
-
-  LTA --> CAM
-  LTA --> SB
-  GH --> SB
-  CAM --> BF
-  BF --> TI
-  ROB --> SB
-  NEA --> RF2
-  NEA --> WX
-  SCH --> GFN
-  GMAP --> GFN
-  GFN --> TT
-  TT --> TP
-  C1 -.->|"congestion view exists, not joined"| TP
-  WX -.->|"weather view exists, not joined"| TP
-  SB -.->|"no live writes since 18 Jul"| C1
-  SB -.->|"no live writes since 18 Jul"| C2
-  CAM -.->|"writer not in git"| CACHE
-  SB -.->|"CACHE_BUCKET set, unused in code"| CACHE
-
-  GH -.->|"camdetect build source"| RS2
-  RS2 -.->|"deploy archive"| SB
-  GH -.->|"build artifacts"| CB
-  RS1 -.->|"asia Run deploy source"| GFN
-  RS1 -.->|"asia Run deploy source"| BF
-  PUB -.->|"fetched by browser"| FH["Firebase Hosting site<br/>swiftborder-92b45, not in this project<br/>source not in git"]
-
-  subgraph EV["Evaluation - repo eval/, read-only"]
-    HAR["layer_b.py fixed window<br/>joined.py offline join<br/>layer_a.py scorer"]
-    CSV["Causeway/ CSV backfill<br/>rainfall + 2h forecast"]
-  end
-  NEA -.->|"data.gov.sg API"| CSV
-  CSV -.->|"load_bigquery.py manual append"| RF2
-  CSV -.->|"load_bigquery.py manual append"| WX
-  CSV -.-> HAR
-  TP -.->|"ML.PREDICT read-only"| HAR
-  TT -.->|"export read-only"| HAR
 ```
 <!-- /mermaid:architecture-detailed -->
 
-`cam2701.v_congestion_index_10min` and `weatherforecast.v_weather_features_10min` are real views. `v_training_set` does not reference them (dashed). `swiftbackend` is the live detect HTTP service; the `Cam2701` / `Cam2702` tables have not been written since 18 Jul, so its edges to them are dashed "no live writes". `swiftborder-frame-cache` has no writer in git; the service's `CACHE_BUCKET` env var is set but unused by `camdetect/main.py` (dashed). The `eval/` block is repo code that reads the project read-only; it writes nothing to GCP.
+Weather and historical camera features are used only in offline experiments. The live `v_training_set` and `forecast-api` inputs are Maps-only. The `eval/` block reads the project without writing to GCP; its dashed inputs denote offline work. `swiftborder-frame-cache` has no writer in git. Deployment and offline-input references are repeated as labelled references in the detailed PNG to avoid crossing connectors.
 
 **Notes**
 
 - `traffic-backfill` is a **Cloud Run Job** (compute), not a BigQuery dataset. Latest execution succeeded 13 Sep 2026, 03:53 SGT, after two failed runs the same day.
 - `swiftbackend` is publicly invocable (IAM invoker check disabled, ingress `all`, CORS `*`) and holds `ROBOFLOW_API_KEY` as a plain env var. Recorded as a risk in [findings.md](findings.md); not changed.
 - `v_training_set` is built only from `causeway.travel_times`: 10-minute bins, lags, rolling means, time-of-day, weekend and peak flags. Labels are `y_30` and `y_60`.
-- `v_forecast_recent` serves **30 minutes** ahead. It calls `ML.PREDICT` on `lin_h30` and picks `lin_h30` or persistence from `model_registry`. `y_60` is computed and not served. `xgb_h30` exists and is not the view's predict target.
+- `forecast-api` reads closed `v_bins_10min` bins and builds the features with the harness's time-based rules (`local_models.features_from_bins`), then fits and serves local models. The target is the mean over the bin 30-40 minutes after the newest closed bin, which is 9-19 minutes ahead of the request when ingestion is current (`lead_min`). A direction with stale data answers 503. The service is public (invoker IAM check disabled, by decision). `v_forecast_recent`, `lin_h30`, `xgb_h30` and the BQML registry remain as historical resources; the HTTP API does not call them.
 - View and BQML DDL checked in under [sql/](../sql/) (exported 2026-09-26). Apply order: [sql/README.md](../sql/README.md).
-- A 24-hour forecast is the product intent. It is not what the live view emits.
+- A 24-hour forecast is the product intent. It is not what the live API emits.
 
 What those facts allow the report to claim is in [findings.md](findings.md). Methods and scored results are in [evaluation.md](evaluation.md).
 
-**Deck export (stale until regenerated; see [diagrams/README.md](diagrams/README.md#png-exports-are-stale-regenerate-before-the-deck)):**
+**Deck export (regenerated 4 Oct 2026):**
 
 ![Detailed architecture](images/architecture-detailed.png)
 

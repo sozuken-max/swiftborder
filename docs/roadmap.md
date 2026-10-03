@@ -36,7 +36,9 @@ These choices are written down before any October label is scored, so the frozen
 - **Run A (headline):** 13 Sep 00:00 to the cutoff. It has 37 days, so every 30-minute comparison has well over 10 day-blocks.
 - **Run B (confirmation):** 1–19 Oct only. No model, feature set or "best single" choice was made on these days, so it confirms or rejects the choices made on 13–30 Sep. The rolling folds and stacks still train only on earlier days.
 
-**2. Claims Run B tests** (fixed now). A claim is confirmed when its Run B decision is "challenger", or for C5 and C8 "not significant", under the run-wide Holm check:
+**2. Claims Run B tests** (fixed now). C1–C4, C6 and C7 are confirmed when their Run B decision is "challenger" under the run-wide Holm check. C5 and C8 have no "confirmed" outcome. A "not significant" result means **no improvement was detected on 1–19 Oct**, not that the arms are equivalent or that weather or stacking cannot help. The report gives the point estimate and the joint calendar-day CI. It may add that the CI lies inside ±0.5 min, as a description and not as an equivalence test: no equivalence margin was fixed before the run. (Revised 2026-10-04 after [final-report-readiness.md](final-report-readiness.md) §5; the team confirms before 19 Oct.)
+
+**Pooled significance (changed 2026-10-04, readiness §4).** In a pooled ("both directions") comparison, the coverage gate counts shared calendar days, not day-blocks summed over directions. The decision also needs the joint calendar-day bootstrap CI (both directions' rows of a day resampled together) to exclude 0. A day-clustered p-value is reported alongside ([evaluation.md](evaluation.md#significance)). Directional results are reported separately. Run A's 37 days and Run B's 19 days both clear the 10-day gate.
 
 | # | Comparison (30 min, both directions) | Family | 13–30 Sep result |
 | --- | --- | --- | --- |

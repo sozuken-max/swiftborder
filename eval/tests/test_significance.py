@@ -320,3 +320,42 @@ def test_compare_scored_rows_rejects_mismatched_keys():
             label_reference="p",
             block_size=1,
         )
+
+
+def test_joint_day_bootstrap_keeps_shared_day_shocks_together():
+    import significance as sig
+
+    # Both directions share one shock per day; within a day the rows barely vary.
+    rng = np.random.default_rng(1)
+    t0 = datetime(2026, 9, 1)
+    days, per_day = 12, 24
+    shocks = rng.normal(-0.2, 1.0, size=days)
+    ts, groups, d = [], [], []
+    for g in ("A", "B"):
+        for k in range(days):
+            for j in range(per_day):
+                ts.append(t0 + timedelta(days=k, hours=j))
+                groups.append(g)
+                d.append(shocks[k] + rng.normal(0, 0.05))
+    zeros = np.zeros(len(d))
+    r = sig.compare_absolute_errors(zeros, np.abs(d), zeros, timestamps=ts, groups=groups, n_bootstrap=199)
+    day_ids = sig.calendar_day_ids(ts)
+    lo, hi = sig.joint_day_bootstrap_mean_ci(d, day_ids, n_resamples=999)
+    per_lo, per_hi = sig.block_bootstrap_mean_ci(d, block_size=per_day, groups=groups, n_resamples=999)
+    # treating the two directions as independent understates the spread of a shared-day mean
+    assert (hi - lo) > 1.2 * (per_hi - per_lo)
+    assert r.calendar_days == days and r.pooled
+    p = sig.day_cluster_pvalue(d, day_ids)
+    assert 0.0 <= p <= 1.0
+
+
+def test_single_group_comparison_keeps_the_block_gate():
+    import significance as sig
+
+    t0 = datetime(2026, 9, 1)
+    ts = [t0 + timedelta(hours=h) for h in range(24 * 12)]
+    rng = np.random.default_rng(2)
+    y = np.zeros(len(ts))
+    r = sig.compare_absolute_errors(y, y + 1.0 + rng.normal(0, 0.1, len(ts)), y + 2.0, timestamps=ts, n_bootstrap=199)
+    assert not r.pooled and r.joint_ci_low_min is None and r.calendar_days == 12
+    assert r.decision == "challenger"

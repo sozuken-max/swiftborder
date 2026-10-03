@@ -27,6 +27,7 @@ import threading
 import time
 
 import functions_framework
+import pandas as pd
 
 import local_models as lm
 
@@ -34,7 +35,6 @@ logger = logging.getLogger("forecastapi")
 
 BQ_PROJECT = os.environ.get("BQ_PROJECT", "swiftborder")
 BQ_LOCATION = "US"
-VIEW = "`swiftborder.traffic_prediction.v_training_set`"
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 COMMIT_SHA = os.environ.get("COMMIT_SHA", "")
 CACHE_TTL_SECONDS = 300
@@ -50,21 +50,33 @@ SELECTION_ID = "registry-2026-09-12-local-replica"
 PERSISTENCE_VERSION = "latest-bin"
 OVERRIDE_PARAMS = {"SG_TO_MY": "model_sg_to_my", "MY_TO_SG": "model_my_to_sg"}
 
+# Availability contract (docs/runbooks/forecast-api.md). A 10-minute bin [t, t+10) is an origin only
+# once it has closed plus INGEST_GRACE (the harness treats a bin as known at t+10). The forecast is the
+# mean Maps duration over [t+30, t+40). An origin is served only while that target bin has not started,
+# so the newest closed bin, or the one before it after a missed fetch, can be served; anything older
+# is unavailable (503), never a 200 with an expired forecast.
+BIN = datetime.timedelta(minutes=10)
+TARGET_SHIFT = datetime.timedelta(minutes=30)
+INGEST_GRACE = datetime.timedelta(seconds=int(os.environ.get("INGEST_GRACE_SECONDS", "60")))
+LATEST_WINDOW = datetime.timedelta(hours=3)  # enough bins for the 60-minute lags and the gap rule
+
+BINS_VIEW = "`swiftborder.traffic_prediction.v_bins_10min`"
+_BIN_COLUMNS = "route_id, direction, bin_ts, dur_min, congestion_ratio, speed_kmh"
+
+# Features are built in Python with the harness's time-based lags (lm.features_from_bins), not read
+# from v_training_set, whose positional LAG/LEAD shift after a skipped bin.
 _LATEST_SQL = f"""
-SELECT direction, bin_ts, {", ".join(lm.VIEW_COLUMNS)}
-FROM {VIEW}
-WHERE lag_60 IS NOT NULL
-  AND bin_ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
-  AND direction IN UNNEST(@directions)
-QUALIFY ROW_NUMBER() OVER (PARTITION BY direction ORDER BY bin_ts DESC) = 1
+SELECT {_BIN_COLUMNS}
+FROM {BINS_VIEW}
+WHERE direction IN UNNEST(@directions)
+  AND bin_ts >= TIMESTAMP_SUB(@now, INTERVAL {int(LATEST_WINDOW.total_seconds())} SECOND)
+  AND TIMESTAMP_ADD(bin_ts, INTERVAL @closed_after_sec SECOND) <= @now
 """
 
 _TRAINING_SQL = f"""
-SELECT direction, bin_ts, y_30, after_gap, {", ".join(lm.VIEW_COLUMNS)}
-FROM {VIEW}
-WHERE y_30 IS NOT NULL
-  AND after_gap = 0
-  AND TIMESTAMP_ADD(bin_ts, INTERVAL 40 MINUTE) <= @labels_before
+SELECT {_BIN_COLUMNS}
+FROM {BINS_VIEW}
+WHERE TIMESTAMP_ADD(bin_ts, INTERVAL 10 MINUTE) <= @labels_before
 """
 
 REPORT_RUN_ID = "20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble"
@@ -155,10 +167,17 @@ def _bigquery():
     return bigquery
 
 
-def fetch_latest(directions):
+def fetch_latest(directions, now):
+    """Closed ``v_bins_10min`` rows of the last ``LATEST_WINDOW`` (the open bin is never read)."""
     bq = _bigquery()
     client = bq.Client(project=BQ_PROJECT)
-    cfg = bq.QueryJobConfig(query_parameters=[bq.ArrayQueryParameter("directions", "STRING", list(directions))])
+    cfg = bq.QueryJobConfig(
+        query_parameters=[
+            bq.ArrayQueryParameter("directions", "STRING", list(directions)),
+            bq.ScalarQueryParameter("now", "TIMESTAMP", now),
+            bq.ScalarQueryParameter("closed_after_sec", "INT64", int((BIN + INGEST_GRACE).total_seconds())),
+        ]
+    )
     return client.query(_LATEST_SQL, job_config=cfg, location=BQ_LOCATION).to_dataframe()
 
 
@@ -177,7 +196,7 @@ def _training_frame(day_start):
     key = day_start.isoformat()
     if key not in _training:
         _training.clear()
-        _training[key] = lm.prepare(fetch_training(day_start))
+        _training[key] = lm.prepare(lm.features_from_bins(fetch_training(day_start)))
     return _training[key]
 
 
@@ -190,7 +209,7 @@ def fitted_model(model_id):
             return hit
         day_start = lm.serving_day_start(_now())
         rows = lm.LOCAL_MODELS[model_id]["rows"]
-        frame = _training_frame(day_start)
+        frame = _training_frame(day_start)  # every closed bin before day_start, harness features
         train = lm.training_rows(frame, rows, day_start)
         if len(train) < 100:
             raise RuntimeError(f"only {len(train)} training rows for {model_id}")
@@ -199,6 +218,35 @@ def fitted_model(model_id):
             _fitted.pop(k)  # yesterday's fit
         _fitted[key] = model
         return model
+
+
+def servable_origins(bins, now):
+    """One origin row per direction that may be served at ``now``, or none for that direction.
+
+    The origin is the newest bin that closed at least ``INGEST_GRACE`` ago. It is dropped when its
+    target bin has already started (stale data) or when it lies within an hour of a gap of more than
+    25 minutes (``after_gap``: the harness never scores such rows).
+    """
+    now = pd.Timestamp(now)
+    if bins is None or len(bins) == 0:
+        return lm.prepare(lm.features_from_bins(_empty_bins()))
+    frame = bins.copy()
+    frame["bin_ts"] = pd.to_datetime(frame["bin_ts"], utc=True)
+    frame = frame[frame["bin_ts"] + BIN + INGEST_GRACE <= now]  # the fetch already does this; keep it local too
+    feats = lm.prepare(lm.features_from_bins(frame, unknown_first_gap=True))
+    latest = feats.sort_values("bin_ts").groupby("direction").tail(1)
+    fresh = latest["bin_ts"] + TARGET_SHIFT > now
+    complete = latest["after_gap"] == 0
+    for _, row in latest[~(fresh & complete)].iterrows():
+        logger.warning(
+            "no servable origin for %s: latest closed bin %s (%s)",
+            row["direction"], row["bin_ts"].isoformat(), "stale" if not fresh[row.name] else "after a gap",
+        )
+    return latest[fresh & complete].reset_index(drop=True)
+
+
+def _empty_bins():
+    return pd.DataFrame(columns=["route_id", "direction", "bin_ts", "dur_min", "congestion_ratio", "speed_kmh"])
 
 
 def resolve(model_id, direction):
@@ -217,10 +265,11 @@ def query_forecast(model_id, directions):
 def query_selection(chosen):
     """Forecast rows for a direction -> concrete model mapping. Tests replace this function."""
     directions = list(chosen)
-    latest = lm.prepare(fetch_latest(directions))
+    now = _now()
+    origins = servable_origins(fetch_latest(directions, now), now)
     rows, meta = [], {}
     for direction in directions:
-        sub = latest[latest["direction"] == direction]
+        sub = origins[origins["direction"] == direction]
         if sub.empty:
             continue
         mid = chosen[direction]
@@ -287,6 +336,29 @@ def _iso(value):
             return text[:-6] + "Z"
         return text
     return str(value)
+
+
+def _parse_ts(value):
+    ts = pd.Timestamp(value)
+    if ts.tzinfo is None:
+        raise ValueError("timestamp without zone")
+    return ts.tz_convert("UTC").to_pydatetime()
+
+
+def _with_timing(payload, now):
+    """Copy of ``payload`` with ages measured at ``now``; None once any target bin has started."""
+    out = dict(payload, directions={})
+    for direction, row in payload["directions"].items():
+        target = _parse_ts(row["forecast_for"])
+        if target <= now:
+            return None
+        closed = _parse_ts(row["origin_closed_at"])
+        out["directions"][direction] = dict(
+            row,
+            observation_age_min=round((now - closed).total_seconds() / 60.0, 1),
+            lead_min=round((target - now).total_seconds() / 60.0, 1),
+        )
+    return out
 
 
 def list_models():
@@ -379,10 +451,14 @@ def _direction_payload(row):
     origin_ts = row.get("origin_ts")
     if not forecast_for or not origin_ts:
         raise ValueError("timestamp")
+    target = _parse_ts(forecast_for)
+    origin = _parse_ts(origin_ts)
     payload = {
         "forecast_min": round(float(forecast_min), 1),
-        "forecast_for": str(forecast_for),
-        "origin_ts": str(origin_ts),
+        "forecast_for": _iso(target),
+        "forecast_window_end": _iso(target + BIN),
+        "origin_ts": _iso(origin),
+        "origin_closed_at": _iso(origin + BIN),
     }
     if row.get("model"):
         payload["model"] = str(row["model"])
@@ -409,9 +485,11 @@ def _assemble(model_id, version_id, horizon, directions, result):
         "model": model_id,
         "version": version_id,
         "horizon_min": horizon,
-        "generated_at": _iso(datetime.datetime.now(datetime.timezone.utc)),
+        "generated_at": _iso(_now()),
         "source": source,
         "label": "maps_duration_in_traffic_min",
+        # the label is the mean over the target bin, 30-40 minutes after the origin bin starts
+        "target_offset_min": [30, 40],
         "directions": ordered,
     }
     meta = result.get("meta") if isinstance(result, dict) else None
@@ -488,18 +566,22 @@ def forecast(request):
 
     cache_key = (model_id, version_id, tuple(directions), horizon)
     cached = _cache_get(cache_key)
-    if cached is None:
+    payload = _with_timing(cached, _now()) if cached is not None else None
+    if payload is None:
+        _cache.pop(cache_key, None)  # absent, or a cached target bin has started
         try:
             result = query_selection(chosen) if chosen else query_forecast(model_id, directions)
-            payload = _assemble(model_id, version_id, horizon, directions, result)
+            fresh = _assemble(model_id, version_id, horizon, directions, result)
         except NoRecentForecast:
             return _error("No recent forecast for the requested direction", 503)
         except Exception:
             logger.exception("forecast query failed")
             return _error("Forecast query failed", 502)
-        _cache_put(cache_key, payload)
-    else:
-        payload = cached
+        payload = _with_timing(fresh, _now())
+        if payload is None:
+            logger.warning("forecast target already started; refusing a stale forecast")
+            return _error("No recent forecast for the requested direction", 503)
+        _cache_put(cache_key, fresh)
 
     headers = {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": "private, max-age=300"}
     return (json.dumps(payload), 200, headers)

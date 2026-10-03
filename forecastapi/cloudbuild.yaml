@@ -46,8 +46,11 @@ steps:
         args=(
           --project=$_AR_PROJECT_ID --region=$_DEPLOY_REGION --platform=managed
           --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-          --min-instances=0 --memory=$_MEMORY --cpu=1 --timeout=120
-          --service-account=$_RUNTIME_SERVICE_ACCOUNT --no-allow-unauthenticated
+          --min-instances=0 --max-instances=$_MAX_INSTANCES --memory=$_MEMORY --cpu=1 --timeout=120
+          --service-account=$_RUNTIME_SERVICE_ACCOUNT
+          # Public, as set live on 2026-10-03 (invoker IAM check disabled) so the Firebase page can call
+          # it from the browser. The IAM-only flag for private services does not control this setting.
+          --no-invoker-iam-check
           --set-env-vars=BQ_PROJECT=$_AR_PROJECT_ID,COMMIT_SHA=$COMMIT_SHA
           --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
           --quiet
@@ -80,36 +83,25 @@ steps:
             print(svc["status"]["url"])
         PY
         )
-        base=$$(python3 -c 'import json; print(json.load(open("/workspace/service.json"))["status"]["url"])')
-        echo "smoke target: $$url (token audience $$base)"
-        # Cloud Build's gcloud cannot mint an ID token (build 363590b1) and its metadata identity endpoint
-        # returns 404 (build 2b76a1c3). Mint one through the IAM Credentials API instead. The build SA needs
-        # roles/iam.serviceAccountOpenIdTokenCreator on itself. The audience is the service URL, which
-        # Cloud Run accepts on every URL of the service, tags included.
-        sa=$$(curl -sf -H "Metadata-Flavor: Google" \
-          "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email")
-        curl -sS -X POST -o /workspace/idtoken.json -w '%{http_code}\n' \
-          -H "Authorization: Bearer $$(gcloud auth print-access-token)" -H "Content-Type: application/json" \
-          -d "{\"audience\": \"$$base\", \"includeEmail\": true}" \
-          "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/$$sa:generateIdToken" > /workspace/idtoken.code
-        test "$$(cat /workspace/idtoken.code)" = "200" || { echo "generateIdToken for $$sa failed:"; cat /workspace/idtoken.json; exit 1; }
-        token=$$(python3 -c 'import json; print(json.load(open("/workspace/idtoken.json"))["token"])')
-        rm -f /workspace/idtoken.json
-        test -n "$$token" || { echo "empty identity token"; exit 1; }
-        code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$$url/?list=models")
-        test "$$code" = "403" || { echo "expected 403 without a token, got $$code"; exit 1; }
-        code=$$(curl -s -o /workspace/list.json -w '%{http_code}' --max-time 60 -H "Authorization: Bearer $$token" "$$url/?list=models")
+        echo "smoke target: $$url"
+        # The service is public (deploy step), so the smoke test calls it the way the browser does: no
+        # token, with the Hosting origin, and checks the CORS header.
+        test "$$(python3 -c 'import json; print(json.load(open("/workspace/service.json"))["metadata"]["annotations"].get("run.googleapis.com/invoker-iam-disabled", ""))')" = "true" \
+          || { echo "invoker IAM check is enabled; the browser cannot call the service"; exit 1; }
+        origin="https://swiftborder-92b45.web.app"
+        code=$$(curl -s -D /workspace/list.headers -o /workspace/list.json -w '%{http_code}' --max-time 60 -H "Origin: $$origin" "$$url/?list=models")
         test "$$code" = "200" || { echo "list=models returned $$code"; exit 1; }
+        grep -qi '^access-control-allow-origin:' /workspace/list.headers || { echo "no CORS header"; exit 1; }
         grep -q '"id": "served"' /workspace/list.json
         # first call fits the daily models (one BigQuery read plus a fit): allow two minutes
-        code=$$(curl -s -o /workspace/served.json -w '%{http_code}' --max-time 120 -H "Authorization: Bearer $$token" "$$url/?model=served")
+        code=$$(curl -s -o /workspace/served.json -w '%{http_code}' --max-time 120 -H "Origin: $$origin" "$$url/?model=served")
         cat /workspace/served.json; echo
         case "$$code" in
-          200) grep -q '"source": "local model"' /workspace/served.json ;;
-          503) echo "no recent Maps bin (data gap); the service answered correctly" ;;
+          200) grep -q '"source": "local model"' /workspace/served.json && grep -q '"lead_min"' /workspace/served.json ;;
+          503) echo "no servable origin bin (data gap or stale ingestion); the service answered correctly" ;;
           *) echo "model=served returned $$code"; exit 1 ;;
         esac
-        code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -g -H "Authorization: Bearer $$token" "$$url/?model=lstm")
+        code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -g "$$url/?model=lstm")
         test "$$code" = "400" || { echo "model=lstm returned $$code, expected 400"; exit 1; }
 
   - id: Promote
@@ -133,6 +125,8 @@ substitutions:
   _SERVICE_NAME: forecast-api
   _RUNTIME_SERVICE_ACCOUNT: forecast-api@swiftborder.iam.gserviceaccount.com
   _MEMORY: 1Gi
+  # public endpoint: bound the instances (and with them the BigQuery reads) an anonymous caller can start
+  _MAX_INSTANCES: "3"
 
 options:
   logging: CLOUD_LOGGING_ONLY
