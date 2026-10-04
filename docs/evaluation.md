@@ -521,63 +521,45 @@ Do not put the 60-minute one-route numbers and the 30-minute two-direction numbe
 
 ---
 
-### 8. TimesFM 2.5 and FCM + MLP (local pass, 2026-10-04)
+### 8. TimesFM 2.5 and FCM + MLP (shared 13-30 Sep window, 2026-10-05)
 
 These two modules live in `Causeway/` and are not part of the frozen run above. Skill is still on the Maps duration series. Labels stay at or before 2026-10-19 23:59 SGT. `fcm_mlp_layer_a` and `timesfm_layer_a` are not scored: camera detections end on 22 Apr 2026 and do not overlap this Maps window.
 
-**TimesFM (`timesfm`, `timesfm_calibrated`). Scored. Not served.** `layer_b_timesfm.py` has no local predict path. The score is BigQuery `AI.FORECAST` (TimesFM 2.5, context window 1024, horizon 6 steps, both directions) in project `swiftborder`, location `US`.
+The earlier pass fit the TimesFM residual on 25 Sep only and scored both models on origin days 26-30 Sep. That is not this comparison. `xgb[maps]` on those five days was the section 2 daily refit, which had already seen the weeks before 26 Sep.
 
-Command shape: `python layer_b_timesfm.py train --start 2026-09-25 --end 2026-09-30 --validation-days 5 --chunk-days 1`, with no `--register` and no `--write`. One `AI.FORECAST` query per SGT day, 25-30 Sep. The residual ridge is fit on 25 Sep only (141 labelled step-3 rows per direction) and scored on origin days 26-30 Sep. That is the shortest window that still fits `timesfm_calibrated` and uses the same validation days as the `fcm_mlp` test below. It is not the 13-30 Sep window in the module docstring. No production table was written: not `lin_h30`, `xgb_h30`, `model_registry`, `v_forecast_recent`, `layer_b_backtest`, or `layer_b_registry`.
+**Protocol.** Both directions, the section 2 origin window 13-30 Sep 2026 SGT, label `y_30` (the bin that starts 30 minutes after the origin), and `after_gap = 0`. All 5,184 reference rows paired on `(direction, bin_ts)`; none were dropped. Persistence on these rows is 2.640 min, the same cell as section 2. `xgb[maps]` is a fresh `eval.joined` daily refit on Maps features only (`replicas=False`): each test day trains on rows whose label ends at or before that day starts (`bin_ts + 40 min`). That refit scores 2.276 min; the frozen-run cell in section 2 is 2.275 on this same window. `fcm_mlp` and the no-FCM `mlp` use the module defaults (c = 3, m = 2, MLP 32-16, five seeds) and refit on each test day from that same allowed history; the network's two-day inner split is the last two of those allowed days, so early stopping does not see the test day. TimesFM 2.5 is not retrained: each origin is one BigQuery `AI.FORECAST` series (context window 1024, about 7 days of bins at or before the origin, horizon 6, project `swiftborder`, location `US`), one query per SGT day from 6-30 Sep, with no table write. 6 Sep had no eligible origin. The residual ridge for `timesfm_calibrated` is refit every test day on the same label-end rule (1,988 joined rows on 13 Sep, 6,884 on 30 Sep). No production table was written: not `lin_h30`, `xgb_h30`, `model_registry`, `v_forecast_recent`, `layer_b_backtest`, or `layer_b_registry`. The table in [Causeway/layer-b-fcm-mlp-results.md](../Causeway/layer-b-fcm-mlp-results.md) is the modules' own 26-30 Sep split, not this table.
 
-`timesfm_layer_a` was not scored. `traffic_prediction.layer_a_counts` is not in location `US`, and camera detections still end on 22 Apr 2026. The TimesFM column in [Causeway/layer-b-fcm-mlp-results.md](../Causeway/layer-b-fcm-mlp-results.md) is an earlier figure, not this billed run.
+Labels matched. Every TimesFM step-3 `actual` equalled `y_30`, and its persistence equalled `y_persistence`. Every `fcm_mlp` step-3 label equalled `y_30`. Significance is `eval/significance.py` (`compare_absolute_errors`, day blocks, Singapore offset, 4,999 resamples, seed 0, horizon step 3). Each model has its own Holm family of four, both directions pooled, and the decision uses the joint calendar-day 95% interval. Eighteen calendar days clears the 10-day gate, so a decision is allowed. This is 30 minutes only; `xgb[maps]` in this protocol is a 30-minute model.
 
-Step 3 is 30 minutes from the origin bin start; step 6 is 60 minutes. On the step-3 rows, all 1,434 labels matched `y_30` and persistence matched `y_persistence` in `eval/data/causeway_gdata.csv` (the same SHA-256 as the `fcm_mlp` test). `xgb[maps]` is `eval.joined.run_folds` on Maps features only, daily refit, `replicas=False`, restricted to 26-30 Sep. Significance is `eval/significance.py` (`compare_absolute_errors`, day blocks, Singapore offset, 4,999 resamples, seed 0, horizon step 3) with Holm over this family of four. A pooled decision uses distinct calendar days. Five days is below the 10-day gate, so every decision is **insufficient data**.
+| Candidate | n | MAE (min) | Calendar days |
+| --- | --- | --- | --- |
+| Persistence | 5,184 | 2.640 | 18 |
+| `xgb[maps]` (daily refit, same rows) | 5,184 | 2.276 | 18 |
+| `timesfm` | 5,184 | 2.340 | 18 |
+| `timesfm_calibrated` | 5,184 | 2.310 | 18 |
+| `mlp` (no FCM) | 5,184 | 2.226 | 18 |
+| `fcm_mlp` | 5,184 | 2.230 | 18 |
+| Mean of `fcm_mlp` and `xgb[maps]` | 5,184 | 2.134 | 18 |
 
-| Candidate | Horizon | n | MAE (min) | Calendar days |
+TimesFM family (Holm over these four):
+
+| Challenger | Reference | Mean diff (min) | Joint day 95% CI | Decision |
 | --- | --- | --- | --- | --- |
-| Persistence | 30 min | 1,434 | 2.804 | 5 |
-| `timesfm` | 30 min | 1,434 | 2.449 | 5 |
-| `timesfm_calibrated` | 30 min | 1,434 | 2.436 | 5 |
-| `xgb[maps]` (daily refit, same rows) | 30 min | 1,434 | 2.195 | 5 |
-| Persistence | 60 min | 1,428 | 4.559 | 5 |
-| `timesfm` | 60 min | 1,428 | 3.525 | 5 |
-| `timesfm_calibrated` | 60 min | 1,428 | 3.526 | 5 |
+| `timesfm` | Persistence | -0.300 | [-0.421, -0.161] | challenger |
+| `timesfm` | `xgb[maps]` | +0.064 | [-0.071, +0.208] | not significant (Holm p = 0.51) |
+| `timesfm_calibrated` | Persistence | -0.330 | [-0.421, -0.225] | challenger |
+| `timesfm_calibrated` | `xgb[maps]` | +0.034 | [-0.110, +0.170] | not significant (Holm p = 0.54) |
 
-| Challenger | Reference | Mean diff (min) | Day-block 95% CI | Decision |
+FCM family (Holm over these four):
+
+| Challenger | Reference | Mean diff (min) | Joint day 95% CI | Decision |
 | --- | --- | --- | --- | --- |
-| `timesfm` | Persistence | -0.355 | [-0.524, -0.243] | insufficient data |
-| `timesfm` | `xgb[maps]` | +0.254 | [+0.139, +0.307] | insufficient data |
-| `timesfm_calibrated` | Persistence | -0.368 | [-0.540, -0.255] | insufficient data |
-| `timesfm_calibrated` | `xgb[maps]` | +0.240 | [+0.127, +0.291] | insufficient data |
-| `timesfm` | Persistence (60 min) | -1.034 | [-1.482, -0.694] | insufficient data |
-| `timesfm_calibrated` | Persistence (60 min) | -1.033 | [-1.461, -0.669] | insufficient data |
+| `fcm_mlp` | Persistence | -0.411 | [-0.529, -0.248] | challenger |
+| `fcm_mlp` | `xgb[maps]` | -0.047 | [-0.159, +0.047] | not significant (Holm p = 0.59) |
+| `mlp` (no FCM) | `xgb[maps]` | -0.050 | [-0.151, +0.028] | not significant (Holm p = 0.59) |
+| Mean of `fcm_mlp` and `xgb[maps]` | `xgb[maps]` | -0.142 | [-0.211, -0.090] | challenger |
 
-The 30-minute point estimates are worse than `xgb[maps]` on the same rows (`timesfm` +0.254 min, `timesfm_calibrated` +0.240 min). The 60-minute rows were compared with persistence only; `xgb[maps]` in this protocol is a 30-minute model. The module's own validation rule (three days, no Holm) would have kept `timesfm_calibrated` for `SG_TO_MY` at 30 minutes and `timesfm` on the other 30- and 60-minute cells; that rule is not the harness gate. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `timesfm` and `timesfm_calibrated` stay off the forecast mix and are not callable.
-
-**FCM + MLP (`fcm_mlp`), no camera.** Computed locally from `eval/data/causeway_gdata.csv` (SHA-256 `13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07`), binned the same way as `v_bins_10min`. No BigQuery write.
-
-Command shape: `layer_b_fcm_mlp.train` with the module defaults (c = 3, m = 2, MLP 32-16, 5 seeds), origins 2026-09-06 through 2026-09-30 SGT, `validation_days=7`, `test_days=5`, empty Layer A. Fit 6-16 Sep, inner stop 17-18 Sep, validation 19-25 Sep (the module's own gate only), test scored once on 26-30 Sep. Step 3 is 30 minutes from the origin bin start; step 6 is 60 minutes. That is the script's day-disjoint protocol, not the 18-day daily-refit window of sections 2 and 6.
-
-On those same step-3 origin rows, `xgb[maps]` is the current best single model from the 30-minute protocol: `eval.joined.run_folds` on Maps features only, daily refit, `replicas=False`, restricted to 26-30 Sep. All 1,434 step-3 rows matched, and the FCM label matched `y_30`. Significance is `eval/significance.py` (`compare_absolute_errors`, day blocks, Singapore offset, 4,999 resamples, seed 0) with Holm over this family of four. A pooled decision uses distinct calendar days. Five days is below the 10-day gate, so every decision is **insufficient data**.
-
-| Candidate | Horizon | n | MAE (min) | Calendar days |
-| --- | --- | --- | --- | --- |
-| Persistence | 30 min | 1,434 | 2.804 | 5 |
-| `mlp` (no FCM) | 30 min | 1,434 | 2.331 | 5 |
-| `fcm_mlp` | 30 min | 1,434 | 2.313 | 5 |
-| `xgb[maps]` (daily refit, same rows) | 30 min | 1,434 | 2.195 | 5 |
-| Mean of `fcm_mlp` and `xgb[maps]` | 30 min | 1,434 | 2.161 | 5 |
-| Persistence | 60 min | 1,428 | 4.559 | 5 |
-| `fcm_mlp` | 60 min | 1,428 | 3.373 | 5 |
-
-| Challenger | Reference | Mean diff (min) | Day-block 95% CI | Decision |
-| --- | --- | --- | --- | --- |
-| `fcm_mlp` | Persistence | -0.492 | [-0.589, -0.405] | insufficient data |
-| `fcm_mlp` | `xgb[maps]` | +0.117 | [+0.025, +0.187] | insufficient data |
-| Mean of the two | `xgb[maps]` | -0.034 | [-0.069, -0.004] | insufficient data |
-| `fcm_mlp` | Persistence (60 min) | -1.186 | [-1.393, -0.938] | insufficient data |
-
-The 30-minute point estimate is worse than `xgb[maps]` on the same rows (+0.117 min). The equal mix is 0.034 min lower than `xgb[maps]`, under the 0.5 min bar proposed in the Significance section, and the Holm-adjusted two-sided p-value in this family is 0.151. Neither result is a significant challenger. The module's own validation rule (three days, no Holm) would have kept `fcm_mlp` at step 3; that rule is not the harness gate. The 60-minute offline best single model was not scored on these rows. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `fcm_mlp` stays off the forecast mix and is not callable.
+Against persistence, `timesfm`, `timesfm_calibrated` and `fcm_mlp` have lower error on the Maps duration series. Against `xgb[maps]`, the TimesFM point estimates are slightly higher and not significant, and `fcm_mlp` is 0.047 min lower and not significant. The equal mix is a challenger versus `xgb[maps]` in this family (Holm p = 5.7e-06) by 0.142 min, which is under the 0.5 min bar in the Significance section. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `timesfm`, `timesfm_calibrated` and `fcm_mlp` stay off the forecast mix and are not callable.
 
 ---
 
