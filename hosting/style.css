@@ -2390,13 +2390,6 @@ h4 {
     white-space: nowrap;
 }
 
-.fc-spark {
-    display: block;
-    width: 100%;
-    height: 56px;
-    margin-top: 0.2rem;
-}
-
 .fc-note {
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -2406,4 +2399,101 @@ h4 {
     padding: 0.8rem 0 0;
     gap: 1rem;
     flex-wrap: wrap;
+}
+
+/* Small hollow dots along the chart's forecast line */
+.lc-fc-dot {
+    fill: var(--bg-dark);
+    stroke-width: 1.8;
+}
+
+.lc-fc-dot.sg {
+    stroke: #00f2fe;
+}
+
+.lc-fc-dot.jb {
+    stroke: #ff9f1c;
+}
+
+/* Forecast vs typical-day chart inside each card */
+.fc-compare {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: 0.3rem;
+}
+
+.fc-fc-line {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.fc-base-line {
+    fill: none;
+    stroke: rgba(148, 163, 184, 0.75);
+    stroke-width: 1.6;
+    stroke-dasharray: 4 4;
+}
+
+.fc-tick {
+    stroke: rgba(255, 255, 255, 0.06);
+    stroke-width: 1;
+}
+
+.fc-axis {
+    font-size: 10px;
+    fill: rgba(148, 163, 184, 0.75);
+}
+
+.fc-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.fc-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.fc-legend-fc::before,
+.fc-legend-base::before {
+    content: '';
+    width: 20px;
+    border-top: 2.4px solid var(--text-main);
+}
+
+.fc-legend-base::before {
+    border-top: 2px dashed rgba(148, 163, 184, 0.9);
+}
+
+/* "Next 5 h | Full day" toggle */
+.fc-range {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.2rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.fc-range button {
+    background: none;
+    border: none;
+    padding: 0.3rem 0.8rem;
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.fc-range button.active {
+    background: rgba(0, 242, 254, 0.1);
+    color: var(--primary);
 }

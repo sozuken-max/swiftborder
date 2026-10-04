@@ -184,20 +184,30 @@
                 </div>
             </div>
 
-            <!-- 30-minute forecast (forecast-api) -->
+            <!-- Forecast (forecast-api): nearest forecast, plus forecast vs typical day -->
             <div class="live-chart-card dashboard-card" id="forecast-widget" style="margin-top: 1.5rem;">
                 <div class="lc-header">
                     <div class="lc-title-group">
-                        <h3>Woodlands Causeway &mdash; 30-min Forecast (min)</h3>
+                        <h3>Woodlands Causeway &mdash; Forecast vs Typical Day (min)</h3>
                         <span class="lc-badge" id="fc-updated">Loading&hellip;</span>
+                    </div>
+                    <div class="fc-range" id="fc-range" style="display:none;">
+                        <button type="button" data-hours="5" class="active">Next 5 h</button>
+                        <button type="button" data-hours="24">Full day</button>
                     </div>
                 </div>
 
                 <p class="fc-note" id="fc-status">Fetching forecast&hellip;</p>
                 <div class="fc-grid" id="fc-cards"></div>
 
-                <p class="fc-note">Forecast of the Google Maps travel-time estimate 30 minutes ahead, not a
-                    measured crossing time.</p>
+                <div class="fc-legend" id="fc-legend" style="display:none;">
+                    <span class="fc-legend-fc">Forecast</span>
+                    <span class="fc-legend-base">Typical for this day and time (calendar profile, not a forecast)</span>
+                </div>
+
+                <p class="fc-note">Forecast of the Google Maps travel-time estimate, not a measured crossing time.
+                    Only the first, 30-minute value is evaluated. Later points are exploratory: in the study the
+                    model beat the typical-day baseline up to about 5.5 hours ahead, not yet confirmed.</p>
 
                 <div class="cam-grid-footer">
                     <span id="fc-meta"></span>

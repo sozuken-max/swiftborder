@@ -229,3 +229,16 @@ Not caused by this change. On 2026-10-03 ~22:17 SGT, `swiftbackend` returned `40
          </div>
      </section>
 ```
+
+## Revision 2 (2026-10-04): forecast curve, baseline, public API
+
+The first revision above called `forecast-api` with no parameters and drew one 30-minute value. The API has since gained a forecast curve and a typical-day baseline ([runbook](runbooks/forecast-api.md)), and the service is public. `hosting/` now does the following.
+
+| Area | Change |
+| --- | --- |
+| Live Congestion chart | Forecast only: each direction continues as a dashed line for the next 5 h (`?curve=forecast&hours=5`, 10 points, all model points; the runbook's model range ends at 5.5 h). No baseline lines on this chart. Hover snaps to the nearest forecast point and says "exploratory" beyond 30 min. |
+| Forecast card | Renamed "Forecast vs Typical Day". Hero value is the first (30-min, evaluated) point with `lead_min`. Each direction plots the forecast against the calendar-profile baseline, with a "Next 5 h / Full day" toggle (`?baseline=profile&hours=24`, refreshed hourly). |
+| Failure handling | 60 s timeout on the curve call. If it fails, the page falls back to the 30-minute `served` forecast and says so. If both fail, the chart returns to observed data only. The old 401/403 "not public" and CORS messages are gone. |
+| Honesty | The note states that only the 30-minute value is evaluated and that later points are exploratory, not yet confirmed on Run B. The baseline is labelled "not a forecast". |
+
+Cost to keep in mind: the first `hours=5` curve call fits about nine models per instance per SGT day, then is cached for 5 minutes. A cold call can take around 20 s.

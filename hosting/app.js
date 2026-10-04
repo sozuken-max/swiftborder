@@ -50,16 +50,14 @@ let currentCheckpoint = 'woodlands';
 let cameraRefreshTimer = null;
 let chartRefreshTimer = null;
 let trafficCache = { data: null, fetchedAt: 0 }; // shared by the transit card and the chart
-// 30-min forecast drawn as an extension of the chart: { at: epoch ms, SG_TO_MY: min, MY_TO_SG: min }.
+// Forecast drawn as a dashed extension of the chart: { SG_TO_MY: [{ at, mins, status }], MY_TO_SG: [...] }.
 // Null until forecast-api answers; the chart draws from traffic-24h.json alone in the meantime.
 let chartForecast = null;
 
 const LTA_API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
 const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
 const TRAFFIC_API = 'https://storage.googleapis.com/swiftborder-public/traffic-24h.json';
-// Cloud Run service endpoint (docs/runbooks/forecast-api.md). The service is private, so a
-// browser can only call it once it is public (roles/run.invoker for allUsers) and allows
-// this origin via CORS.
+// Cloud Run service endpoint (docs/runbooks/forecast-api.md). Public, CORS open.
 const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app/';
 
 // ── Backend AI Detection Image ─────────────────────────────────────────────
@@ -575,23 +573,37 @@ async function fetchAndRenderCongestionChart() {
         const sgMap = Object.fromEntries(sgPts.map(p => [p.label, p.mins]));
         const jbMap = Object.fromEntries(jbPts.map(p => [p.label, p.mins]));
 
-        // ── 30-min forecast extension ──────────────────────────────────────
+        // ── Forecast extension ─────────────────────────────────────────────
         // Extra x slots (5 min each) are appended after the last observed label.
-        // Ignored if the forecast is not later than the newest observation.
+        // Forecast points at or before the newest observation are ignored.
         const clockOf = ms => new Date(ms).toLocaleTimeString('en-GB',
             { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' });
         const lastEpoch = parseSgt(`${todayStr}T${allLabels[allLabels.length - 1]}`);
-        const fc = chartForecast && lastEpoch != null && chartForecast.at > lastEpoch ? chartForecast : null;
-        const fcSg = fc ? fc.SG_TO_MY : null;
-        const fcJb = fc ? fc.MY_TO_SG : null;
-        const extra = fc ? Math.max(1, Math.min(12, Math.round((fc.at - lastEpoch) / 300000))) : 0;
-        const axisLabels = allLabels.concat(Array.from({ length: extra },
-            (_, k) => clockOf(k === extra - 1 ? fc.at : lastEpoch + (k + 1) * 300000)));
+        const fcSeries = {};
+        let maxSlot = 0;
+        FORECAST_DIRECTIONS.forEach(d => {
+            const bySlot = {};
+            (chartForecast?.[d.key] || []).forEach(p => {
+                const slot = Math.round((p.at - lastEpoch) / 300000);
+                if (lastEpoch != null && slot >= 1 && slot <= FORECAST_MAX_SLOTS) {
+                    bySlot[slot] = p;
+                    maxSlot = Math.max(maxSlot, slot);
+                }
+            });
+            fcSeries[d.key] = bySlot;
+        });
+        const fc = maxSlot > 0;
+        const fcSg = fcSeries.SG_TO_MY, fcJb = fcSeries.MY_TO_SG;
+        const axisLabels = allLabels.concat(Array.from({ length: maxSlot },
+            (_, k) => clockOf(lastEpoch + (k + 1) * 300000)));
         const N = axisLabels.length;
         const fcIdx = N - 1;
+        // Chart indices that carry a forecast point (slot s sits at index n - 1 + s).
+        const fcIdxs = [...new Set([...Object.keys(fcSg), ...Object.keys(fcJb)].map(Number))]
+            .sort((x, y) => x - y).map(sl => allLabels.length - 1 + sl);
 
         const allMins = [...sgPts.map(p => p.mins), ...jbPts.map(p => p.mins),
-            ...(fcSg != null ? [fcSg] : []), ...(fcJb != null ? [fcJb] : [])];
+            ...Object.values(fcSg).map(p => p.mins), ...Object.values(fcJb).map(p => p.mins)];
         const pad = Math.max(1, (Math.max(...allMins) - Math.min(...allMins)) * 0.15);
         const minVal = Math.max(0, Math.min(...allMins) - pad);
         const maxVal = Math.max(...allMins) + pad;
@@ -641,16 +653,20 @@ async function fetchAndRenderCongestionChart() {
             return '';
         }
 
-        // Dashed segment from a series' last observation to its forecast point.
-        function fcExtension(map, val, cls) {
-            if (val == null) return '';
+        // Dashed line from a series' last observation through its forecast points.
+        function fcExtension(map, bySlot, cls) {
+            const slots = Object.keys(bySlot).map(Number).sort((x, y) => x - y);
+            if (!slots.length) return '';
             let li = -1;
             for (let i = n - 1; i >= 0; i--) { if (map[allLabels[i]] != null) { li = i; break; } }
             if (li < 0) return '';
-            const x1 = xOf(li).toFixed(1), y1 = yOf(map[allLabels[li]]).toFixed(1);
-            const x2 = xOf(fcIdx).toFixed(1), y2 = yOf(val).toFixed(1);
-            return `<line class="lc-fc-line ${cls}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>
-                    <circle class="lc-fc-marker ${cls}" cx="${x2}" cy="${y2}" r="5"/>`;
+            const pts = [[xOf(li), yOf(map[allLabels[li]])]]
+                .concat(slots.map(sl => [xOf(n - 1 + sl), yOf(bySlot[sl].mins)]));
+            const end = pts[pts.length - 1];
+            const dots = pts.slice(1, -1).map(([x, y]) =>
+                `<circle class="lc-fc-dot ${cls}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6"/>`).join('');
+            return `<polyline class="lc-fc-line ${cls}" points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}"/>
+                    ${dots}<circle class="lc-fc-marker ${cls}" cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="5"/>`;
         }
         const fcZone = fc ? `
             <rect class="lc-fc-zone" x="${xOf(n - 1).toFixed(1)}" y="${padT}" width="${(xOf(fcIdx) - xOf(n - 1)).toFixed(1)}" height="${plotH}"/>
@@ -738,8 +754,10 @@ async function fetchAndRenderCongestionChart() {
             const x = toSvgX(evt);
             let i = Math.round(((x - padL) / plotW) * (N - 1));
             i = Math.max(0, Math.min(N - 1, i));
+            // Past the last observation, snap to the nearest forecast point.
+            if (fc && i > n - 1) i = fcIdxs.reduce((best, k) => Math.abs(k - i) < Math.abs(best - i) ? k : best, fcIdxs[0]);
             const label = axisLabels[i];
-            const isFc = fc && i === fcIdx;
+            const isFc = fc && i > n - 1;
             const cx = xOf(i);
 
             cross.setAttribute('x1', cx.toFixed(1));
@@ -747,18 +765,21 @@ async function fetchAndRenderCongestionChart() {
             cross.style.display = '';
 
             const rows = [];
+            let exploratory = false;
             [[sgMap, fcSg, hdSg, 'SG → JB', 'sg'], [jbMap, fcJb, hdJb, 'JB → SG', 'jb']].forEach(([map, fcVal, dot, name, cls]) => {
                 // Slots past the last observation carry no data, except the forecast point.
-                const v = isFc ? fcVal : (i < n ? map[label] : null);
+                const fp = isFc ? fcVal[i - (n - 1)] : null;
+                const v = isFc ? (fp ? fp.mins : null) : (i < n ? map[label] : null);
                 if (v == null) { dot.style.display = 'none'; return; }
                 dot.setAttribute('cx', cx.toFixed(1));
                 dot.setAttribute('cy', yOf(v).toFixed(1));
                 dot.style.display = '';
                 rows.push(`<div class="lc-tt-row"><span class="lc-dot ${cls}"></span>${name}<strong>${v.toFixed(1)} min${isFc ? ' (forecast)' : ''}</strong></div>`);
+                if (fp && fp.status !== 'evaluated') exploratory = true;
             });
 
             if (!rows.length) { tip.style.display = 'none'; return; }
-            tip.innerHTML = `<div class="lc-tt-time">${label} SGT${isFc ? ' · forecast' : ''}</div>${rows.join('')}`;
+            tip.innerHTML = `<div class="lc-tt-time">${label} SGT${isFc ? ` · forecast${exploratory ? ' (exploratory)' : ''}` : ''}</div>${rows.join('')}`;
             tip.style.display = 'block';
 
             const areaRect = chartArea.getBoundingClientRect();
@@ -787,16 +808,23 @@ async function fetchAndRenderCongestionChart() {
         }
 
         const legendFc = document.getElementById('lc-legend-fc');
-        if (legendFc) legendFc.style.display = fc ? '' : 'none';
+        if (legendFc) {
+            legendFc.style.display = fc ? '' : 'none';
+            const span = Math.round(maxSlot * 5 / 30) * 30; // nearest half hour, e.g. "5 h" not "5.1 h"
+            legendFc.textContent = `Forecast (next ${span < 60 ? `${span} min` : `${span / 60} h`})`;
+        }
+        // Footer quotes the nearest forecast point only; the chart carries the rest.
+        const firstFc = bySlotFirst => { const k = Object.keys(bySlotFirst).map(Number).sort((x, y) => x - y)[0]; return k == null ? null : bySlotFirst[k]; };
+        const nextSg = firstFc(fcSg), nextJb = firstFc(fcJb);
 
         if (footerEl) footerEl.style.display = 'flex';
         const latestSg = sgPts[sgPts.length - 1];
         const latestJb = jbPts[jbPts.length - 1];
         if (statSg && latestSg) {
-            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>SG → JB</strong>&nbsp;Latest: <strong>${latestSg.mins.toFixed(1)} min</strong> at ${latestSg.label}${fcSg != null ? ` &rarr; <strong>${fcSg.toFixed(1)}</strong> forecast at ${axisLabels[fcIdx]}` : ''}`;
+            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>SG → JB</strong>&nbsp;Latest: <strong>${latestSg.mins.toFixed(1)} min</strong> at ${latestSg.label}${nextSg ? ` &rarr; <strong>${nextSg.mins.toFixed(1)}</strong> forecast at ${clockOf(nextSg.at)}` : ''}`;
         }
         if (statJb && latestJb) {
-            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>JB → SG</strong>&nbsp;Latest: <strong>${latestJb.mins.toFixed(1)} min</strong> at ${latestJb.label}${fcJb != null ? ` &rarr; <strong>${fcJb.toFixed(1)}</strong> forecast at ${axisLabels[fcIdx]}` : ''}`;
+            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>JB → SG</strong>&nbsp;Latest: <strong>${latestJb.mins.toFixed(1)} min</strong> at ${latestJb.label}${nextJb ? ` &rarr; <strong>${nextJb.mins.toFixed(1)}</strong> forecast at ${clockOf(nextJb.at)}` : ''}`;
         }
 
     } catch (err) {
@@ -805,25 +833,34 @@ async function fetchAndRenderCongestionChart() {
     }
 }
 
-// ── 30-min Forecast Widget ─────────────────────────────────────────────────
-// Reads forecast-api with no parameters, which returns the `served` model for
-// both directions. Responses are cached server-side for 5 minutes, so this
-// shares the chart's 5-minute timer. The value forecasts Google Maps'
-// duration_in_traffic, not a measured crossing time.
+// ── Forecast Widget ────────────────────────────────────────────────────────
+// forecast-api (docs/runbooks/forecast-api.md). `?curve=forecast` returns a forecast
+// every 30 min from one origin. Only 30 min is evaluated; later points are exploratory,
+// and the model beat the typical-day baseline through about 5.5 h in the study (not
+// confirmed on Run B). So the page asks for 5 h, which stays inside the model's range.
+// `?baseline=profile` is the calendar-profile "typical day", not a forecast.
+const FORECAST_HOURS = 5;
+const FORECAST_MAX_SLOTS = 66;        // 5.5 h in 5-min chart slots
+const FORECAST_TIMEOUT_MS = 60000;    // the first curve call can take ~20 s while the models fit
+const BASELINE_REFRESH_MS = 3600000;  // the profile is refitted once per SGT day
 const FORECAST_DIRECTIONS = [
-    { key: 'SG_TO_MY', label: 'SG → JB', cls: 'sg', series: 'mandai_to_shell_jb' },
-    { key: 'MY_TO_SG', label: 'JB → SG', cls: 'jb', series: 'jb_to_woodlands' }
+    { key: 'SG_TO_MY', label: 'SG → JB', cls: 'sg', color: '#00f2fe', series: 'mandai_to_shell_jb' },
+    { key: 'MY_TO_SG', label: 'JB → SG', cls: 'jb', color: '#ff9f1c', series: 'jb_to_woodlands' }
 ];
 
 const FORECAST_ERRORS = {
-    401: 'Forecast service requires authentication and is not public yet.',
-    403: 'Forecast service requires authentication and is not public yet.',
+    400: 'Forecast request was rejected.',
     502: 'Forecast query failed on the server.',
-    503: 'No recent data for this direction yet.'
+    503: 'Forecast paused: no recent data for this direction.'
 };
 
+let forecastView = null;      // { dirs: { KEY: { points, originAt } }, curve }
+let baselineDay = null;       // { KEY: [{ t, mins }] }
+let baselineAt = 0;
+let forecastSpanH = FORECAST_HOURS;
+
 function sgtClock(iso) {
-    const t = Date.parse(iso);
+    const t = typeof iso === 'number' ? iso : Date.parse(iso);
     if (Number.isNaN(t)) return '—';
     return new Date(t).toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' });
 }
@@ -835,27 +872,173 @@ function setForecastStatus(text) {
     el.style.display = text ? '' : 'none';
 }
 
-// Last 2 hours of observed minutes, then a dashed segment to the forecast point.
-function forecastSpark(pts, forecastMin, forecastAt, color) {
-    if (!pts.length || !Number.isFinite(forecastAt)) return '';
-    const last = pts[pts.length - 1];
-    const hist = pts.filter(p => p.t >= last.t - 120 * 60000);
-    const t0 = hist[0].t, t1 = Math.max(forecastAt, last.t);
-    const vals = hist.map(p => p.mins).concat(forecastMin);
+async function fetchJson(url, timeoutMs) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { signal: ctl.signal });
+        if (!res.ok) throw new Error(FORECAST_ERRORS[res.status] || `HTTP ${res.status}`);
+        return await res.json();
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// Both response shapes become { points: [{ at, mins, base, status, model, lead }], originAt }.
+function normalizeCurve(data) {
+    const dirs = {};
+    FORECAST_DIRECTIONS.forEach(d => {
+        const src = data.directions?.[d.key];
+        const points = (src?.points || [])
+            .filter(p => p.model !== 'profile' && p.forecast_min != null)
+            .map(p => ({ at: Date.parse(p.forecast_for), mins: p.forecast_min, base: p.baseline_min,
+                         status: p.status, model: p.model, lead: p.lead_min }))
+            .filter(p => Number.isFinite(p.at));
+        dirs[d.key] = { points, originAt: Date.parse(src?.origin_ts) };
+    });
+    return { dirs, curve: true };
+}
+
+function normalizeServed(data) {
+    const dirs = {};
+    FORECAST_DIRECTIONS.forEach(d => {
+        const f = data.directions?.[d.key];
+        const at = Date.parse(f?.forecast_for);
+        dirs[d.key] = {
+            points: f && f.forecast_min != null && Number.isFinite(at)
+                ? [{ at, mins: f.forecast_min, base: null, status: 'evaluated', model: f.model, lead: f.lead_min }] : [],
+            originAt: Date.parse(f?.origin_ts)
+        };
+    });
+    return { dirs, curve: false };
+}
+
+async function loadBaselineDay() {
+    if (baselineDay && Date.now() - baselineAt < BASELINE_REFRESH_MS) return;
+    try {
+        const data = await fetchJson(`${FORECAST_API}?baseline=profile&hours=24`, 30000);
+        const out = {};
+        FORECAST_DIRECTIONS.forEach(d => {
+            out[d.key] = (data.directions?.[d.key] || [])
+                .map(b => ({ t: Date.parse(b.bin_start), mins: b.forecast_min }))
+                .filter(b => Number.isFinite(b.t) && b.mins != null);
+        });
+        baselineDay = out;
+        baselineAt = Date.now();
+    } catch (err) {
+        console.error('Baseline fetch error:', err); // the curve's own baseline_min still draws the 5 h view
+    }
+}
+
+// Forecast against the typical day, from the forecast origin out to spanH hours.
+function forecastCompare(d, view, spanH) {
+    const pts = view.points;
+    if (!pts.length) return '';
+    const t0 = Number.isFinite(view.originAt) ? view.originAt : pts[0].at - 1800000;
+    const t1 = t0 + Math.max(spanH, FORECAST_HOURS) * 3600000;
+    const baseBins = baselineDay?.[d.key]?.filter(b => b.t >= t0 && b.t <= t1)
+        || [];
+    const base = baseBins.length > 1 ? baseBins
+        : pts.filter(p => p.base != null).map(p => ({ t: p.at, mins: p.base }));
+    const fcPts = pts.filter(p => p.at <= t1);
+
+    const vals = fcPts.map(p => p.mins).concat(base.map(b => b.mins));
     const lo = Math.min(...vals), hi = Math.max(...vals);
-    const pad = Math.max(0.5, (hi - lo) * 0.15);
-    const W = 240, H = 56, m = 4;
-    const x = t => m + ((t - t0) / (t1 - t0 || 1)) * (W - 2 * m);
-    const y = v => H - m - ((v - (lo - pad)) / ((hi + pad) - (lo - pad) || 1)) * (H - 2 * m);
-    const line = hist.map(p => `${x(p.t).toFixed(1)},${y(p.mins).toFixed(1)}`).join(' ');
-    const fx = x(forecastAt).toFixed(1), fy = y(forecastMin).toFixed(1);
-    return `<svg viewBox="0 0 ${W} ${H}" class="fc-spark" role="img"
-                 aria-label="Last 2 hours and 30-minute forecast">
-        <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-        <line x1="${x(last.t).toFixed(1)}" y1="${y(last.mins).toFixed(1)}" x2="${fx}" y2="${fy}"
-              stroke="${color}" stroke-width="2" stroke-dasharray="4 3"/>
-        <circle cx="${fx}" cy="${fy}" r="4" fill="${color}" stroke="#070b13" stroke-width="1.5"/>
+    const pad = Math.max(1, (hi - lo) * 0.12);
+    const W = 420, H = 150, padL = 30, padR = 8, padT = 8, padB = 22;
+    const x = t => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
+    const y = v => padT + (H - padT - padB) - ((v - (lo - pad)) / ((hi + pad) - (lo - pad) || 1)) * (H - padT - padB);
+    const poly = arr => arr.map(p => `${x(p.t ?? p.at).toFixed(1)},${y(p.mins).toFixed(1)}`).join(' ');
+
+    const tickEvery = (spanH <= 6 ? 1 : 6) * 3600000;
+    let ticks = '';
+    for (let t = Math.ceil(t0 / tickEvery) * tickEvery; t <= t1; t += tickEvery) {
+        ticks += `<line class="fc-tick" x1="${x(t).toFixed(1)}" y1="${padT}" x2="${x(t).toFixed(1)}" y2="${H - padB}"/>
+                  <text class="fc-axis" x="${x(t).toFixed(1)}" y="${H - 6}" text-anchor="middle">${sgtClock(t)}</text>`;
+    }
+    const yLab = v => `<text class="fc-axis" x="${padL - 4}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${v.toFixed(0)}</text>`;
+    const last = fcPts[fcPts.length - 1];
+    const dots = fcPts.slice(0, -1).map(p => `<circle cx="${x(p.at).toFixed(1)}" cy="${y(p.mins).toFixed(1)}" r="2.4" fill="${d.color}"/>`).join('');
+
+    return `<svg viewBox="0 0 ${W} ${H}" class="fc-compare" role="img"
+                 aria-label="${d.label} forecast against the typical day">
+        ${ticks}${yLab(lo)}${yLab(hi)}
+        ${base.length > 1 ? `<polyline class="fc-base-line" points="${poly(base)}"/>` : ''}
+        <polyline class="fc-fc-line" stroke="${d.color}" points="${poly(fcPts)}"/>
+        ${dots}<circle cx="${x(last.at).toFixed(1)}" cy="${y(last.mins).toFixed(1)}" r="4" fill="${d.color}" stroke="#070b13" stroke-width="1.5"/>
     </svg>`;
+}
+
+function renderForecastCards() {
+    const cards = document.getElementById('fc-cards');
+    if (!cards || !forecastView) return;
+    const traffic = trafficCache.data;
+
+    cards.innerHTML = FORECAST_DIRECTIONS.map(d => {
+        const view = forecastView.dirs[d.key];
+        const f = view.points[0];
+        if (!f) {
+            return `
+                <div class="fc-card ${d.cls}">
+                    <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}</div>
+                    <div class="fc-value">—</div>
+                    <div class="fc-when">no forecast available</div>
+                </div>`;
+        }
+        const obs = traffic ? seriesPoints(traffic, d.series) : [];
+        const now = obs.length ? obs[obs.length - 1].mins : null;
+        const delta = now == null ? null : f.mins - now;
+
+        // Label the forecast against this direction's own 24h free-flow level.
+        const baseline = obs.length ? percentile(obs.map(p => p.mins), BASELINE_PCTILE) : null;
+        const level = congestionLevel({ ok: baseline != null, baseline, recentMean: f.mins });
+
+        // Same stable band as the Traffic Summary card.
+        const pct = now > 0 ? (delta / now) * 100 : 0;
+        const trend = delta == null ? null
+            : pct > TREND_STABLE_PCT ? { cls: 'up', txt: `▲ Rising ${pct.toFixed(0)}%` }
+                : pct < -TREND_STABLE_PCT ? { cls: 'down', txt: `▼ Easing ${Math.abs(pct).toFixed(0)}%` }
+                    : { cls: 'stable', txt: '▬ Steady' };
+
+        const nowLine = delta == null ? '' :
+            `<div class="fc-now">Now <strong>${now.toFixed(1)}</strong> min <span class="fc-delta">(${delta >= 0 ? '+' : ''}${delta.toFixed(1)})</span></div>`;
+        const lead = f.lead != null ? ` · ${Math.round(f.lead)} min ahead` : '';
+
+        return `
+            <div class="fc-card ${d.cls}">
+                <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}</div>
+                <div class="fc-main">
+                    <span class="fc-value">${f.mins.toFixed(1)}</span>
+                    <span class="fc-when">min at ${sgtClock(f.at)} SGT${lead}</span>
+                </div>
+                ${nowLine}
+                <div class="fc-badges">
+                    <span class="status-indicator-badge ${level.cls}">${level.text}</span>
+                    ${trend ? `<span class="time-trend ${trend.cls}">${trend.txt} vs now</span>` : ''}
+                </div>
+                ${forecastCompare(d, view, forecastSpanH)}
+            </div>`;
+    }).join('');
+
+    const withBaseline = forecastView.curve && FORECAST_DIRECTIONS.some(d => forecastView.dirs[d.key].points.length > 1);
+    const legend = document.getElementById('fc-legend');
+    if (legend) legend.style.display = withBaseline ? '' : 'none';
+    const range = document.getElementById('fc-range');
+    if (range) range.style.display = withBaseline && baselineDay ? '' : 'none';
+    document.querySelectorAll('#fc-range button').forEach(b =>
+        b.classList.toggle('active', +b.dataset.hours === forecastSpanH));
+
+    const origin = FORECAST_DIRECTIONS.map(d => forecastView.dirs[d.key].originAt).filter(Number.isFinite).sort().pop();
+    const updatedEl = document.getElementById('fc-updated');
+    if (updatedEl) updatedEl.textContent = origin ? `Based on ${sgtClock(origin)} SGT data` : 'Updated';
+    const metaEl = document.getElementById('fc-meta');
+    if (metaEl) {
+        const models = FORECAST_DIRECTIONS.map(d => {
+            const m = [...new Set(forecastView.dirs[d.key].points.map(p => p.model))];
+            return `${d.label}: ${m.join(', ') || '—'}`;
+        }).join(' · ');
+        metaEl.textContent = `Model — ${models}`;
+    }
 }
 
 async function fetchForecast() {
@@ -866,89 +1049,48 @@ async function fetchForecast() {
 
     setForecastStatus('Fetching forecast…');
 
+    let view = null;
+    let failure = null;
     try {
-        const res = await fetch(FORECAST_API);
-        if (!res.ok) throw new Error(FORECAST_ERRORS[res.status] || `HTTP ${res.status}`);
-        const data = await res.json();
-        const dirs = data.directions || {};
-
-        // Hand the forecast to the chart, which redraws with the dashed extension.
-        const fcAt = Math.max(...FORECAST_DIRECTIONS.map(d => Date.parse(dirs[d.key]?.forecast_for)).filter(Number.isFinite));
-        chartForecast = Number.isFinite(fcAt) ? {
-            at: fcAt,
-            SG_TO_MY: dirs.SG_TO_MY?.forecast_min ?? null,
-            MY_TO_SG: dirs.MY_TO_SG?.forecast_min ?? null
-        } : null;
-        fetchAndRenderCongestionChart();
-
-        // Latest observed value per direction, from the feed the chart already loaded.
-        let traffic = null;
-        try { traffic = await loadTrafficData(); } catch (_) { /* "now" is optional */ }
-
-        cards.innerHTML = FORECAST_DIRECTIONS.map(d => {
-            const f = dirs[d.key];
-            if (!f || f.forecast_min == null) {
-                return `
-                    <div class="fc-card ${d.cls}">
-                        <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}</div>
-                        <div class="fc-value">—</div>
-                        <div class="fc-when">no forecast available</div>
-                    </div>`;
-            }
-            const pts = traffic ? seriesPoints(traffic, d.series) : [];
-            const now = pts.length ? pts[pts.length - 1].mins : null;
-            const delta = now == null ? null : f.forecast_min - now;
-            
-            // Label the forecast against this direction's own 24h free-flow level.
-            const baseline = pts.length ? percentile(pts.map(p => p.mins), BASELINE_PCTILE) : null;
-            const level = congestionLevel({ ok: baseline != null, baseline, recentMean: f.forecast_min });
-
-            // Same stable band as the Traffic Summary card.
-            const pct = now > 0 ? (delta / now) * 100 : 0;
-            const trend = delta == null ? null
-                : pct > TREND_STABLE_PCT ? { cls: 'up', txt: `▲ Rising ${pct.toFixed(0)}%` }
-                    : pct < -TREND_STABLE_PCT ? { cls: 'down', txt: `▼ Easing ${Math.abs(pct).toFixed(0)}%` }
-                        : { cls: 'stable', txt: '▬ Steady' };
-            const color = d.cls === 'sg' ? '#00f2fe' : '#ff9f1c';
-
-            const whenTxt = `min at ${sgtClock(f.forecast_for)} SGT`;
-            const nowLine = delta == null ? '' :
-                `<div class="fc-now">Now <strong>${now.toFixed(1)}</strong> min <span class="fc-delta">(${delta >= 0 ? '+' : ''}${delta.toFixed(1)})</span></div>`;
-            return `
-                <div class="fc-card ${d.cls}">
-                    <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}</div>
-                    <div class="fc-main">
-                        <span class="fc-value">${f.forecast_min.toFixed(1)}</span>
-                        <span class="fc-when">${whenTxt}</span>
-                    </div>
-                    ${nowLine}
-                    <div class="fc-badges">
-                        <span class="status-indicator-badge ${level.cls}">${level.text}</span>
-                        ${trend ? `<span class="time-trend ${trend.cls}">${trend.txt} vs now</span>` : ''}
-                    </div>
-                    ${forecastSpark(pts, f.forecast_min, Date.parse(f.forecast_for), color)}
-                </div>`;
-        }).join('');
-
-        setForecastStatus('');
-        const origin = FORECAST_DIRECTIONS.map(d => dirs[d.key]?.origin_ts).filter(Boolean).sort().pop();
-        if (updatedEl) updatedEl.textContent = origin ? `Based on ${sgtClock(origin)} SGT data` : 'Updated';
-        if (metaEl) {
-            const models = FORECAST_DIRECTIONS.map(d => `${d.label}: ${dirs[d.key]?.model || '—'}`).join(' · ');
-            metaEl.textContent = `Model — ${models}`;
-        }
+        view = normalizeCurve(await fetchJson(`${FORECAST_API}?curve=forecast&hours=${FORECAST_HOURS}`, FORECAST_TIMEOUT_MS));
     } catch (err) {
-        // A CORS block surfaces as a bare TypeError with no status, so name it.
-        const msg = err instanceof TypeError
-            ? 'Forecast service unreachable (blocked by CORS or not public).'
-            : err.message;
+        // The curve fits several models and can be slow; fall back to the cheap 30-min forecast.
+        failure = err;
+        try {
+            view = normalizeServed(await fetchJson(FORECAST_API, FORECAST_TIMEOUT_MS));
+        } catch (err2) {
+            failure = err2;
+        }
+    }
+
+    if (!view || !FORECAST_DIRECTIONS.some(d => view.dirs[d.key].points.length)) {
+        const err = failure || new Error(FORECAST_ERRORS[503]);
+        const msg = err.name === 'AbortError' ? 'Forecast service timed out.'
+            : err instanceof TypeError ? 'Forecast service unreachable.'
+                : err.message;
         if (chartForecast) { chartForecast = null; fetchAndRenderCongestionChart(); } // drop a stale extension
+        forecastView = null;
         cards.innerHTML = '';
         setForecastStatus(`Forecast unavailable: ${msg}`);
         if (updatedEl) updatedEl.textContent = 'Unavailable';
         if (metaEl) metaEl.textContent = '';
         console.error('Forecast fetch error:', err);
+        return;
     }
+
+    forecastView = view;
+    if (view.curve) await loadBaselineDay();
+
+    // Hand the forecast line to the chart, which redraws with the dashed extension.
+    chartForecast = {};
+    FORECAST_DIRECTIONS.forEach(d => {
+        chartForecast[d.key] = view.dirs[d.key].points.map(p => ({ at: p.at, mins: p.mins, status: p.status }));
+    });
+    fetchAndRenderCongestionChart();
+
+    try { await loadTrafficData(); } catch (_) { /* "now" is optional */ }
+    setForecastStatus(view.curve ? '' : 'Showing the 30-minute forecast only; the longer forecast did not load.');
+    renderForecastCards();
 }
 
 // ── Toll Calculator ────────────────────────────────────────────────────────
@@ -1045,6 +1187,13 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchForecast().finally(() => setTimeout(() => { refreshForecastBtn.disabled = false; }, 3000));
         });
     }
+
+    document.querySelectorAll('#fc-range button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            forecastSpanH = +btn.dataset.hours;
+            renderForecastCards();
+        });
+    });
 
     const tabBtns = document.querySelectorAll('.tab-btn');
     tabBtns.forEach(btn => {
