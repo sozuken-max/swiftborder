@@ -765,7 +765,6 @@ async function fetchAndRenderCongestionChart() {
             cross.style.display = '';
 
             const rows = [];
-            let exploratory = false;
             [[sgMap, fcSg, hdSg, 'SG → JB', 'sg'], [jbMap, fcJb, hdJb, 'JB → SG', 'jb']].forEach(([map, fcVal, dot, name, cls]) => {
                 // Slots past the last observation carry no data, except the forecast point.
                 const fp = isFc ? fcVal[i - (n - 1)] : null;
@@ -775,11 +774,10 @@ async function fetchAndRenderCongestionChart() {
                 dot.setAttribute('cy', yOf(v).toFixed(1));
                 dot.style.display = '';
                 rows.push(`<div class="lc-tt-row"><span class="lc-dot ${cls}"></span>${name}<strong>${v.toFixed(1)} min${isFc ? ' (forecast)' : ''}</strong></div>`);
-                if (fp && fp.status !== 'evaluated') exploratory = true;
             });
 
             if (!rows.length) { tip.style.display = 'none'; return; }
-            tip.innerHTML = `<div class="lc-tt-time">${label} SGT${isFc ? ` · forecast${exploratory ? ' (exploratory)' : ''}` : ''}</div>${rows.join('')}`;
+            tip.innerHTML = `<div class="lc-tt-time">${label} SGT${isFc ? ' · forecast' : ''}</div>${rows.join('')}`;
             tip.style.display = 'block';
 
             const areaRect = chartArea.getBoundingClientRect();
