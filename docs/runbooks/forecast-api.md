@@ -29,7 +29,7 @@ What it is not:
 
 `eval/tests/test_forecastapi_models.py` asserts that the service and the harness use the same feature lists and settings, and that a service fit predicts exactly what the harness predicts on the same rows. It runs in GitHub Actions and in the Cloud Build `Test` step.
 
-**`served` today** is an interim choice until the frozen run: `SG_TO_MY` → `lin_bq[frozen]`, `MY_TO_SG` → `persistence`. That is the 12 Sep registry rebuilt from local replicas. After the frozen run (on or after 20 Oct), set `SERVED_SELECTION` by the ADR 0004 rule: per direction, a model that beats persistence in Run A and is confirmed in Run B, both significant under run-wide Holm, otherwise persistence. Then change `SELECTION_ID` and push to `main`.
+**`served` today** is an interim choice until the frozen run: `SG_TO_MY` → `lin_bq[frozen]`, `MY_TO_SG` → `persistence`. That is the 12 Sep registry rebuilt from local replicas, not a weighted ensemble. The response keeps `"model": "served"` at the top level. Each direction's `model` is the id that produced that value (`lin_bq[frozen]` or `persistence`). After the frozen run (on or after 20 Oct), set `SERVED_SELECTION` by the ADR 0004 rule: per direction, a model that beats persistence in Run A and is confirmed in Run B, both significant under run-wide Holm, otherwise persistence. Then change `SELECTION_ID` and push to `main`.
 
 ## Request
 
@@ -37,16 +37,15 @@ What it is not:
 
 | Parameter | Default | Values |
 | --- | --- | --- |
-| `list` | none | `models` returns the catalog and a description of these parameters |
-| `model` | `served` | `served`, `persistence`, or a model id above, used for every requested direction; other catalog ids return 400 |
+| `list` | none | `models` returns the catalog (callable and not) and a description of these parameters. `horizon-study` returns the exploratory study summary |
+| `model` | `served` | A callable id, used for every requested direction. Callable: `served`, `persistence`, `profile`, `ridge[maps]`, `xgb[maps]`, `xgb[maps+prof]`, `lin_bq[daily]`, `xgb_bq[daily]`, `lin_bq[frozen]`, `xgb_bq[frozen]`. Other catalog ids (`lstm`, scored ensembles, and the rest with `deploy_state` `artifact` or `code-only`) return 400 `model is not deployed`. Unknown ids return 400 |
 | `model_sg_to_my` | none | a callable id for `SG_TO_MY` only; overrides `model` there |
 | `model_my_to_sg` | none | a callable id for `MY_TO_SG` only; overrides `model` there |
 | `version` | current | must equal the current version, otherwise 400; not allowed with a per-direction override |
 | `direction` | `both` | `SG_TO_MY`, `MY_TO_SG`, `both` |
 | `horizon_min` | 30 | 30 for every model. Any multiple of 30 up to 1440 (exploratory) for `served`, `persistence`, `xgb[maps]`, `xgb[maps+prof]` and `profile` |
 | `baseline` | none | `profile` returns the baseline curve instead of a forecast (with `hours`, 1–24, default 24) |
-| `curve` | none | `forecast` returns forecasts every 30 minutes (with `hours`, 1–24, default 2); see [the forecast curve](#exploratory-horizons-and-the-profile-baseline) |
-| `list` | none | `models` (catalog) or `horizon-study` (the exploratory study summary) |
+| `curve` | none | `forecast` returns forecasts every 30 minutes (with `hours`, 1-24, default 2); see [the forecast curve](#exploratory-horizons-and-the-profile-baseline). Model points stop at 5.5 h (generous end of the study). Later points are the profile |
 
 **Manual selection.**
 - `?model=xgb[maps]` uses one model for both directions.
@@ -62,6 +61,8 @@ What it is not:
 - `profile`: `labels_before=...` (refitted each SGT day).
 
 ## Response
+
+The shape below is the code in this tree. Live revision `forecast-api-00009-hax` (commit `7bd94e3`) does not include per-point `model` or `components` until this merges and trigger `forecast-api` runs. A live GET is not proof of these fields.
 
 ```json
 {
@@ -80,9 +81,11 @@ What it is not:
 }
 ```
 
+Top-level `model` is the id the caller asked for. `directions.<d>.model`, and `model` on each `?curve=forecast` point, is the id that produced that value. Those differ for `served`, because the two directions use different models, and along the curve, because the id changes with lead time. A single-model value omits `components`. A blend (nothing in `served` or the forecast curve is a blend today) adds `components` on that direction or curve point: a list of `{model, weight}` whose weights sum to 1. The service copies those weights; it does not invent or rescale them. A blend value would look like `"model": "mean[models]"` with `"components"` naming `lin_bq[frozen]` and `persistence` at weight 0.5 each.
+
 | Status | When |
 | --- | --- |
-| 400 | Unknown model (in `model` or an override), model not deployed, stale `version`, `version` with an override, an override for a direction not requested, bad `direction` or `horizon_min`, `list` other than `models` |
+| 400 | Unknown model (in `model` or an override), a catalog id that is not callable (`model is not deployed`), stale `version`, `version` with an override, an override for a direction not requested, bad `direction` or `horizon_min`, `list` other than `models` or `horizon-study` |
 | 405 | Method other than `GET` / `OPTIONS` |
 | 502 | BigQuery read or fit failed (`{"error": "Forecast query failed"}`; details stay in the log) |
 | 503 | No servable origin for a requested direction: ingestion stale (the newest closed bin's target has started), or within an hour after a gap of more than 25 minutes. A data condition, not a failed deploy |
@@ -122,7 +125,7 @@ Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:
 
 **Forecast curve, `?curve=forecast&hours=N`** (the recommended call for a chart):
 - Returns the forecast every 30 minutes from one origin, out to `N` hours (1–24, default **2**: four points at 30, 60, 90 and 120 min).
-- **Each point** carries `horizon_min`, `forecast_for`, `forecast_window_end`, `forecast_min`, `baseline_min` (the profile at the same target), `model`, `status`, `lead_min` and `study_mae_min`.
+- **Each point** carries `horizon_min`, `forecast_for`, `forecast_window_end`, `forecast_min`, `baseline_min` (the profile at the same target), `model` (the id that produced that lead, not one id for the whole curve), `status`, `lead_min` and `study_mae_min`. A single-model point omits `components`.
 - **Which model per point:**
   - 30 min uses the evaluated `served` choice;
   - 60 min uses `xgb[maps]`;
@@ -137,12 +140,12 @@ Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:
 
 Why not model points every 30 minutes to 24 h: from 6 h on, the model points would be, within the study's uncertainty, the baseline under another name. A single horizon past 5.5 h can still be requested with `horizon_min` (exploratory).
 
-**For the page (`app.js`, outside git):**
+**For the page (`hosting/app.js`):**
 - Call `?curve=forecast` (or `&hours=4` for 8 points) and plot each point's `forecast_min` at `forecast_for`. This gives the three or more points 60–120 min ahead the page asked for, all from one origin and one request.
 - Plot `?baseline=profile&hours=24` as a separately styled line labelled with `label`.
 - Show `status` on exploratory values, and use `lead_min` rather than a fixed "30 minutes ahead".
 - With `hours` above 5, draw the points where `model` is `profile` in the baseline style. The curve can step at the switch: in a live run on 2026-10-04, SG → JB went 23.5 → 27.3 between 5.5 h and 6 h. That step is the model letting go, not a predicted change.
-- Past about 5.5 h, the study found the forecast no better than the baseline. Say so next to those values.
+- Past about 5.5 h, the study found the forecast no better than the baseline. The claims register still says so. The checked-in page does not: a product decision on the Hosting commits left one sourcing line ("Based on Google Maps travel-time estimates") and labels the baseline "Typical for this day and time". See [findings.md](../findings.md#claims-register).
 - Each new horizon costs one daily fit per instance on its first request (about 4–5 s locally).
 
 ## Performance

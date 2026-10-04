@@ -2,7 +2,7 @@ flowchart LR
   subgraph LA["Layer A - Vision"]
     LTA["LTA cameras"] --> SB["Cloud Run swiftbackend<br/>directional counts: 2701"]
     RF["Roboflow YOLO<br/>label - train - serve"] --> SB
-    SB --> UI["Firebase Hosting UI<br/>source outside git"]
+    SB --> UI["Firebase Hosting UI<br/>hosting/ in git; manual deploy"]
   end
   subgraph LB["Layer B - Forecasting"]
     SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]

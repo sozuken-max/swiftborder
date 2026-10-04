@@ -94,7 +94,7 @@ The chart shows origins on 24–26 Sep (Thursday to Saturday), plotted at their 
 ## Limits
 
 - **History:** 25 days in all and 18 test days, about three weekends. Weekly shape is learned from two to three weeks. There are no public holidays or major events in the window, and that is exactly where a calendar baseline fails at long horizons.
-- **Shared design and test window:** the arms and the 4-hour boundary were found on the same window. Run B (1–19 Oct) is the test.
+- **Shared design and test window:** the arms and the curve cutoff were found on the same window. Run B (1-19 Oct) is the test. The 5.5 h model cutoff on the public curve is the generous end of that search, not a confirmed horizon.
 - **Model search:** one model family, the harness settings, and no tuning per horizon. A better model may extend finding 1 somewhat. It cannot add information that current traffic does not carry.
 - **Multiplicity:** there are 336 comparisons without a family correction. Under Holm over all 336, only the wins to 3 h (against the profile) and 1.5 h (against "same time last week") remain. The cutoff the curve uses (5.5 h) is therefore the generous end, and the scattered later wins should not be read either way.
 
@@ -103,16 +103,16 @@ The chart shows origins on 24–26 Sep (Thursday to Saturday), plotted at their 
 `forecast-api` exposes the study, labelled. Details are in the [runbook](runbooks/forecast-api.md#exploratory-horizons-and-the-profile-baseline).
 - **`horizon_min`:** 30 (evaluated), or any multiple of 30 up to 1440 (exploratory). At an exploratory horizon `served` is the study's lower-MAE model: `xgb[maps]` up to 1 h, `xgb[maps+prof]` from 1.5 h. Every such response says `"status": "exploratory"`.
 - **`?curve=forecast&hours=N`:** forecasts every 30 minutes from one origin, 30–120 min by default.
-  - Model points run to 5.5 h, the end of the unbroken run of 30-minute steps where the model beat the profile. After that each point is the profile baseline, labelled so.
+  - Model points run to 5.5 h, the generous end: every uncorrected 30-minute step to there beat the profile. Holm over all 336 comparisons keeps that win only to 3 h. After 5.5 h each point is the profile baseline, labelled so. Drawing the model that far is not a confirmed 24-hour forecast.
   - Each point carries its study MAE.
   - The study grid is every 30 minutes, so every plotted point has its own row in `?list=horizon-study`.
 - **The profile baseline:** every forecast response carries it as `baseline`, labelled *"Baseline: typical for this day and time (calendar profile), not a forecast"*. `model=profile` returns it alone. `?baseline=profile&hours=24` returns its 10-minute curve.
 - **The study's own numbers:** each response carries the study MAE at that horizon (`study`), for the model used, the profile and persistence. `?list=horizon-study` returns the whole summary.
-- **Recommendation for the page:** past about 5.5 h, show the forecast next to the baseline. The study found no difference between them there, and the page should say so instead of implying long-range skill.
+- **Recommendation for the page:** past about 5.5 h, show the value next to the baseline and say the study did not detect a difference there. "Not significant" is not equivalence. Do not imply a confirmed long-range forecast.
 
 The service fits the same models as the study, once per SGT day. `eval/tests/test_forecastapi_models.py` asserts this at 2 h and 24 h: the same labels and profile, and the same `xgb[maps+prof]` predictions to 1e-6.
 
 ## What this means for the report
 
-- **Report wording:** "Forecasts using current traffic beat a calendar baseline up to about 5 hours ahead. Beyond that, no model on 25 days of data did better than the typical pattern for the day and time." Do not report long-horizon gains over persistence as forecasting skill.
+- **Report wording:** name both cutoffs. Uncorrected steps: `xgb[maps+prof]` beats the profile to 5.5 h. Holm over 336 comparisons: only to 3 h. Beyond 5.5 h the public curve is the profile. Do not call this a confirmed 24-hour forecast, and do not report long-horizon gains over persistence as forecasting skill.
 - **Before 19 Oct (team decision):** to claim any of this, add the horizons, the profile baseline and the `xgb[maps+prof]` arm to the frozen-run claims and the ADR 0004 serving rule. Until then it is shown as exploratory, not claimed.

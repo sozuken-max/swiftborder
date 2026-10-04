@@ -82,14 +82,14 @@ Neither run uses `--bqml`, so the ensemble pool is local (`ensemble.pool_30_loca
 ## Already true
 
 - Maps durations log every 5 minutes into `causeway.travel_times` (both directions; counts in [inventory.md](inventory.md)).
-- `forecast-api` (Cloud Run, public) serves the 30-minute forecast from local models ([ADR 0004](adr/0004-serve-local-models.md)): the `lin_h30` replica for SG→MY and persistence for MY→SG. It also serves exploratory horizons to 24 h, a 30-minute forecast curve and a calendar-profile baseline ([horizon-study.md](horizon-study.md)). `v_forecast_recent` and the BQML models remain as history.
+- `forecast-api` (Cloud Run, public) serves the 30-minute forecast from local models ([ADR 0004](adr/0004-serve-local-models.md)): the `lin_h30` replica for SG to MY and persistence for MY to SG. It also accepts exploratory `horizon_min` values out to 24 h. The public curve draws the study model only to 5.5 h (the generous end; Holm keeps `xgb[maps+prof]` ahead of the profile only to 3 h) and the calendar profile after that ([horizon-study.md](horizon-study.md)). That is not a confirmed 24-hour forecast. `v_forecast_recent` and the BQML models remain as history. Live revisions: [inventory.md](inventory.md).
 - Weather and camera-2701 congestion views exist and are not joined.
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
 - Layer B is scored and promoted to [`eval/runs/report/`](../eval/runs/report/): production models at 30 min on 13–30 Sep (`layer_b.py`), the joined weather experiment (`joined.py`), and offline 60-min XGBoost (`timeseries_xgb.py`), all with significance tests (Diebold–Mariano on error differences, Holm correction across models). Numbers are in [evaluation.md](evaluation.md).
 - Weather history for 5–30 Sep is fetched (`Causeway/`) and appended to BigQuery; weather gave no significant gain. The Layer A scorer exists (`eval/layer_a.py`); no export is scored.
 - Also scored in `report/`: LSTM, GRU and a patch Transformer at 60 min (none beats XGBoost), a fuzzy light / moderate / heavy forecast (the XGB → fuzzy hybrid is best), and ensembles / hybrids of the 30-min models (no gain over a daily-refit XGBoost, which beats the served forecast).
-- Report drafts exist: design, evaluation, findings, inventory (2026-10-01).
+- Report drafts exist: design, evaluation, findings, inventory (latest verification 2026-10-04).
 
 ---
 
@@ -187,10 +187,10 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 
 | Item | Why it waits |
 | --- | --- |
-| Firebase Hosting from git | A site is live at `swiftborder-92b45.web.app` (not in project `swiftborder`; source not in git). Bringing the client into the repo is [ADR 0002](adr/0002-firebase-hosting-source.md). The grade does not require it if the demo runs. |
+| Firebase Hosting deploy | `hosting/` (`index.html`, `app.js`, `style.css`) is in git. The live site is `https://swiftborder-92b45.web.app` and is not a resource of project `swiftborder`. `firebase.json` and `.firebaserc` are still absent, so deploy stays manual ([ADR 0002](adr/0002-firebase-hosting-source.md)). The grade does not require a Hosting workflow if the demo runs. Page copy and the claims register disagree ([findings.md](findings.md#claims-register)). |
 | Holiday calendars | No calendar table yet. Add only if a residual error looks like a public holiday. |
 | ResNet | Optional third detector. It does not unblock Layer B. |
-| Serving a better 30-min model | A daily-refit XGBoost (or the rolling stack) beats the served registry forecast by ~0.27 min on 13–30 Sep ([evaluation.md §6](evaluation.md#6-ensembles-and-hybrids-of-the-layer-b-models-evalensemblepy)); blending on top adds nothing. Serving it needs a daily retrain job and a `v_forecast_recent` change: an approved deploy. |
+| Serving a better 30-min model | A daily-refit XGBoost (or the rolling stack) beats the served registry forecast by ~0.27 min on 13-30 Sep ([evaluation.md §6](evaluation.md#6-ensembles-and-hybrids-of-the-layer-b-models-evalensemblepy)); blending on top adds nothing. `forecast-api` already fits local models in the process ([ADR 0004](adr/0004-serve-local-models.md)). Changing the served choice is a `SERVED_SELECTION` edit after Runs A and B, not a `v_forecast_recent` change. |
 | Region consolidation | Not graded. |
 
 ---

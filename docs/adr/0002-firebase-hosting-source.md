@@ -2,13 +2,17 @@
 
 ## Status
 
-Proposed
+Proposed on 2026-10-03 for how a later push is deployed. The static client is now in git; see the update below. `firebase.json` and `.firebaserc` are still absent, and deploy stays manual.
+
+## Update (repo, after the Hosting commits)
+
+`hosting/` contains `index.html`, `app.js`, and `style.css`. The Context sentence that this repo has no Hosting directory describes the 2026-10-03 check. No workflow deploys the site, and this note does not invent `firebase.json` or `.firebaserc`. The live page copy and the claims register disagree: the page keeps a Maps sourcing line and "Typical for this day and time"; the register still limits claims to an evaluated 30-minute result, exploratory later curve points, Holm skill only to 3 h, and 5.5 h as a generous end ([findings.md](../findings.md#claims-register), [hosting-forecast-widget-delta.md](../hosting-forecast-widget-delta.md)).
 
 ## Context
 
 The graded demo is the static site at `https://swiftborder-92b45.web.app` (same bytes on `https://swiftborder-92b45.firebaseapp.com`). Travel times stay on the public JSON file ([0001](0001-firebase-client-api-calls.md)). This note decides where the page source lives and how a later push is deployed.
 
-This repo has no `firebase.json`, `.firebaserc`, `package.json`, or Hosting directory. `.github/workflows/tests.yml` is the only workflow. `firebase` is not on PATH. `gcloud firebase` only offers the Test Lab group.
+On 2026-10-03 this repo had no `firebase.json`, `.firebaserc`, `package.json`, or Hosting directory. `.github/workflows/tests.yml` is the only workflow. `firebase` is not on PATH. `gcloud firebase` only offers the Test Lab group.
 
 `C:\Users\vi_ci\Downloads` has `app.js` (42,084 bytes, written 2026-10-03 10:36 SGT) and no `index.html`, `style.css`, `firebase.json`, or `.firebaserc` beside it. The script is not a Firebase project. It has no Firebase SDK. On `DOMContentLoaded` it reads elements that the page must already define (`live-cam-grid`, `ai-detection-panel`, `lc-chart-area`, the transit cards, the toll calculator).
 
@@ -65,10 +69,10 @@ A Hosting workflow is a later decision. It would need a new credential that can 
 ## Consequences
 
 - Chad collects `index.html`, `style.css`, and the `firebase.json` / `.firebaserc` from the machine that last deployed (the live HTML and CSS match the 19 Sep 2026 release; Downloads already matches live `app.js`). He does not commit `app.js` by itself.
-- Until that commit, the demo source of truth for the page is the live Hosting release of 19 Sep 2026 05:54:38 GMT, not this repo.
+- The static files are in `hosting/`. Until a manual upload from that directory, the live site can still differ from git. The 19 Sep 2026 `Last-Modified` was the live release at the 2026-10-03 check, not a statement that the client is absent from this tree.
 - `tests.yml` stays tests-only. Trigger `76bbca35` stays limited to `camdetect` runtime files.
 - CORS on `swiftborder-public` is unchanged. `TRAFFIC_API` and `BACKEND_URL` are unchanged.
-- This pass did not deploy, did not enable `firebase.googleapis.com` or `firebasehosting.googleapis.com`, and did not copy the client into git.
+- This pass did not deploy and did not enable `firebase.googleapis.com` or `firebasehosting.googleapis.com`. It did not copy the client; a later commit added `hosting/`.
 
 ## What this pass did not verify
 

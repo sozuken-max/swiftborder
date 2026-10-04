@@ -41,7 +41,7 @@ flowchart LR
   subgraph LA["Layer A - Vision"]
     LTA["LTA cameras"] --> SB["Cloud Run swiftbackend<br/>directional counts: 2701"]
     RF["Roboflow YOLO<br/>label - train - serve"] --> SB
-    SB --> UI["Firebase Hosting UI<br/>source outside git"]
+    SB --> UI["Firebase Hosting UI<br/>hosting/ in git; manual deploy"]
   end
   subgraph LB["Layer B - Forecasting"]
     SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
@@ -70,7 +70,7 @@ flowchart LR
 
 ![High-level architecture](images/architecture-high-level.png)
 
-Regenerated on 4 Oct 2026 after a fresh serving and storage check; see [diagrams/README.md](diagrams/README.md). **Stale since then:** the `forecast-api` input is now `v_bins_10min` (closed bins, harness features), not `v_training_set`, and the service is labelled public. The Mermaid above already shows this. Regenerate both PNGs before the deck.
+Regenerated on 4 Oct 2026 after a fresh serving and storage check; see [diagrams/README.md](diagrams/README.md). **Stale since then:** the `forecast-api` input is now `v_bins_10min` (closed bins, harness features), not `v_training_set`, the service is labelled public, and the Hosting node says the source is outside git. The Mermaid above already shows the current labels, including `hosting/` in git with a manual deploy. Regenerate both PNGs before the deck.
 
 The high-level figure shows camera, cache and public-history storage. The detailed figure names all seven verified buckets. Storage inventory nodes have no inferred data-flow edges.
 
@@ -99,7 +99,7 @@ flowchart LR
   subgraph DELIVERY["Delivery and evaluation"]
     BUILD["Cloud Build<br/>two test/deploy pipelines"] --> SB
     BUILD --> API
-    UI["Firebase Hosting UI<br/>source outside git"]
+    UI["Firebase Hosting UI<br/>hosting/ in git; manual deploy"]
     SB --> UI
     API --> UI
     PUB["swiftborder-public<br/>traffic-24h.json history"] --> UI
@@ -127,7 +127,7 @@ Weather and historical camera features are used only in offline experiments. The
 - `v_training_set` is built only from `causeway.travel_times`: 10-minute bins, lags, rolling means, time-of-day, weekend and peak flags. Labels are `y_30` and `y_60`.
 - `forecast-api` reads closed `v_bins_10min` bins and builds the features with the harness's time-based rules (`local_models.features_from_bins`), then fits and serves local models. The target is the mean over the bin 30-40 minutes after the newest closed bin, which is 9-19 minutes ahead of the request when ingestion is current (`lead_min`). A direction with stale data answers 503. The service is public (invoker IAM check disabled, by decision). `v_forecast_recent`, `lin_h30`, `xgb_h30` and the BQML registry remain as historical resources; the HTTP API does not call them.
 - View and BQML DDL checked in under [sql/](../sql/) (exported 2026-09-26). Apply order: [sql/README.md](../sql/README.md).
-- A 24-hour forecast is the product intent. It is not what the live API emits.
+- A 24-hour forecast of crossing time is the product intent. The live API's evaluated response is the 30-minute Maps-duration forecast. It can also return exploratory horizons out to 24 h, and `?curve=forecast` draws the study model only to 5.5 h (the generous end of an exploratory study; Holm over 336 comparisons keeps `xgb[maps+prof]` ahead of the profile only to 3 h) and the calendar profile after that. That curve is not a confirmed 24-hour forecast. See [horizon-study.md](horizon-study.md).
 
 What those facts allow the report to claim is in [findings.md](findings.md). Methods and scored results are in [evaluation.md](evaluation.md).
 
@@ -135,4 +135,4 @@ What those facts allow the report to claim is in [findings.md](findings.md). Met
 
 ![Detailed architecture](images/architecture-detailed.png)
 
-Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the join, a longer horizon, Layer A results, 2702 geometry, the Hosting client in git) is in [findings.md](findings.md) and [roadmap.md](roadmap.md).
+Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the join, a longer horizon, Layer A results, 2702 geometry, a Firebase project file for Hosting) is in [findings.md](findings.md) and [roadmap.md](roadmap.md). `hosting/` is in git; the deck PNGs still label that node as outside git.

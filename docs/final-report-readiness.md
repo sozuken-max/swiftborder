@@ -18,8 +18,8 @@ Reviewed 2026-10-03 (SGT), checkout `be9281d`, against repository code, committe
 | 6 | Deployment and report architecture disagree | **Docs updated.** README, findings, architecture prose and Mermaid, runbook and ADR now describe `forecast-api` local serving; BQML results are labelled BQML-era | as listed; **PNGs need regeneration** (see 10) |
 | 7 | Access policy contradicts the smoke test | **Reconciled to the live decision (public).** Deploy sets `--no-invoker-iam-check` and `--max-instances=3`. The smoke test calls anonymously with the Hosting origin and checks the annotation and CORS. Risk recorded | `forecastapi/cloudbuild.yaml`, [findings.md](findings.md#known-risk-public-forecast-api-by-decision) |
 | 8 | Parity depends on gap-free data | **Fixed in code.** Serving and daily training build features from `v_bins_10min` with the harness's time-based rules. A test asserts they equal `eval/features.maps_features` with skipped bins and a gap. `v_training_set` itself is unchanged | `forecastapi/local_models.py`, `eval/tests/test_forecastapi_models.py` |
-| 9 | Reproducibility / submission package | **Open (team).** Needs an immutable data package or access procedure, the Hosting source (ADR 0002), the Maps fetcher source, and the frozen run from a clean revision | [roadmap.md](roadmap.md) |
-| 10 | Deck PNGs | **Regenerated 4 Oct, and now stale on two labels** (forecast-api input and public access). Handled separately, as agreed | [architecture.md](architecture.md) |
+| 9 | Reproducibility / submission package | **Open (team).** Static Hosting files are in `hosting/`. Still needs an immutable data package or access procedure, `firebase.json` / `.firebaserc` (not invented), the Maps fetcher source, and the frozen run from a clean revision | [roadmap.md](roadmap.md), [ADR 0002](adr/0002-firebase-hosting-source.md) |
+| 10 | Deck PNGs | **Regenerated 4 Oct, and now stale on three labels** (forecast-api input, public access, and the Hosting node still drawn as outside git). Handled separately, as agreed | [architecture.md](architecture.md) |
 
 ## Readiness by graded surface
 
@@ -28,7 +28,7 @@ Reviewed 2026-10-03 (SGT), checkout `be9281d`, against repository code, committe
 | Tools, techniques and model design | Substantial | Consolidate the model/data descriptions and current serving architecture |
 | Layer B performance | Strong preliminary evidence | Frozen Runs A/B; resolve inference concerns below; publish exact windows per experiment |
 | Layer A performance | Not ready | Held-out detector and directional-count results, dataset/model version and split provenance |
-| Runnable MVP | Backend demonstrated; browser implementation inspected | Full browser rehearsal, freshness handling and reproducible Hosting source |
+| Runnable MVP | Backend demonstrated; `hosting/` is in git | Full browser rehearsal, freshness handling, and a Hosting release taken from `hosting/` |
 | Findings and discussion | Good foundation | Correct significance wording; distinguish historical BQML results from current local serving |
 | Final figures | Fail | Refresh topology and regenerate all four deck PNGs |
 | Reproducibility/submission package | Partial | Immutable input data package or access procedure, pinned code/environment, client source and run instructions |
@@ -74,11 +74,13 @@ Keep the conclusion as “no improvement detected on this window,” or predefin
 
 Fresh GCP and HTTP reads confirm a working **local-model forecast API**, with `lin_bq[frozen]` for SG-to-MY and persistence for MY-to-SG. README, architecture, findings, several ADR passages, and the inventory's earlier observations still describe `v_forecast_recent` as the current serving path. The architecture also calls LSTM unscored even though the evidence bundle includes deep results.
 
-Separate historical BQML benchmark results, local-replica parity, and today's HTTP serving policy. Do not transfer the old served MAE of 2.542 minutes to the new replica without identifying the relevant evaluation. Update both architecture depths to one verified system. The current public frontend now calls the forecast API; its source is still outside git. A successful API call and inspection of its client code do not replace a full browser rehearsal.
+Separate historical BQML benchmark results, local-replica parity, and today's HTTP serving policy. Do not transfer the old served MAE of 2.542 minutes to the new replica without identifying the relevant evaluation. Update both architecture depths to one verified system. The current public frontend now calls the forecast API. At this review the client source was outside git. **Follow-up:** `hosting/` is in git (`index.html`, `app.js`, `style.css`); deploy stays manual. A successful API call and inspection of its client code do not replace a full browser rehearsal.
 
 ### 7. Medium: live access policy contradicts the deployment smoke test
 
-The forecast service is anonymously accessible because its invoker check is disabled; a live request returned HTTP 200 with CORS `*`. [`forecastapi/cloudbuild.yaml`](../forecastapi/cloudbuild.yaml) expects an anonymous request to return 403. Its `--no-allow-unauthenticated` flag concerns IAM policy and does not explicitly resolve the separate disabled-invoker-check setting. Reconcile the intended access policy, deploy flags, smoke assertion and frontend before the next release. Do not label the API private based only on an empty IAM policy.
+The forecast service is anonymously accessible because its invoker check is disabled; a live request during the 3 Oct review returned HTTP 200 with CORS `*`. At that checkout [`forecastapi/cloudbuild.yaml`](../forecastapi/cloudbuild.yaml) expected an anonymous request to return 403.
+
+**Follow-up (2026-10-04):** local `main` `7bd94e3` accepts anonymous 200 or 503 for `model=served`, and a fresh anonymous GET returned 200. See [inventory.md](inventory.md). Do not label the API private based only on an empty IAM policy.
 
 The camera service's public billed-inference exposure is an already accepted, documented risk. This review does not reopen that team decision or change access settings.
 
@@ -92,7 +94,7 @@ The fresh query found **zero** such single-bin gaps and **zero** three-row horiz
 
 The committed report manifest validates and records a clean run at `b3b6562`, dataset fingerprints and environment metadata. Its code fingerprint differs from current HEAD, which has subsequent legitimate changes. That is a historical-run distinction, not proof of invalid results. Reproduce that snapshot from its recorded revision, and generate the final run from the frozen final revision.
 
-Raw inputs are ignored in git. Hashes identify them but do not deliver them to a grader. Supply an immutable, permitted dataset package or a tested retrieval/access process, including Maps, weather, camera history, and held-out labels. Source for Maps ingestion and Hosting is absent, so a clean checkout cannot reconstruct the whole deployed application. A bounded offline demo can be an acceptable fallback if documented and included. No leaked secret value was printed or used as report evidence; this was not an exhaustive history-wide secret audit.
+Raw inputs are ignored in git. Hashes identify them but do not deliver them to a grader. Supply an immutable, permitted dataset package or a tested retrieval/access process, including Maps, weather, camera history, and held-out labels. Source for Maps ingestion is absent. **Follow-up:** the Hosting static files are in `hosting/`; `firebase.json` is still absent, so a clean checkout still cannot publish the live site. A bounded offline demo can be an acceptable fallback if documented and included. No leaked secret value was printed or used as report evidence; this was not an exhaustive history-wide secret audit.
 
 ### 10. Medium: all four deck PNGs fail factual review
 
@@ -117,9 +119,52 @@ The review is not a full rerun of the published experiments, a browser usability
 
 ## Route to final submission
 
-1. **Before the 19 October data freeze:** score Layer A; resolve bin completion/staleness; settle the statistical inference and no-gain wording; preserve the confirmation window; capture the Hosting source and approved immutable data inputs. Avoid adding more model families.
+1. **Before the 19 October data freeze:** score Layer A; resolve bin completion/staleness; settle the statistical inference and no-gain wording; preserve the confirmation window; keep the Hosting static files in git (done in `hosting/`) and capture approved immutable data inputs. Avoid adding more model families.
 2. **From 20 October:** run the agreed frozen evaluation from a clean revision, validate and promote Runs A/B, and make every table/figure traceable to its run, horizon, direction coverage, label and baseline. Keep insufficient-data conclusions where required.
 3. **Assemble the report:** problem and scope; data and label validity; methods/model choices; current architecture; experimental protocol; results; error analysis and limitations; conclusion; references; reproducibility and contribution appendices. Lead with the few research questions, not the entire experiment catalog.
 4. **Before submission:** regenerate the figures, rehearse a clean-start demo and browser flow, prepare an outage fallback, package code/data/instructions, complete the video/slides and individual reflections, and verify the 31 October deadline and submission rules on Canvas.
 
 **Final acceptance bar:** every claimed result has frozen evidence; vision quality is measured or explicitly excluded from validated scope; served forecasts obey their availability/freshness contract; current diagrams match GCP; and a grader can run the submitted demonstration from the supplied materials.
+
+## Proposed information architecture
+
+**Status: proposed (2026-10-04).** This section is a consolidation plan. It does not move or rewrite the other docs.
+
+A lecturer should open six files and stop. Everything else is an ADR, a runbook, or a labelled archive.
+
+| Spine | Why it exists |
+| --- | --- |
+| [../README.md](../README.md) | What the system is, and how to run the camera count plus the 30-minute forecast |
+| [architecture.md](architecture.md) | Tools, techniques, and one system at two depths |
+| [evaluation.md](evaluation.md) | What was measured, on which window, against which baseline, and which cells are still targets |
+| [findings.md](findings.md) | Findings a report or a 10–15 min talk can cite, each tied to a run or a live query, plus the claims register |
+| [inventory.md](inventory.md) | Dated copy of project `swiftborder`. Cite the latest verification block only |
+| [README.md](README.md) | The map. After a later rewrite it should lead with this spine, then operational docs, then archive |
+
+**Merge in a later pass (headings move; files stay until that pass):**
+
+- [horizon-study.md](horizon-study.md) moves under a new `evaluation.md` heading, "Exploratory horizon study (not a report run)". The 3 h Holm cutoff, the 5.5 h uncorrected cutoff, and the 24 h product target stay in that one section. README, findings item 12, and the roadmap "Already true" list keep one sentence and a link.
+- [deep-learning-assessment.md](deep-learning-assessment.md) "What it showed", "Why this is expected", and "When to revisit" fold into evaluation §4. The transformer design note can stay as a short paragraph there.
+- Open readiness items (Layer A scores, submission package) move into findings as "Still open". Items already marked fixed stay in [CHANGELOG.md](../CHANGELOG.md), not in report prose.
+- The callable-model catalog has one home: the parameter table in [runbooks/forecast-api.md](runbooks/forecast-api.md). ADR 0004 keeps the serving decision. [release-pr2.md](release-pr2.md) curl comments and the 2026-10-03 changelog catalog stay historical.
+
+**Label as archive. Do not delete:**
+
+- [release-pr2.md](release-pr2.md) — merged-PR checklist. Its "pending merge", anonymous 403, and `v_forecast_recent` curls are not the current contract.
+- [plan-eval-integrity.md](plan-eval-integrity.md) — execution log. Remaining work is the roadmap freeze and steps 4–7, not this task list.
+- This file's original priority-finding body — a 3 Oct review memo. The Response table is the status. The finding prose is not current behaviour.
+- Inventory blocks dated before the latest verification, and body rows that still quote older row counts, revisions, or "not on main".
+- Roadmap steps already marked done (first presentation, published 13–30 Sep Layer B).
+
+**Stay operational. Do not merge into report prose:** ADRs 0001–0004, the forecast-api runbook, [handoff-camera-pilot.md](handoff-camera-pilot.md), [agent-deploy.md](agent-deploy.md), the roadmap freeze and remaining sequence, [../eval/README.md](../eval/README.md), [../sql/README.md](../sql/README.md), the grading lens, and `docs/diagrams/` plus `docs/images/`.
+
+**Do not merge:** `eval/runs/report/` JSON and plots, replay CSVs, or `skills/`. `hosting/` is in this checkout. The per-point `model` fields in `forecastapi/` are a separate code change in the same branch; they are not a report-file merge.
+
+**Report gaps this spine still leaves empty:**
+
+| Graded section | Filled by | Still empty |
+| --- | --- | --- |
+| Tools | architecture.md | Deck PNGs stale on forecast input, public access, and the Hosting node. Mermaid in this checkout says `hosting/` is in git and deploy is manual |
+| Design and models | architecture.md; decision in ADR 0004; feature matrix in ADR 0003 | ADR 0004's decision still shows example ids that did not ship. The shipped catalog is only in the runbook |
+| Performance | evaluation.md, from `eval/runs/report/run.json` | Layer A mAP table is all `pending`. §7c observed counts are pending. Frozen Runs A and B are not run. The horizon study is exploratory and is not in `run.json` |
+| Findings | findings.md | Item 5 (scored camera-profile prior) is easy to read as measured Layer A quality. 24 h and ≤15 min MAE stay targets |

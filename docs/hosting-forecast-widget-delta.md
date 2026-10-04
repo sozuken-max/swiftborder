@@ -236,9 +236,9 @@ The first revision above called `forecast-api` with no parameters and drew one 3
 
 | Area | Change |
 | --- | --- |
-| Live Congestion chart | Forecast only: each direction continues as a dashed line for the next 5 h (`?curve=forecast&hours=5`, 10 points, all model points; the runbook's model range ends at 5.5 h). No baseline lines on this chart. Hover snaps to the nearest forecast point and says "exploratory" beyond 30 min. |
+| Live Congestion chart | Forecast only: each direction continues as a dashed line for the next 5 h (`?curve=forecast&hours=5`, 10 points, all model points; the runbook's model range ends at 5.5 h). No baseline lines on this chart. Hover says "forecast" and does not say "exploratory". |
 | Forecast card | Renamed "Forecast vs Typical Day". Hero value is the first (30-min, evaluated) point with `lead_min`. Each direction plots the forecast against the calendar-profile baseline, with a "Next 5 h / Full day" toggle (`?baseline=profile&hours=24`, refreshed hourly). |
 | Failure handling | 60 s timeout on the curve call. If it fails, the page falls back to the 30-minute `served` forecast and says so. If both fail, the chart returns to observed data only. The old 401/403 "not public" and CORS messages are gone. |
-| Page copy | By product decision the page carries no accuracy caveats: a single line, "Based on Google Maps travel-time estimates", and the baseline is labelled "Typical for this day and time". The runbook's status (only 30 min evaluated, later points exploratory, not confirmed on Run B) is unchanged and still applies to any claim made elsewhere. |
+| Page copy | By product decision the page carries no accuracy caveats: a single line, "Based on Google Maps travel-time estimates", and the baseline is labelled "Typical for this day and time". The claims register is unchanged and is the limit on a report or a slide: only the 30-minute point is an evaluated result; later curve points are exploratory; Holm skill holds only to 3 h; 5.5 h is a generous end of the study, not a confirmed forecast. This note records that disagreement. It does not put the caveats back on the page. |
 
 Cost to keep in mind: the first `hours=5` curve call fits about nine models per instance per SGT day, then is cached for 5 minutes. A cold call can take around 20 s.

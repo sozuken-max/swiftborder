@@ -2,7 +2,7 @@
 
 **Report section:** performance (methods, reasoning, scored results).
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
-**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `b3b6562`, clean tree, `code_sha256` `39fa1c24…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family).
+**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `b3b6562`, clean tree, `code_sha256` `39fa1c24…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1-6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family). The snapshot was not refit for this doc pass. Figure series for the cited run were replayed, without a new fit, into [`eval/runs/replay-20261003T035807Z/`](../eval/runs/replay-20261003T035807Z/). `offline/holdout-sample` was never stored, so that replay has no CSV even though `eval/runs/report/offline/holdout-sample.png` remains. The schema-v1 run `20260926T073406Z` is not replayable from this snapshot.
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` were regenerated on 4 Oct 2026 ([diagrams/README.md](diagrams/README.md)).
 
@@ -10,7 +10,7 @@ Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diag
 
 ## What would count as success
 
-The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes. **Both stay targets.** The live `forecast-api` emits a local-model forecast of Google Maps `duration_in_traffic` with a nominal **30-minute bin-start shift**. The BQML results below evaluate the earlier `v_forecast_recent` policy; see [inventory.md](inventory.md) for current serving and [final-report-readiness.md](final-report-readiness.md) for timing and inference limitations. No model here forecasts beyond 60 minutes, and there is no independent crossing-time label to test the 15-minute target against.
+The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes. **Both stay targets.** The live `forecast-api` emits a local-model forecast of Google Maps `duration_in_traffic` with a nominal **30-minute bin-start shift**. Longer horizons are exploratory only ([horizon-study.md](horizon-study.md)): the public curve draws the model to 5.5 h, which is the generous end of that study, and the calendar profile after that. Holm over the study's 336 comparisons keeps `xgb[maps+prof]` ahead of the profile only to 3 h. That is not a confirmed 24-hour forecast. The scored tables on this page stop at 60 minutes. The BQML results below evaluate the earlier `v_forecast_recent` policy; see [inventory.md](inventory.md) for current serving and [final-report-readiness.md](final-report-readiness.md) for timing and inference limitations. There is no independent crossing-time label to test the 15-minute target against.
 
 ---
 
@@ -57,7 +57,7 @@ Point forecasts are **paired** on the same `(direction, time)` rows. For each ro
 
 Directional results are reported separately. A pooled "challenger" is one result, not two independent confirmations.
 
-**"Not significant" is not "no effect".** It means no difference was detected on that window. Equivalence was never tested, because no margin was fixed in advance.
+**"Not significant" is not "no effect" and it is not equivalence.** It means no difference was detected on that window. Equivalence was never tested, because no margin was fixed in advance. A pooled comparison uses the joint calendar-day bootstrap; failing that test does not show the two forecasts are the same.
 
 The committed snapshot (`eval/runs/report/`, code `b3b6562`) used the earlier rule. Its 30-minute pooled comparisons cover 18 calendar days and pass the new gate. The pooled weekend slice (5 days) and every fuzzy comparison (5 days) do not, so under the new rule they are "insufficient data". The sensitivity re-run of the same cached data is summarised in [findings.md](findings.md#pooled-significance-sensitivity-2026-10-04).
 
@@ -111,7 +111,7 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 | Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
 | Deep learning (LSTM, GRU, patch Transformer) | [`eval/deep_forecast.py`](../eval/deep_forecast.py), [`eval/timeseries_transformer.py`](../eval/timeseries_transformer.py); same rows as offline XGB | Section 4 |
 | Fuzzy logic | Light / moderate / heavy traffic-level classifier with a learned fuzzy rule base ([`eval/fuzzy_traffic.py`](../eval/fuzzy_traffic.py)) | Section 5 |
-| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A scorer ready; results pending. As a Layer B input: section 7 |
+| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A detector metrics pending. Section 7a scores a March-April queue forecast as a Layer B input. Observed counts for the Maps window are pending (section 7c); a 2026-10-04 query still ends detections on 22 Apr 2026 |
 | Hybrid / ensemble | `ensemble_mean`; ridge + XGBoost; rolling LAD stack, rolling selection and a fuzzy-gated stack over BQML and daily-refit models; XGBoost regression defuzzified into traffic levels | Sections 1, 2, 5, 6 |
 
 ---
@@ -309,7 +309,7 @@ Backtest days are full days after the split. These numbers replace the 2026-09-2
 
 **Window features (not in the table).** Chad's day-2 note suggested a wavelet because trees get a ready-made trend and bend from it. [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py) can score three sets on this same split and the same `XGBTrainConfig`: (A) lags only, (B) lags plus a causal first difference and a 60-minute rolling mean (12 bins of 5 minutes, the same span as `keep_lags` and the horizon), (C) lags plus a per-window z-score wavelet. The default wavelet is Daubechies db2 at level 2; level 3 is a parameter. db4 is not the default because it smooths the bends. Mean and standard deviation of the window are separate columns so normalization does not throw away the level. `use_dwt` stays off for the rows above. Run `python timeseries_xgb.py` from `eval/` against `data/causeway_gdata.csv`. The hold-out in this section has 5 day-blocks, so a significance decision on that split is "insufficient data" (Diebold-Mariano, day-block bootstrap, and Holm need 10). Point estimates from the command are not part of this table.
 
-Plots: `eval/runs/report/offline/backtest-mae.png`, `offline/holdout-sample.png`, `offline/holdout-mae-diff.png`.
+Plots: `eval/runs/report/offline/backtest-mae.png`, `offline/holdout-sample.png`, `offline/holdout-mae-diff.png`. Replay CSVs for the first and third are under `eval/runs/replay-20261003T035807Z/offline/`. `offline/holdout-sample` has no replay CSV: that series was never stored.
 
 ### 4. Deep sequence models, 60 minutes, one route (`eval/deep_forecast.py`)
 
