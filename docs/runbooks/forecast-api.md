@@ -8,7 +8,7 @@ A **public** HTTP read of the Woodlands 30-minute forecast (the invoker IAM chec
 
 What it is not:
 - **Not a crossing-time measurement.** The label is Maps' own estimate.
-- **Not a 24-hour forecast.** Only 30-minute models are callable.
+- **Not an evaluated long-range forecast.** Only the 30-minute forecast is evaluated by the report harness. Horizons from 60 min to 24 h and the 30-minute forecast curve are exploratory (`status: exploratory`). Past 5.5 h the curve is the calendar-profile baseline. See [Exploratory horizons and the profile baseline](#exploratory-horizons-and-the-profile-baseline).
 - **Not the public `traffic-24h.json`** the Firebase cards read ([ADR 0001](../adr/0001-firebase-client-api-calls.md)).
 
 ## How a forecast is made
@@ -58,7 +58,8 @@ What it is not:
 - daily models: `labels_before=YYYY-MM-DDT00:00:00+08:00`;
 - frozen replicas: `bqml-replica-2026-09-12`;
 - `persistence`: `latest-bin`;
-- `served`: the `SELECTION_ID`.
+- `served`: the `SELECTION_ID` at 30 min; `horizon-study-2026-10-04` (`EXPLORATORY_SELECTION_ID`) at other horizons;
+- `profile`: `labels_before=...` (refitted each SGT day).
 
 ## Response
 

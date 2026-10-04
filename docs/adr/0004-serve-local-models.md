@@ -60,7 +60,7 @@ Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemen
 - **Response:** reports `lead_min` and `observation_age_min`.
 - **Frozen replicas:** their 12 Sep training rows still number 1,406 in a live read after the change.
 
-**Amendment (2026-10-04, exploratory horizons).** The service also answers horizons of 60 min to 24 h, together with a calendar-profile baseline, from [horizon-study.md](../horizon-study.md). The selection rule above governs only the 30-minute `served`. At other horizons `served` is the study's lower-MAE model (`EXPLORATORY_SELECTION`), not a confirmed one. Every such response says `"status": "exploratory"`, and the profile is always labelled as a baseline, not a forecast. Claiming any of it needs the frozen-run claims extended before 19 Oct.
+**Amendment (2026-10-04, exploratory horizons).** The service also answers every 30-minute horizon from 60 min to 24 h, a forecast curve (`?curve=forecast`: the model to 5.5 h, the profile after), and a calendar-profile baseline, from [horizon-study.md](../horizon-study.md). The selection rule above governs only the 30-minute `served`. At other horizons `served` is the study's lower-MAE model (`EXPLORATORY_SELECTION`), not a confirmed one. Every such response says `"status": "exploratory"`, and the profile is always labelled as a baseline, not a forecast. Claiming any of it needs the frozen-run claims extended before 19 Oct.
 
 ## Consequences
 

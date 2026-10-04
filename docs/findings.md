@@ -61,7 +61,7 @@ Use this for the proposal, the presentations and the final report (31 Oct 2026).
 | --- | --- | --- |
 | Woodlands only; cameras 2701 and 2702 are in scope | The live divider covers 2702 | 2702 geometry exists and is demoed |
 | Layer A measures detection; Layer B measures duration. Camera-derived queue counts follow the same daily cycle as Maps travel time, and a queue forecast learned from them lowers 30-min MAE significantly, as much as a Maps-derived daily profile does. Observed counts are untested (no overlap with the Maps window) | Layer A output is highly correlated with the Layer B target; camera counts can replace Distance Matrix data; live queue counts improve the forecast; the camera adds information beyond the daily cycle | An observed-count row beats `maps+mpfc` with sufficient coverage in [evaluation.md](evaluation.md) |
-| Maps durations log live. `forecast-api` serves the mean Maps duration of the bin 30–40 min after the newest closed bin, and shows how far ahead that is (`lead_min`) | A 24-hour forecast is running; the forecast is "30 minutes from now" | A scored horizon beyond 60 minutes is in the results tables |
+| Maps durations log live. `forecast-api` serves the evaluated 30-minute forecast: the mean Maps duration of the bin 30–40 min after the newest closed bin, with how far ahead that is (`lead_min`). It also shows exploratory forecasts every 30 minutes to 5.5 h, and a calendar-profile baseline after that, labelled as such | A 24-hour forecast is evaluated or beats the typical pattern; the forecast is "30 minutes from now"; the exploratory horizons are report results | Run A/B confirm a horizon beyond 30 minutes (claims added before 19 Oct) |
 | On 13–30 Sep, the ensemble has lower 30-min MAE than persistence (significant under family and run-wide Holm); `xgb_h30` does too within the BQML family | `xgb_h30` or the ensemble is the production model; a significant gain is a product-relevant gain | `model_registry` and `v_forecast_recent` are changed (an approved write) |
 | A daily-refit XGBoost (or a stack) would cut the served 30-min MAE by ~0.27 min (~16 s) on 13–30 Sep | The served forecast is significantly better than persistence; ensembling beats the best single model | A longer window shows it |
 | We tested LSTM, GRU and a patch Transformer; none beat XGBoost on 5 test days | Deep learning does not work for this problem | 3+ months of history are scored |
@@ -87,7 +87,12 @@ Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `r
 
 ## Discussion points for the report
 
-**Horizon.** Three bins ahead is implemented and scored (`y_30`). Six bins (`y_60`) is labelled and not served. The only 60-minute result is the offline one-route model. Twenty-four hours has no training target yet.
+**Horizon.** Three bins ahead (`y_30`) is the evaluated, served horizon. The exploratory study ([horizon-study.md](horizon-study.md)) scores every 30 minutes to 24 h on the same folds:
+- current traffic beats the calendar profile to about 3 h;
+- with the profile as an input, to 5.5 h;
+- after that the typical pattern for the day and time is as good as anything tried.
+
+`forecast-api` serves those horizons and a forecast curve, labelled exploratory, so the demo can show them. The 24-hour target is not met in any useful sense: at 24 h nothing beats the profile.
 
 **Unused features.** Weather gave no measurable gain on 18 days with few rain events; that is a limitation of the window, not evidence that rain never matters. Camera queue depth is the untested hypothesis most tied to the proposal. It can only help where Maps lags miss a change (queue onsets and clearings), which is where the remaining error is concentrated.
 
