@@ -2252,20 +2252,6 @@ h4 {
     stroke: #ff9f1c;
 }
 
-/* Hollow ring marks a predicted value; filled dots are observed. */
-.lc-fc-marker {
-    fill: var(--bg-dark);
-    stroke-width: 2.5;
-}
-
-.lc-fc-marker.sg {
-    stroke: #00f2fe;
-}
-
-.lc-fc-marker.jb {
-    stroke: #ff9f1c;
-}
-
 /* Shaded band behind the forecast span */
 .lc-fc-zone {
     fill: rgba(148, 163, 184, 0.07);
@@ -2399,20 +2385,6 @@ h4 {
     padding: 0.8rem 0 0;
     gap: 1rem;
     flex-wrap: wrap;
-}
-
-/* Small hollow dots along the chart's forecast line */
-.lc-fc-dot {
-    fill: var(--bg-dark);
-    stroke-width: 1.8;
-}
-
-.lc-fc-dot.sg {
-    stroke: #00f2fe;
-}
-
-.lc-fc-dot.jb {
-    stroke: #ff9f1c;
 }
 
 /* Forecast vs typical-day chart inside each card */
