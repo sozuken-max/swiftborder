@@ -723,3 +723,11 @@ def test_non_ascii_digits_are_400(monkeypatch, query):
     _install(monkeypatch)
     payload, status, _ = _json(main.forecast(_request(query=query)))
     assert status == 400 and "error" in payload
+
+
+def test_curve_note_does_not_claim_the_model_never_won_later(monkeypatch):
+    # the study has scattered, uncorrected wins after the cutoff: the note says "not consistent", not "never"
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, _bins(), now)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200 and "not consistent" in payload["note"] and "no model beat it" not in payload["note"]

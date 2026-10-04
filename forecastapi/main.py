@@ -56,7 +56,7 @@ SELECTION_ID = "registry-2026-09-12-local-replica"
 # Exploratory horizons (docs/horizon-study.md). ``served`` at a horizon other than 30 minutes is the
 # lower-MAE model of eval/horizon_study.py on 13-30 Sep (both directions): xgb[maps] up to 1 h,
 # xgb[maps+prof] from 1.5 h. Chosen on the study window, not confirmed on Run B: every such response
-# says ``status: exploratory``. Beyond about 4 h no model beat the profile baseline in the study.
+# says ``status: exploratory``. Beyond 5.5 h no model beat the profile baseline consistently in the study.
 EXPLORATORY_SELECTION = {h: ("xgb[maps]" if h <= 60 else "xgb[maps+prof]") for h in lm.HORIZONS if h != 30}
 # The forecast curve (?curve=forecast) uses the model up to this horizon and the labelled profile
 # baseline after it. In the study (every 30 min), xgb[maps+prof] beat the profile at every step from
@@ -467,8 +467,10 @@ def forecast_curve(directions, hours):
         "model_until_min": CURVE_MODEL_MAX_MIN,
         "note": "Each point is the mean Maps duration of the 10-minute bin starting at forecast_for, forecast from the "
                 "same origin bin. 30 min is the evaluated model; later points are exploratory (docs/horizon-study.md). "
-                "After %d min the curve is the calendar-profile baseline (model: profile), because no model beat it "
-                "in the study. baseline_min is that baseline at every point, for comparison; it is not a forecast." % CURVE_MODEL_MAX_MIN,
+                "After %d min the curve is the calendar-profile baseline (model: profile). Up to there the model beat "
+                "the profile at every 30-minute step of the study; after it the advantage was not consistent (a few "
+                "scattered steps won by under 0.1 min at the CI edge, uncorrected for multiple testing). baseline_min "
+                "is that baseline at every point, for comparison; it is not a forecast." % CURVE_MODEL_MAX_MIN,
         "baseline_label": BASELINE_LABEL,
         "directions": out,
         "model_meta": meta,

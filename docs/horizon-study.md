@@ -20,7 +20,7 @@
   - **profile:** a per-direction Fourier (K = 8) × weekend ridge, fitted on every closed bin before the test day and read at the target time. This is a **baseline, not a forecast**: it ignores current traffic, so its error does not depend on the horizon.
   - **`xgb[maps]`:** the harness XGBoost.
   - **`xgb[maps+prof]`:** the same, plus the profile at the origin and at the target.
-- **Significance:** pooled over both directions with the shared-calendar-day rule (`significance.py`). Each pooled comparison needs ≥ 10 shared days, a joint day-bootstrap CI that excludes 0, and a Diebold–Mariano p below 0.05. Every comparison here has 18 shared days. There is no Holm correction across the 66 comparisons, so treat single marginal results (|CI end| < 0.05) as noise.
+- **Significance:** pooled over both directions with the shared-calendar-day rule (`significance.py`). Each pooled comparison needs ≥ 10 shared days, a joint day-bootstrap CI that excludes 0, and a Diebold–Mariano p below 0.05. Every comparison here has 18 shared days. There is no Holm correction across the 336 comparisons (7 per horizon × 48 horizons), so treat single marginal results (|CI end| < 0.05) as noise. A Holm sensitivity check over all 336 is under Findings.
 
 ## MAE by horizon (minutes, both directions)
 
@@ -80,7 +80,12 @@ The chart shows origins on 24–26 Sep (Thursday to Saturday), plotted at their 
 ## Findings
 
 1. **Current traffic carries information for about 3 hours, and about 5.5 hours with the profile as an input.** On the 30-minute grid, `xgb[maps]` beats the calendar profile at every step to 3 h (−0.40 at 3 h) and matches it from 3.5 h on. `xgb[maps+prof]` beats the profile at every step from 30 min to 5.5 h (−0.45 [−0.78, −0.11] at 5.5 h). The 11-point table above showed the same pattern (−0.72). Beyond that its edge is marginal (8 h) or not detected (6, 12, 18, 24 h).
-2. **Beyond about 5.5 hours, a forecast on this data is essentially a calendar baseline.** On the 30-minute grid a few later steps (8–9 h and 19–23 h) clear 0 by less than 0.1 min at the CI edge, among 48 uncorrected comparisons; they are not evidence of skill. The profile and "same time last week" stay near 5.0–5.2 min MAE out to 24 h. No model beats them significantly at 6, 12, 18 or 24 h, apart from the one marginal 8-hour result. A "24-hour forecast" built from these features would be the profile in another form.
+2. **Beyond about 5.5 hours the model's advantage is no longer consistent.** `xgb[maps+prof]` beats both the profile and "same time last week" at every 30-minute step from 30 min to 5.5 h. After that:
+   - against the profile, it wins at 8–9 h and 19–23 h, mostly by less than 0.1 min at the CI edge;
+   - against "same time last week", it wins at 17.5–23 h;
+   - none of these later wins is uncorrected-significant at 6, 12 or 24 h.
+
+   **Holm over all 336 comparisons** (day-clustered p, a stricter sensitivity check) keeps `xgb[maps+prof]` ahead of the profile only to 3 h, and ahead of "same time last week" only to 1.5 h. No win after 3 h survives it. The profile and "same time last week" stay near 5.0–5.2 min MAE out to 24 h. A "24-hour forecast" built from these features would be the profile in another form.
 3. **Persistence is the wrong yardstick past 1 hour.** It degrades to about 11 min by 6 h, so every model "beats persistence" by 5–6 minutes there (and still by 1.2 min at 24 h). Those gains say nothing about forecasting skill. Long-horizon results must be reported against the profile and "same time last week".
 4. **The profile is the right baseline to show beside a forecast.** It is worse than persistence up to 1 h, level at about 1.5 h, and better from 2 h. Its MAE is lower than "same time yesterday" (about 6.2) at every horizon, because it averages over days and separates weekends. That comparison was not significance-tested.
 5. **The profile also helps as a model input, but only at 2 h and beyond.** At 30 min and 1 h it changes nothing; from 2 h it lowers XGBoost MAE by 0.3–0.7 min. This arm was chosen on this window, so it needs Run B before any claim.
@@ -91,7 +96,7 @@ The chart shows origins on 24–26 Sep (Thursday to Saturday), plotted at their 
 - **History:** 25 days in all and 18 test days, about three weekends. Weekly shape is learned from two to three weeks. There are no public holidays or major events in the window, and that is exactly where a calendar baseline fails at long horizons.
 - **Shared design and test window:** the arms and the 4-hour boundary were found on the same window. Run B (1–19 Oct) is the test.
 - **Model search:** one model family, the harness settings, and no tuning per horizon. A better model may extend finding 1 somewhat. It cannot add information that current traffic does not carry.
-- **Multiplicity:** there are 66 comparisons without a family correction. The marginal 8-hour and 6-hour results should not be read either way.
+- **Multiplicity:** there are 336 comparisons without a family correction. Under Holm over all 336, only the wins to 3 h (against the profile) and 1.5 h (against "same time last week") remain. The cutoff the curve uses (5.5 h) is therefore the generous end, and the scattered later wins should not be read either way.
 
 ## What is served
 

@@ -127,7 +127,7 @@ Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:
   - 30 min uses the evaluated `served` choice;
   - 60 min uses `xgb[maps]`;
   - 90–330 min use `xgb[maps+prof]`;
-  - after 330 min (5.5 h) the point **is** the profile baseline (`model: profile`, `status: baseline`), because in the study no model beat it consistently there (`CURVE_MODEL_MAX_MIN`).
+  - after 330 min (5.5 h) the point **is** the profile baseline (`model: profile`, `status: baseline`), because in the study no model beat it consistently there (`CURVE_MODEL_MAX_MIN`). There are scattered uncorrected wins at 8–9 h and 19–23 h, and none survives Holm over the 336 comparisons.
 - **Per direction:** `origin_ts`, `origin_closed_at` and `observation_age_min`.
 - **Caching:** the curve is cached for 5 minutes and dropped when its first target starts.
 - **Live check** (local run against live BigQuery, 2026-10-04 02:01 UTC, origin 01:50 UTC):
