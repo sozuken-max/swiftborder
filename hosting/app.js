@@ -59,6 +59,7 @@ const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
 const TRAFFIC_API = 'https://storage.googleapis.com/swiftborder-public/traffic-24h.json';
 // Cloud Run service endpoint (docs/runbooks/forecast-api.md). Public, CORS open.
 const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app/';
+// Model cards (not fetched on this page): FORECAST_API + '?list=cards'  (same body as '?view=cards')
 
 // ── Backend AI Detection Image ─────────────────────────────────────────────
 // The detection service exposes a direction split for every frame it scores.

@@ -33,6 +33,8 @@ No existing function was modified. `fetchBackendMessage`, `BACKEND_URL` and the 
 `GET FORECAST_API` with no parameters returns the `served` model for both directions (runbook: `docs/runbooks/forecast-api.md`).
 Fields read: `directions.{SG_TO_MY,MY_TO_SG}.{forecast_min, forecast_for, origin_ts, model}`.
 
+Model cards for the frontend are `GET FORECAST_API?list=cards` (same JSON array as `?view=cards`). `hosting/app.js` records that URL in a comment next to `FORECAST_API` and does not fetch it; the page still draws the forecast from `?curve=forecast` and the Typical line from `?baseline=profile`.
+
 ### Error handling
 
 | Condition | UI |

@@ -37,7 +37,8 @@ What it is not:
 
 | Parameter | Default | Values |
 | --- | --- | --- |
-| `list` | none | `models` returns the catalog (callable and not) and a description of these parameters. `horizon-study` returns the exploratory study summary |
+| `list` | none | `models` returns the catalog (callable and not) and a description of these parameters. `cards` returns the model-card array (same body as `view=cards`). `horizon-study` returns the exploratory study summary |
+| `view` | none | `cards` returns the same JSON array as `list=cards` |
 | `model` | `served` | A callable id, used for every requested direction. Callable: `served`, `persistence`, `profile`, `ridge[maps]`, `xgb[maps]`, `xgb[maps+prof]`, `lin_bq[daily]`, `xgb_bq[daily]`, `lin_bq[frozen]`, `xgb_bq[frozen]`. Other catalog ids (`lstm`, scored ensembles, and the rest with `deploy_state` `artifact` or `code-only`) return 400 `model is not deployed`. Unknown ids return 400 |
 | `model_sg_to_my` | none | a callable id for `SG_TO_MY` only; overrides `model` there |
 | `model_my_to_sg` | none | a callable id for `MY_TO_SG` only; overrides `model` there |
@@ -59,6 +60,25 @@ What it is not:
 - `persistence`: `latest-bin`;
 - `served`: the `SELECTION_ID` at 30 min; `horizon-study-2026-10-04` (`EXPLORATORY_SELECTION_ID`) at other horizons;
 - `profile`: `labels_before=...` (refitted each SGT day).
+
+## Model cards
+
+`GET /?list=cards` and `GET /?view=cards` return a JSON array. Each object has `id` (the `model` query value, except the two code-only cards below), `name`, `summary`, `kind` (`single` or `mix`), `callable`, `default_for` (or null), and `members` on a mix. A single model omits `members`. `callable` matches the allow-list above. `timesfm` and `fcm_mlp` are cards only: `Causeway/layer_b_timesfm.py` and `Causeway/layer_b_fcm_mlp.py` are not called by this service, and both summaries start with "Not served."
+
+The Hosting chart's Typical line is `profile` (`?baseline=profile`), the calendar profile. `served` at 30 minutes is the registry choice, with no weights.
+
+```json
+[
+  {
+    "id": "served",
+    "name": "Served default",
+    "kind": "mix",
+    "callable": true,
+    "default_for": "request with no model parameter; public curve (?curve=forecast)",
+    "members": ["lin_bq[frozen]", "persistence", "xgb[maps]", "xgb[maps+prof]", "profile"]
+  }
+]
+```
 
 ## Response
 

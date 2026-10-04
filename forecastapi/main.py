@@ -27,6 +27,9 @@ Each direction object, and each point of a forecast curve, carries ``model``: th
 that value. The top-level ``model`` stays the id the caller asked for (``served``, a concrete id, or
 ``custom``). A single-model value omits ``components``. A blend includes ``components``, a list of
 ``{model, weight}`` whose weights sum to 1.
+
+``GET /?list=cards`` and ``GET /?view=cards`` return a JSON array of model cards for the frontend.
+``GET /?list=models`` is unchanged.
 """
 
 import datetime
@@ -634,6 +637,252 @@ def study_for(horizon, models):
     }
 
 
+# Harness column names from eval/ensemble.py. lin_h30 and xgb_h30 are not query ids.
+_HARNESS_POOL_30 = ("Persistence", "lin_h30", "xgb_h30", "ridge[maps]", "xgb[maps]")
+_MEAN_MODELS_30 = ("lin_h30", "xgb_h30", "ridge[maps]", "xgb[maps]")
+_DEEP_60 = ("lstm", "gru", "transformer")
+
+
+def _dedupe(items):
+    seen = []
+    for item in items:
+        if item not in seen:
+            seen.append(item)
+    return seen
+
+
+def _served_member_ids():
+    """Ids the served default and the public curve can put on a point."""
+    return _dedupe(
+        list(SERVED_SELECTION.values())
+        + [EXPLORATORY_SELECTION[h] for h in sorted(EXPLORATORY_SELECTION)]
+        + ["profile"]
+    )
+
+
+def _card(model_id, name, summary, kind, default_for=None, members=None):
+    """One frontend card. A single model omits ``members``. A mix lists underlying ids."""
+    if kind not in ("single", "mix"):
+        raise RuntimeError("card kind")
+    card = {
+        "id": model_id,
+        "name": name,
+        "summary": summary,
+        "kind": kind,
+        "callable": False,
+        "default_for": default_for,
+    }
+    if kind == "mix":
+        if not members:
+            raise RuntimeError("mix card has no members")
+        card["members"] = list(members)
+    return card
+
+
+def _authored_cards():
+    """Plain-language cards. ``callable`` is filled from the allow-list in ``model_cards``."""
+    return {
+        "served": _card(
+            "served",
+            "Served default",
+            "Predicts Maps travel time in traffic. At 30 minutes it is the registry choice for each direction "
+            "(SG_TO_MY lin_bq[frozen], MY_TO_SG persistence), with no weights applied. The public curve uses that "
+            "choice at 30 minutes, xgb[maps] at 60 minutes, xgb[maps+prof] from 90 minutes through 5.5 hours, then "
+            "the typical-day profile; only the 30-minute point is evaluated, and later points are exploratory.",
+            "mix",
+            "request with no model parameter; public curve (?curve=forecast)",
+            _served_member_ids(),
+        ),
+        "persistence": _card(
+            "persistence",
+            "Persistence",
+            "Repeats the latest observed Maps travel time for that direction.",
+            "single",
+            "MY_TO_SG inside the 30-minute served default",
+        ),
+        "profile": _card(
+            "profile",
+            "Typical day",
+            "What the Hosting chart labels Typical. It is the calendar profile for this time of day and for a "
+            "weekday or weekend. That line is this profile; it is a single baseline, and the offline "
+            "yesterday-and-last-week blend is a different method that this API does not serve.",
+            "single",
+            "Hosting typical-day line (?baseline=profile); public curve after 5.5 h",
+        ),
+        "ridge[maps]": _card(
+            "ridge[maps]",
+            "Ridge (Maps)",
+            "A ridge regression on Maps features, refitted each Singapore day.",
+            "single",
+        ),
+        "xgb[maps]": _card(
+            "xgb[maps]",
+            "XGBoost (Maps)",
+            "An XGBoost model on Maps features, refitted each Singapore day. Served and the public curve use it "
+            "at 60 minutes. That point is exploratory.",
+            "single",
+            "served and the public curve at 60 min",
+        ),
+        "lin_bq[daily]": _card(
+            "lin_bq[daily]",
+            "Linear (daily)",
+            "A linear model on the BigQuery feature list, refitted each Singapore day.",
+            "single",
+        ),
+        "xgb_bq[daily]": _card(
+            "xgb_bq[daily]",
+            "XGBoost (daily)",
+            "An XGBoost model on the BigQuery feature list, refitted each Singapore day.",
+            "single",
+        ),
+        "lin_bq[frozen]": _card(
+            "lin_bq[frozen]",
+            "Linear (frozen)",
+            "A linear model frozen on the 12 Sep training rows. It is the SG_TO_MY choice inside the 30-minute "
+            "served default.",
+            "single",
+            "SG_TO_MY inside the 30-minute served default",
+        ),
+        "xgb_bq[frozen]": _card(
+            "xgb_bq[frozen]",
+            "XGBoost (frozen)",
+            "An XGBoost model frozen on the 12 Sep training rows.",
+            "single",
+        ),
+        "xgb[maps+prof]": _card(
+            "xgb[maps+prof]",
+            "XGBoost + typical day",
+            "An XGBoost model on Maps features plus the typical-day profile, refitted each Singapore day. Served "
+            "uses it from 90 minutes to 24 hours, and the public curve uses it from 90 minutes through 5.5 hours. "
+            "Those points are exploratory.",
+            "single",
+            "served from 90 min through 24 h; public curve from 90 min through 5.5 h",
+        ),
+        "ensemble_mean": _card(
+            "ensemble_mean",
+            "Two-model mean",
+            "Equal mean of the harness columns lin_h30 and xgb_h30. Not served.",
+            "mix",
+            members=("lin_h30", "xgb_h30"),
+        ),
+        "mean[models]": _card(
+            "mean[models]",
+            "Equal mean",
+            "Equal-weight mean of the harness columns lin_h30, xgb_h30, ridge[maps] and xgb[maps]. Not served. "
+            "The Hosting Typical line is the calendar profile (id profile), not this mean.",
+            "mix",
+            members=_MEAN_MODELS_30,
+        ),
+        "stack": _card(
+            "stack",
+            "Stacked blend",
+            "A weighted blend of the 30-minute harness pool, with weights fit on earlier days. Not served.",
+            "mix",
+            members=_HARNESS_POOL_30,
+        ),
+        "select": _card(
+            "select",
+            "Rolling pick",
+            "Picks one member of the 30-minute harness pool by recent error. Not served.",
+            "mix",
+            members=_HARNESS_POOL_30,
+        ),
+        "fuzzy stack": _card(
+            "fuzzy stack",
+            "Fuzzy-gated stack",
+            "A weighted blend of the 30-minute harness pool. The weights depend on a light, moderate or heavy "
+            "traffic level. Not served.",
+            "mix",
+            members=_HARNESS_POOL_30,
+        ),
+        "mean[deep]": _card(
+            "mean[deep]",
+            "Deep-model mean",
+            "Equal mean of the offline LSTM, GRU and patch Transformer seed-means (60 minutes, JB to SG only). "
+            "Not served.",
+            "mix",
+            members=_DEEP_60,
+        ),
+        "mean[XGB+deep]": _card(
+            "mean[XGB+deep]",
+            "XGB and deep mean",
+            "Equal mean of the offline 60-minute XGBoost and the LSTM, GRU and patch Transformer seed-means. "
+            "Not served.",
+            "mix",
+            members=("XGB (sklearn)",) + _DEEP_60,
+        ),
+        "stack[XGB+deep]": _card(
+            "stack[XGB+deep]",
+            "XGB and deep stack",
+            "A weighted blend of the offline 60-minute XGBoost and the deep seed-means. Not served.",
+            "mix",
+            members=("XGB (sklearn)",) + _DEEP_60,
+        ),
+    }
+
+
+def _fallback_card(spec):
+    """A card for a catalog id that has no authored copy. Still says whether the API can call it."""
+    mid = spec["id"]
+    if mid.startswith("ensemble[") and mid.endswith("]"):
+        feat = mid[len("ensemble"):]
+        return _card(
+            mid,
+            mid,
+            "Equal mean of the ridge and XGBoost fits on the same features in the evaluation harness. Not served.",
+            "mix",
+            members=("ridge" + feat, "xgb" + feat),
+        )
+    if spec["family"] == "deep":
+        summary = "An offline deep model from the comparison set. Not served."
+    elif spec["family"] == "fuzzy":
+        summary = "An offline fuzzy traffic-level model. Not served."
+    elif spec["deploy_state"] == "code-only":
+        summary = "Not served. Evaluation code names this model; this API does not call it."
+    else:
+        summary = "Not served. An evaluation-harness result; this API does not call it."
+    return _card(mid, mid, summary, "single")
+
+
+def _layer_b_cards():
+    """Causeway modules on main that this service does not call. They are not model query values."""
+    return [
+        _card(
+            "timesfm",
+            "TimesFM 2.5",
+            "Not served. Code in Causeway/layer_b_timesfm.py; this API does not call it.",
+            "single",
+        ),
+        _card(
+            "fcm_mlp",
+            "Fuzzy C-Means + MLP",
+            "Not served. Code in Causeway/layer_b_fcm_mlp.py; this API does not call it.",
+            "single",
+        ),
+    ]
+
+
+def model_cards():
+    """Cards a frontend can render. No BigQuery. ``callable`` matches the forecast allow-list."""
+    authored = _authored_cards()
+    cards = []
+    for spec in MODELS.values():
+        card = authored.pop(spec["id"], None) or _fallback_card(spec)
+        if card["id"] != spec["id"] or "components" in card:
+            raise RuntimeError("card")
+        if card["kind"] == "single" and "members" in card:
+            raise RuntimeError("single card has members")
+        card["callable"] = spec["callable"]
+        cards.append(card)
+    if authored:
+        raise RuntimeError("card for an id that is not in the catalog")
+    cards.extend(_layer_b_cards())
+    ids = [card["id"] for card in cards]
+    if len(ids) != len(set(ids)):
+        raise RuntimeError("duplicate card id")
+    return cards
+
+
 def list_models():
     """Catalog a caller can read before asking for a forecast. No BigQuery."""
     models = []
@@ -664,7 +913,8 @@ def list_models():
             "curve": "forecast, with hours=1..%d (default %d): forecasts every 30 minutes from one origin; the model "
                      "up to %d min, the profile baseline after it" % (CURVE_MAX_HOURS, CURVE_DEFAULT_HOURS, CURVE_MODEL_MAX_MIN),
             "baseline": "profile, with hours=1..%d: the calendar-profile baseline curve (not a forecast)" % CURVE_MAX_HOURS,
-            "list": "models, or horizon-study for the exploratory study results",
+            "list": "models (catalog), cards (frontend model cards), or horizon-study for the exploratory study results",
+            "view": "cards: the same JSON array as list=cards",
         },
     }
 
@@ -895,11 +1145,19 @@ def _handle(request):
         what = str(list_raw).strip()
         if what == "models":
             return _ok(list_models(), headers)
+        if what == "cards":
+            return _ok(model_cards(), headers)
         if what == "horizon-study":
             if not STUDY:
                 return _error("horizon study results are not bundled", 503)
             return _ok(STUDY, headers)
-        return _error("list must be models or horizon-study", 400)
+        return _error("list must be models, cards, or horizon-study", 400)
+
+    view_raw = _param(body, args, "view")
+    if view_raw is not None and str(view_raw).strip() != "":
+        if str(view_raw).strip() == "cards":
+            return _ok(model_cards(), headers)
+        return _error("view must be cards", 400)
 
     baseline_raw = _param(body, args, "baseline")
     if baseline_raw is not None and str(baseline_raw).strip() != "":

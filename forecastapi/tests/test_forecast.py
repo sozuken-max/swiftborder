@@ -122,6 +122,34 @@ def test_catalog_states_and_served_selection(monkeypatch):
     assert "lin_h30" not in by_id and "xgb_h30" not in by_id  # BigQuery ML is no longer called
     assert by_id["ensemble[maps]"]["callable"] is False
     assert by_id["lstm"]["deploy_state"] == "artifact"
+    assert "timesfm" not in by_id and "fcm_mlp" not in by_id
+    assert calls == []
+
+
+def test_model_cards_match_the_allow_list(monkeypatch):
+    calls = _install(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={"list": "cards"})))
+    assert status == 200 and isinstance(payload, list)
+    same, status_view, _ = _json(main.forecast(_request(query={"view": "cards"})))
+    assert status_view == 200 and same == payload
+    by_id = {card["id"]: card for card in payload}
+    assert len(by_id) == len(payload)
+    served = by_id["served"]
+    assert served["kind"] == "mix" and served["callable"] is True
+    assert {"lin_bq[frozen]", "persistence"} <= set(served["members"])
+    assert "components" not in served
+    assert any(card["kind"] == "mix" for card in payload)
+    single = by_id["persistence"]
+    assert single["kind"] == "single" and "components" not in single and "members" not in single
+    profile = by_id["profile"]
+    assert profile["kind"] == "single" and profile["name"] == "Typical day" and "members" not in profile
+    for spec in main.MODELS.values():
+        assert by_id[spec["id"]]["callable"] is spec["callable"]
+    for mid in ("timesfm", "fcm_mlp"):
+        assert by_id[mid]["callable"] is False and mid not in main.MODELS
+        assert by_id[mid]["summary"].startswith("Not served.")
+        assert "members" not in by_id[mid]
+    assert "mae" not in json.dumps(payload).lower()
     assert calls == []
 
 

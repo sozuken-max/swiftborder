@@ -27,3 +27,29 @@ Top-level `model` is the id the caller asked for (`served` by default). Each dir
 ```
 
 A blend point (not what `served` returns) looks like `"model": "mean[models]"` plus `"components": [{"model": "lin_bq[frozen]", "weight": 0.5}, {"model": "persistence", "weight": 0.5}]`.
+
+## Model cards
+
+`GET /?list=cards` (same body as `GET /?view=cards`) returns a JSON array the frontend can render as cards. `GET /?list=models` is unchanged. A card's `callable` flag matches the forecast allow-list. `timesfm` and `fcm_mlp` are on the cards only: the modules are in `Causeway/` and this API does not call them.
+
+```json
+[
+  {
+    "id": "served",
+    "name": "Served default",
+    "summary": "Predicts Maps travel time. At 30 minutes it is the registry choice (SG_TO_MY lin_bq[frozen], MY_TO_SG persistence), with no weights applied.",
+    "kind": "mix",
+    "callable": true,
+    "default_for": "request with no model parameter; public curve (?curve=forecast)",
+    "members": ["lin_bq[frozen]", "persistence", "xgb[maps]", "xgb[maps+prof]", "profile"]
+  },
+  {
+    "id": "profile",
+    "name": "Typical day",
+    "summary": "What the Hosting chart labels Typical. It is the calendar profile, a single baseline.",
+    "kind": "single",
+    "callable": true,
+    "default_for": "Hosting typical-day line (?baseline=profile); public curve after 5.5 h"
+  }
+]
+```
