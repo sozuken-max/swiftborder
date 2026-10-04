@@ -2,7 +2,7 @@
 
 **Report section:** performance (methods, reasoning, scored results).
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
-**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `b3b6562`, clean tree, `code_sha256` `39fa1c24…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1-6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family). The snapshot was not refit for this doc pass. Figure series for the cited run were replayed, without a new fit, into [`eval/runs/replay-20261003T035807Z/`](../eval/runs/replay-20261003T035807Z/). `offline/holdout-sample` was never stored, so that replay has no CSV even though `eval/runs/report/offline/holdout-sample.png` remains. The schema-v1 run `20260926T073406Z` is not replayable from this snapshot.
+**Source of the numbers in sections 1-7:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). Section 8 is a separate local pass and is not in that file. The report run was made from committed code (`provenance.git_sha` `b3b6562`, clean tree, `code_sha256` `39fa1c24…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1-6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family). The snapshot was not refit for this doc pass. Figure series for the cited run were replayed, without a new fit, into [`eval/runs/replay-20261003T035807Z/`](../eval/runs/replay-20261003T035807Z/). `offline/holdout-sample` was never stored, so that replay has no CSV even though `eval/runs/report/offline/holdout-sample.png` remains. The schema-v1 run `20260926T073406Z` is not replayable from this snapshot.
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` were regenerated on 4 Oct 2026 ([diagrams/README.md](diagrams/README.md)).
 
@@ -518,6 +518,39 @@ Observed counts depend on the camera backfill ([handoff-camera-pilot.md](handoff
 ### Do not combine
 
 Do not put the 60-minute one-route numbers and the 30-minute two-direction numbers in one headline. The 30-minute production window (section 1) is the headline for the served system.
+
+---
+
+### 8. TimesFM 2.5 and FCM + MLP (local pass, 2026-10-04)
+
+These two modules live in `Causeway/` and are not part of the frozen run above. Skill is still on the Maps duration series. Labels stay at or before 2026-10-19 23:59 SGT. `fcm_mlp_layer_a` and `timesfm_layer_a` are not scored: camera detections end on 22 Apr 2026 and do not overlap this Maps window.
+
+**TimesFM (`timesfm`, `timesfm_calibrated`, `timesfm_layer_a`). Not scored.** `layer_b_timesfm.py` has no local predict path. A backtest is one `AI.FORECAST` query that builds a context-1024 series for every 10-minute origin (the documented window is 13-30 Sep). That job was not run. The TimesFM column in [Causeway/layer-b-fcm-mlp-results.md](../Causeway/layer-b-fcm-mlp-results.md) is not a result of this pass. Decision: not served, not callable, not in the ensemble.
+
+**FCM + MLP (`fcm_mlp`), no camera.** Computed locally from `eval/data/causeway_gdata.csv` (SHA-256 `13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07`), binned the same way as `v_bins_10min`. No BigQuery write.
+
+Command shape: `layer_b_fcm_mlp.train` with the module defaults (c = 3, m = 2, MLP 32-16, 5 seeds), origins 2026-09-06 through 2026-09-30 SGT, `validation_days=7`, `test_days=5`, empty Layer A. Fit 6-16 Sep, inner stop 17-18 Sep, validation 19-25 Sep (the module's own gate only), test scored once on 26-30 Sep. Step 3 is 30 minutes from the origin bin start; step 6 is 60 minutes. That is the script's day-disjoint protocol, not the 18-day daily-refit window of sections 2 and 6.
+
+On those same step-3 origin rows, `xgb[maps]` is the current best single model from the 30-minute protocol: `eval.joined.run_folds` on Maps features only, daily refit, `replicas=False`, restricted to 26-30 Sep. All 1,434 step-3 rows matched, and the FCM label matched `y_30`. Significance is `eval/significance.py` (`compare_absolute_errors`, day blocks, Singapore offset, 4,999 resamples, seed 0) with Holm over this family of four. A pooled decision uses distinct calendar days. Five days is below the 10-day gate, so every decision is **insufficient data**.
+
+| Candidate | Horizon | n | MAE (min) | Calendar days |
+| --- | --- | --- | --- | --- |
+| Persistence | 30 min | 1,434 | 2.804 | 5 |
+| `mlp` (no FCM) | 30 min | 1,434 | 2.331 | 5 |
+| `fcm_mlp` | 30 min | 1,434 | 2.313 | 5 |
+| `xgb[maps]` (daily refit, same rows) | 30 min | 1,434 | 2.195 | 5 |
+| Mean of `fcm_mlp` and `xgb[maps]` | 30 min | 1,434 | 2.161 | 5 |
+| Persistence | 60 min | 1,428 | 4.559 | 5 |
+| `fcm_mlp` | 60 min | 1,428 | 3.373 | 5 |
+
+| Challenger | Reference | Mean diff (min) | Day-block 95% CI | Decision |
+| --- | --- | --- | --- | --- |
+| `fcm_mlp` | Persistence | -0.492 | [-0.589, -0.405] | insufficient data |
+| `fcm_mlp` | `xgb[maps]` | +0.117 | [+0.025, +0.187] | insufficient data |
+| Mean of the two | `xgb[maps]` | -0.034 | [-0.069, -0.004] | insufficient data |
+| `fcm_mlp` | Persistence (60 min) | -1.186 | [-1.393, -0.938] | insufficient data |
+
+The 30-minute point estimate is worse than `xgb[maps]` on the same rows (+0.117 min). The equal mix is 0.034 min lower than `xgb[maps]`, under the 0.5 min bar proposed in the Significance section, and the Holm-adjusted two-sided p-value in this family is 0.151. Neither result is a significant challenger. The module's own validation rule (three days, no Holm) would have kept `fcm_mlp` at step 3; that rule is not the harness gate. The 60-minute offline best single model was not scored on these rows. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `fcm_mlp` stays off the forecast mix and is not callable.
 
 ---
 

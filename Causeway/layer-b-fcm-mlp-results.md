@@ -1,5 +1,7 @@
 # Layer B: FCM + MLP results (real data, 6–30 Sep 2026)
 
+The 2026-10-04 harness pass in [docs/evaluation.md](../docs/evaluation.md) section 8 recomputed `fcm_mlp` on this split. Five test days are below the 10-day gate, so the decision is insufficient data and the model stays out of the served mix. On those same 30-minute rows its point estimate is higher than `xgb[maps]`. The TimesFM column below was not recomputed in that pass.
+
 Produced on 4 Oct 2026 by the `train` logic of [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py) on the BigQuery view `traffic_prediction.v_bins_10min`, 3,589 ten-minute bins per direction. No October labels were used (the protected window 1–19 Oct was respected).
 
 ## Protocol

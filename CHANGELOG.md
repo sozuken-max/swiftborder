@@ -4,6 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-04
 
+- Layer B point models were scored locally where that was possible. `fcm_mlp` (no camera) on the script's 26-30 Sep test split has five calendar days, so the harness decision is insufficient data; it is worse than `xgb[maps]` on those same 30-minute rows and stays out of the served mix. `timesfm` was not scored (`AI.FORECAST` was not run). `forecast-api` cards stay non-callable. No Cloud Run deploy. `lin_h30`, `xgb_h30`, `model_registry`, and `v_forecast_recent` were not changed.
 - `GET /?list=cards` (same body as `?view=cards`) returns a JSON array of model cards for the frontend. `list=models` is unchanged. `timesfm` and `fcm_mlp` are cards only (`Not served`); the forecast API does not call those Causeway modules. No deploy.
 - Forecast responses name the underlying model on each direction and each curve point. `components` appears only on a blend, as `{model, weight}` pairs whose weights sum to 1. That shape is in this tree. Live revision `forecast-api-00009-hax` does not serve it until this merges and the `forecast-api` trigger runs. `swiftbackend` is unchanged.
 - `hosting/` is in git. Architecture, ADR 0002, and the claims register no longer say the client is absent. Deploy stays manual. The page copy, by product decision, drops the accuracy caveats; the claims register still treats 30 min as the only evaluated result, later curve points as exploratory, Holm skill only to 3 h, and 5.5 h as a generous end.

@@ -850,13 +850,16 @@ def _layer_b_cards():
         _card(
             "timesfm",
             "TimesFM 2.5",
-            "Not served. Code in Causeway/layer_b_timesfm.py; this API does not call it.",
+            "Not served. TimesFM 2.5 is a BigQuery AI.FORECAST batch in Causeway/layer_b_timesfm.py. "
+            "It was not scored, and this API does not call it.",
             "single",
         ),
         _card(
             "fcm_mlp",
             "Fuzzy C-Means + MLP",
-            "Not served. Code in Causeway/layer_b_fcm_mlp.py; this API does not call it.",
+            "Not served. Fuzzy C-Means plus an MLP, from Causeway/layer_b_fcm_mlp.py. "
+            "A local day-disjoint test had five calendar days, which is insufficient data to join the served mix. "
+            "The camera variant was not scored. This API does not call it.",
             "single",
         ),
     ]
