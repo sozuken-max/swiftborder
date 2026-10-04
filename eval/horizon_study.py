@@ -375,9 +375,9 @@ def main(argv=None) -> None:
         if tuple(args.horizons) != DEFAULT_HORIZONS:
             raise SystemExit("--publish needs the default horizons")
         PUBLISH_IMAGES.mkdir(parents=True, exist_ok=True)
-        for c in charts:
-            if c.suffix == ".png":
-                shutil.copy2(c, PUBLISH_IMAGES / c.name)
+        for c in charts:  # each chart and the CSV of its plotted series
+            shutil.copy2(c, PUBLISH_IMAGES / c.name)
+        shutil.copy2(OUT / "results.json", PUBLISH_IMAGES / "results.json")  # every comparison, per horizon
         shutil.copy2(OUT / "summary.json", PUBLISH_JSON)
         print("published:", PUBLISH_IMAGES.relative_to(REPO), PUBLISH_JSON.relative_to(REPO))
 

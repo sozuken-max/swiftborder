@@ -2,7 +2,11 @@
 
 **Status:** exploratory, recorded 2026-10-04. These are not report results. The study reuses the 13–30 Sep window that already informed the 30-minute design, so any horizon or arm chosen from it must be confirmed on the October-only Run B ([roadmap.md](roadmap.md)) before it is claimed. The label is Google Maps' `duration_in_traffic`, not a measured crossing time.
 
-**Reproduce:** `cd eval; python horizon_study.py` (several minutes on a laptop CPU). It writes results and the three charts below to `eval/runs/horizon-study/` (gitignored), each chart with a CSV of the plotted series. `python horizon_study.py --publish` also copies the charts to `docs/images/horizon-study/` and writes `forecastapi/horizon_study.json`, the summary `forecast-api` serves.
+**Reproduce:** `cd eval; python horizon_study.py` (several minutes on a laptop CPU). It writes results and the three charts below to `eval/runs/horizon-study/` (gitignored), each chart with a CSV of the plotted series. `python horizon_study.py --publish` copies the committed copies into place:
+- the charts and their CSVs, plus `results.json` (every comparison at every horizon), to `docs/images/horizon-study/`;
+- `forecastapi/horizon_study.json`, the summary `forecast-api` serves.
+
+`eval/runs/` stays gitignored, so only the published files reach other people.
 
 **Exposed on purpose.** These figures are shown in the API and the frontend, labelled exploratory: the project wants them visible. See [What is served](#what-is-served). Data: the report cache `eval/data/causeway_gdata.csv` (sha256 `13a11998…`, the same file as `eval/runs/report/`, 5 Sep 17:53 to 30 Sep 16:30 UTC). XGBoost seed and bootstrap seed are fixed, so a re-run gives the same numbers.
 
@@ -62,7 +66,7 @@ Negative favours the first-named. Decision: **better**/**worse** = significant; 
 | 18 h | −5.95 better | +0.10 n.s. | −0.49 [−1.07, +0.02] n.s. | −0.59 better | −6.05 better |
 | 24 h | −1.17 [−2.14, −0.28] better | −0.34 [−0.86, +0.16] n.s. | −0.43 [−0.85, +0.05] n.s. | −0.09 n.s. | −0.83 [−1.93, +0.08] n.s. |
 
-The full table, including "same time last week", per-direction MAE and day-clustered p-values, is in `eval/runs/horizon-study/results.json`.
+The full table covers all 48 horizons, including "same time last week", per-direction MAE and day-clustered p-values. It is in [`images/horizon-study/results.json`](images/horizon-study/results.json), and the plotted series are in the CSVs next to each chart.
 
 ## Example days
 
