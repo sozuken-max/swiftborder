@@ -628,3 +628,63 @@ def test_browser_cache_never_outlives_the_first_target(monkeypatch):
     assert headers["Cache-Control"] == "private, max-age=300"
     _, _, headers = _json(main.forecast(_request(query={"list": "models"})))
     assert headers["Cache-Control"] == "private, max-age=300"
+
+
+# --- review fixes, round 2 (PR #7) -----------------------------------------------------------
+
+
+def _new_route_bins():
+    """MY_TO_SG starts at 00:00 SGT 3 Oct: no closed bin before the serving day, so no profile."""
+    bins = _bins()
+    day = pd.Timestamp("2026-10-02 16:00", tz="UTC")
+    return bins[(bins["direction"] == "SG_TO_MY") | (bins["bin_ts"] >= day)]
+
+
+def test_no_profile_history_never_sends_nan(monkeypatch):
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, _new_route_bins(), now)
+    body, status, _ = main.forecast(_request(query={"model": "persistence"}))
+    assert status == 200 and "NaN" not in body
+    payload = json.loads(body)
+    assert payload["baseline"]["directions"]["MY_TO_SG"]["forecast_min"] is None
+    assert payload["baseline"]["directions"]["SG_TO_MY"]["forecast_min"] is not None
+    for query in ({"model": "profile"}, {"baseline": "profile"}, {"curve": "forecast"}, {"horizon_min": "120"}):
+        main._cache.clear()
+        payload, status, _ = _json(main.forecast(_request(query=query)))
+        assert status == 503 and payload == {"error": main.NO_PROFILE_ERROR}, query
+
+
+def test_non_finite_numbers_are_a_502_not_invalid_json(monkeypatch):
+    monkeypatch.setattr(main, "list_models", lambda: {"x": float("nan")})
+    payload, status, _ = _json(main.forecast(_request(query={"list": "models"})))
+    assert status == 502 and payload == {"error": "Forecast query failed"}
+
+
+def test_single_forecast_cache_rolls_over_at_midnight_sgt(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 15, 59, tzinfo=UTC)}  # 23:59 SGT
+    reads = _fake_bigquery(monkeypatch, bins, now)
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(main, "_clock", lambda: clock["t"])
+    first, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 200 and len(reads["latest"]) == 1
+    now["t"] = dt.datetime(2026, 10, 3, 16, 1, 30, tzinfo=UTC)  # 00:01:30 SGT, inside the 5-minute TTL
+    clock["t"] += 150
+    second, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 200 and len(reads["latest"]) == 2  # not yesterday's cached answer
+    assert first["baseline"]["version"] != second["baseline"]["version"]
+
+
+def test_curve_metadata_is_kept_per_model_and_horizon(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast", "hours": "4"})))
+    assert status == 200
+    meta = payload["model_meta"]
+    for p in payload["directions"]["SG_TO_MY"]["points"]:
+        m = meta[p["model_meta_key"]]
+        assert m["model"] == p["model"] and m["horizon_min"] == p["horizon_min"]
+    prof_fits = {k: v for k, v in meta.items() if v["model"] == "xgb[maps+prof]"}
+    assert sorted(v["horizon_min"] for v in prof_fits.values()) == [90, 120, 150, 180, 210, 240]
+    assert len({v["training_rows"] for v in prof_fits.values()}) > 1  # each fit has its own rows

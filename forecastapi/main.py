@@ -358,7 +358,8 @@ def query_selection(chosen, horizon=30):
         mid = chosen[direction]
         origin = sub["bin_ts"].iloc[0]
         value, target_value, meta[mid] = _predict_one(mid, sub, horizon, profile, now)
-        baseline[direction] = {"forecast_min": round(target_value, 1)}
+        baseline[direction] = ({"forecast_min": round(target_value, 1)} if target_value is not None
+                               else {"forecast_min": None, "unavailable": "no profile history before the serving day"})
         rows.append(
             {
                 "direction": direction,
@@ -381,7 +382,12 @@ def _predict_one(mid, sub, horizon, profile, now):
     """(forecast, profile baseline at the same target, meta) for one origin row and horizon."""
     origin = sub["bin_ts"].iloc[0]
     direction = sub["direction"].iloc[0]
-    target_value = float(profile.predict([direction], [origin + datetime.timedelta(minutes=int(horizon))])[0])
+    try:
+        target_value = float(profile.predict([direction], [origin + datetime.timedelta(minutes=int(horizon))])[0])
+    except lm.NoProfileHistory:
+        if mid == "profile" or lm.LOCAL_MODELS.get(mid, {}).get("kind") == "harness_xgb_prof":
+            raise  # the forecast itself needs the profile: 503
+        target_value = None  # the forecast stands; only its comparison baseline is unavailable
     if mid == "persistence":
         return float(sub["y_persistence"].iloc[0]), target_value, {"eval_id": "persistence", "version": PERSISTENCE_VERSION}
     if mid == "profile":
@@ -419,15 +425,19 @@ def forecast_curve(directions, hours):
         points = []
         for h in horizons:
             mid = curve_model(direction, h)
-            value, base, meta[mid] = _predict_one(mid, sub, h, profile, now)
+            # one fit per (model, horizon): key the metadata by both so no fit's metadata is overwritten
+            meta_key = "%s@%dmin" % (mid, h)
+            value, base, meta[meta_key] = _predict_one(mid, sub, h, profile, now)
+            meta[meta_key] = dict(meta[meta_key], model=mid, horizon_min=h)
             target = origin + datetime.timedelta(minutes=h)
             point = {
                 "horizon_min": h,
                 "forecast_for": _iso(target),
                 "forecast_window_end": _iso(target + BIN),
                 "forecast_min": round(value, 1),
-                "baseline_min": round(base, 1),
+                "baseline_min": None if base is None else round(base, 1),
                 "model": mid,
+                "model_meta_key": meta_key,
                 "status": status_for(mid, h),
             }
             mae = _study_mae(h, mid)
@@ -530,6 +540,19 @@ class NoRecentForecast(Exception):
 def _error(message, status):
     headers = {**_cors_headers(), "Content-Type": "application/json"}
     return (json.dumps({"error": message}), status, headers)
+
+
+NO_PROFILE_ERROR = "No baseline history for the requested direction"
+
+
+def _ok(payload, headers):
+    """200 with strict JSON: a NaN or infinity anywhere is a server error, never an invalid body."""
+    try:
+        body = json.dumps(payload, allow_nan=False)
+    except ValueError:
+        logger.exception("response contains a non-finite number")
+        return _error("Forecast query failed", 502)
+    return (body, 200, headers)
 
 
 def _param(body, args, name):
@@ -788,11 +811,11 @@ def forecast(request):
     if list_raw is not None and str(list_raw).strip() != "":
         what = str(list_raw).strip()
         if what == "models":
-            return (json.dumps(list_models()), 200, headers)
+            return _ok(list_models(), headers)
         if what == "horizon-study":
             if not STUDY:
                 return _error("horizon study results are not bundled", 503)
-            return (json.dumps(STUDY), 200, headers)
+            return _ok(STUDY, headers)
         return _error("list must be models or horizon-study", 400)
 
     baseline_raw = _param(body, args, "baseline")
@@ -811,11 +834,13 @@ def forecast(request):
         if payload is None:
             try:
                 payload = profile_curve(directions, int(text))
+            except lm.NoProfileHistory:
+                return _error(NO_PROFILE_ERROR, 503)
             except Exception:
                 logger.exception("baseline curve failed")
                 return _error("Forecast query failed", 502)
             _cache_put(key, payload)
-        return (json.dumps(payload), 200, headers)
+        return _ok(payload, headers)
 
     curve_raw = _param(body, args, "curve")
     if curve_raw is not None and str(curve_raw).strip() != "":
@@ -837,6 +862,8 @@ def forecast(request):
                 fresh = forecast_curve(directions, int(text))
             except NoRecentForecast:
                 return _error("No recent forecast for the requested direction", 503)
+            except lm.NoProfileHistory:
+                return _error(NO_PROFILE_ERROR, 503)
             except Exception:
                 logger.exception("forecast curve failed")
                 return _error("Forecast query failed", 502)
@@ -844,7 +871,7 @@ def forecast(request):
             if payload is None:
                 return _error("No recent forecast for the requested direction", 503)
             _cache_put(key, fresh)
-        return (json.dumps(payload), 200, _json_headers(_browser_max_age(payload, _now())))
+        return _ok(payload, _json_headers(_browser_max_age(payload, _now())))
 
     model_raw = _param(body, args, "model")
     model_id = "served" if model_raw is None or str(model_raw).strip() == "" else str(model_raw).strip()
@@ -894,7 +921,8 @@ def forecast(request):
         if has_version and str(version_raw).strip() != version_id:
             return _error("unknown version", 400)
 
-    cache_key = (model_id, version_id, tuple(directions), horizon)
+    # the serving day too: fixed-version ids (served, persistence) still change fit and profile at 00:00 SGT
+    cache_key = (model_id, version_id, tuple(directions), horizon, profile_version(_now()))
     cached = _cache_get(cache_key)
     payload = _with_timing(cached, _now()) if cached is not None else None
     if payload is None:
@@ -904,6 +932,8 @@ def forecast(request):
             fresh = _assemble(model_id, version_id, horizon, directions, result)
         except NoRecentForecast:
             return _error("No recent forecast for the requested direction", 503)
+        except lm.NoProfileHistory:
+            return _error(NO_PROFILE_ERROR, 503)
         except Exception:
             logger.exception("forecast query failed")
             return _error("Forecast query failed", 502)
@@ -913,4 +943,4 @@ def forecast(request):
             return _error("No recent forecast for the requested direction", 503)
         _cache_put(cache_key, fresh)
 
-    return (json.dumps(payload), 200, _json_headers(_browser_max_age(payload, _now())))
+    return _ok(payload, _json_headers(_browser_max_age(payload, _now())))

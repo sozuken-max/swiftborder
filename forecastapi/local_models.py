@@ -106,6 +106,10 @@ def _fourier_design(tod_min: np.ndarray, weekend: np.ndarray, harmonics: int) ->
     return np.column_stack(cols)
 
 
+class NoProfileHistory(Exception):
+    """A direction has no closed bins before the serving day, so the profile has nothing to return."""
+
+
 class Profile:
     """Calendar baseline: per-direction ridge on Fourier (K = 8) x weekend terms of the Maps duration.
 
@@ -141,8 +145,10 @@ class Profile:
             m = direction == d
             if d in self.models_:
                 out[m] = self.models_[d].predict(_fourier_design(tod[m], we[m], self.harmonics))
+            elif d in self.fallback_:
+                out[m] = self.fallback_[d]
             else:
-                out[m] = self.fallback_.get(d, np.nan)
+                raise NoProfileHistory(f"no profile history for {d}")  # never a NaN in a response
         return out
 
 
