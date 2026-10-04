@@ -60,7 +60,7 @@ The callable travel-time API is the public object the client already fetches:
 
 `GET https://storage.googleapis.com/swiftborder-public/traffic-24h.json`
 
-No new Cloud Run handler **for these cards**. No request-time BigQuery query on the browser tick. (`forecastapi/` is a separate, private endpoint for the 30-minute forecast, which this file does not contain; the cards do not call it.)
+No new Cloud Run handler **for these cards** was part of this decision. No request-time BigQuery query on the browser tick. (`forecast-api` is a separate endpoint. It is deployed and public as of the 2026-10-04 inventory. This ADR does not contain its payload. `hosting/app.js` calls it. Deploy of that page stays manual ([0002](0002-firebase-hosting-source.md)).)
 
 | | Public GCS object | Direct BigQuery on each refresh |
 | --- | --- | --- |
@@ -70,7 +70,7 @@ No new Cloud Run handler **for these cards**. No request-time BigQuery query on 
 | CORS | Already allows the live Hosting origins and the Firebase emulator. | Needs a Cloud Run service with the `camdetect` CORS habit. Nothing like that is deployed for this payload. |
 | Payload | One body, both directions, which is what `seriesPoints` and the chart read. | Would rebuild that same JSON, or return `v_forecast_recent` fields the UI ignores. |
 
-Direct BigQuery is the path to add later only for a value this file does not contain. The concrete case is `v_forecast_recent` (`forecast_30min_min`, `serving_model`): a 30-minute forecast of Maps `duration_in_traffic`, `lin_h30` or persistence. That view runs `ML.PREDICT`. If the UI grows a control that reads it, a server should cache the result for at least the 5-minute fetcher interval. The browser should not start that query on every tick. That handler is specified in [../runbooks/forecast-api.md](../runbooks/forecast-api.md) and is not deployed.
+Direct BigQuery is the path to add later only for a value this file does not contain. The concrete case considered here was `v_forecast_recent` (`forecast_30min_min`, `serving_model`): a 30-minute forecast of Maps `duration_in_traffic`, `lin_h30` or persistence. That view runs `ML.PREDICT` and is historical. The handler that replaced it is deployed: [../runbooks/forecast-api.md](../runbooks/forecast-api.md). It fits local models and does not call the view. The browser should still not start a BigQuery job on every tick.
 
 ## Consequences
 

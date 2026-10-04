@@ -7,7 +7,7 @@ Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemen
 ## Context
 
 - The evaluation is local only. BigQuery ML stays out of it ([roadmap.md](../roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt)). The local replicas of `lin_h30` and `xgb_h30` forecast as well as the BQML models: within ±0.5 min, slightly better in fact ([evaluation.md §1a](../evaluation.md#1a-local-replicas-of-the-bqml-models-evalbqml_paritypy)). The team does not want to keep maintaining the BQML models.
-- `forecast-api` should serve a **selection of the local models**. Today its callable ids (`served`, `lin_h30`, `xgb_h30`) all go through BigQuery ML.
+- `forecast-api` should serve a **selection of the local models**. When this decision was opened, its callable ids (`served`, `lin_h30`, `xgb_h30`) all went through BigQuery ML. That path is gone: see Implemented below.
 - The policy being evaluated is the **daily refit**: one model per day, trained on every label observed before 00:00 SGT that day (`joined.fold_split`).
 - `v_training_set` already holds the serving features, and the harness rebuilds the same columns locally with zero difference (parity check in `run.json`). A model trained in `eval/` can therefore score the latest `v_training_set` row directly.
 - Hard constraint: `forecast-api` is built from `forecastapi/` only (`pack --path=forecastapi`), so it cannot import `eval/`.
@@ -45,8 +45,9 @@ Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemen
 
 **Threshold (settled at sign-off):** the 0.5-minute practical threshold governs the report's "product-relevant" wording only. The served selection uses the significance rule above. On 13–30 Sep no 30-minute model beat persistence by 0.5 min (`xgb[maps]` −0.37), so applying the threshold here would have kept persistence everywhere.
 
-**Implemented (2026-10-03):**
-- `forecastapi/local_models.py` holds the six local models.
+**Implemented (2026-10-03, catalog as of local `main` `7bd94e3`):**
+- Callable HTTP ids: `served`, `persistence`, `profile`, and the local models `ridge[maps]`, `xgb[maps]`, `xgb[maps+prof]`, `lin_bq[daily]`, `xgb_bq[daily]`, `lin_bq[frozen]`, `xgb_bq[frozen]`. The example names in the decision (`xgb_maps_daily`) were not the ids that shipped. Catalog ids with `deploy_state` `artifact` or `code-only` (including `lstm`) are listed and return 400. BQML ids `lin_h30` and `xgb_h30` are not HTTP ids.
+- `forecastapi/local_models.py` holds those local models. The 30-minute daily and frozen models are six; `xgb[maps+prof]` is the seventh, exploratory.
 - `main.py` has the `served` selection (`SERVED_SELECTION`, interim: `lin_bq[frozen]` for `SG_TO_MY`, `persistence` for `MY_TO_SG`, the 12 Sep registry rebuilt locally), the versions, `model_meta`, and `commit`.
 - BigQuery ML ids and SQL are removed.
 - `eval/tests/test_forecastapi_models.py` proves that a service fit equals the harness prediction.

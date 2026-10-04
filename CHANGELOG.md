@@ -2,8 +2,17 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-05
+
+- `timesfm`, `timesfm_calibrated` and `fcm_mlp` were rescored on the section 2 window (both directions, 13-30 Sep, 5,184 rows). The earlier 25 Sep fit and 26-30 Sep scores are not that comparison. Daily-refit 30-minute MAE: persistence 2.640, `xgb[maps]` 2.276, `timesfm` 2.340, `timesfm_calibrated` 2.310, `fcm_mlp` 2.230. Eighteen calendar days. None is a challenger versus `xgb[maps]` by the 0.5 min bar, so the served mix is unchanged and the forecast API does not call them. `timesfm_layer_a` and `fcm_mlp_layer_a` were not scored. No Cloud Run deploy. `lin_h30`, `xgb_h30`, `model_registry`, and `v_forecast_recent` were not changed.
+
 ## 2026-10-04
 
+- Layer B point models were scored locally where that was possible. `fcm_mlp` (no camera) on the script's 26-30 Sep test split has five calendar days, so the harness decision is insufficient data; it is worse than `xgb[maps]` on those same 30-minute rows and stays out of the served mix. `timesfm` was not scored (`AI.FORECAST` was not run). `forecast-api` cards stay non-callable. No Cloud Run deploy. `lin_h30`, `xgb_h30`, `model_registry`, and `v_forecast_recent` were not changed.
+- `GET /?list=cards` (same body as `?view=cards`) returns a JSON array of model cards for the frontend. `list=models` is unchanged. `timesfm` and `fcm_mlp` are cards only (`Not served`); the forecast API does not call those Causeway modules. No deploy.
+- Forecast responses name the underlying model on each direction and each curve point. `components` appears only on a blend, as `{model, weight}` pairs whose weights sum to 1. That shape is in this tree. Live revision `forecast-api-00009-hax` does not serve it until this merges and the `forecast-api` trigger runs. `swiftbackend` is unchanged.
+- `hosting/` is in git. Architecture, ADR 0002, and the claims register no longer say the client is absent. Deploy stays manual. The page copy, by product decision, drops the accuracy caveats; the claims register still treats 30 min as the only evaluated result, later curve points as exploratory, Holm skill only to 3 h, and 5.5 h as a generous end.
+- Docs refreshed against local `main` `7bd94e3` and a read-only query of project `swiftborder` (about 14:40 SGT). No deploy and no cloud change. `forecast-api` is revision `forecast-api-00009-hax` at that commit; an anonymous `model=served` GET returned 200 (the smoke test accepts 200 or 503). `weather-backfill-tmp` is revision `00004-tjj`. Inventory's older "403", "trigger has not run", and `forecast-api-00002-zaj` lines are marked historical. Horizon wording stays exploratory: Holm keeps `xgb[maps+prof]` ahead of the profile only to 3 h; the public curve's 5.5 h model cutoff is the generous end, not a confirmed 24-hour forecast. Deck PNGs were not redrawn.
 - Add two Layer B modules with offline tests in `Causeway/tests/`:
   - [Causeway/layer_b_timesfm.py](Causeway/layer_b_timesfm.py): TimesFM 2.5 through BigQuery `AI.FORECAST`, a ridge calibration of its residual and Layer A fusion.
   - [Causeway/layer_b_fcm_mlp.py](Causeway/layer_b_fcm_mlp.py): Fuzzy C-Means regimes feeding an MLP seed ensemble; results on 6–30 Sep in [Causeway/layer-b-fcm-mlp-results.md](Causeway/layer-b-fcm-mlp-results.md).

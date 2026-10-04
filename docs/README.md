@@ -39,6 +39,6 @@ Design figures are **high-level** and **detailed** views of one system, not an a
 | `diagrams/eval-layer-b.mmd` | `eval-layer-b.png` | Performance: Layer B method |
 | — | `../eval/runs/report/{offline,bqml,joined,deep,fuzzy,ensemble}/*.png` | Performance: scored comparison plots (see [evaluation.md](evaluation.md)) |
 
-The four deck PNGs were regenerated on 4 Oct 2026 from the updated topology and fresh GCP checks. See [diagrams/README.md](diagrams/README.md) for generation and QA notes.
+The four deck PNGs were regenerated on 4 Oct 2026 from the topology then current. A later serving change (features from closed bins, public access) left two labels stale; this refresh does not redraw them. See [final-report-readiness.md](final-report-readiness.md) item 10 and [diagrams/README.md](diagrams/README.md).
 
 Region layout is not part of the graded story.

@@ -52,6 +52,8 @@ The redeploy does not change authentication. The service stays public until item
 
 ## 1b. `forecast-api` first deploy (on merge to `main`)
 
+**Later correction (2026-10-04).** The checklist below is what PR #2 expected at first deploy: a private service, anonymous 403, and `xgb[maps]` not callable. Live `forecast-api` is public. The checked-in smoke test accepts anonymous 200 or 503 for `model=served`. Callable ids include `xgb[maps]`, `xgb[maps+prof]`, and `profile`. Current revision and smoke result: [inventory.md](inventory.md). Do not treat the curl comments below as the current contract.
+
 The merge commit adds `forecastapi/**`, which starts Cloud Build trigger `forecast-api` (`949ff029`). The build:
 
 1. runs the `forecastapi` tests and the harness equivalence test;

@@ -122,6 +122,34 @@ def test_catalog_states_and_served_selection(monkeypatch):
     assert "lin_h30" not in by_id and "xgb_h30" not in by_id  # BigQuery ML is no longer called
     assert by_id["ensemble[maps]"]["callable"] is False
     assert by_id["lstm"]["deploy_state"] == "artifact"
+    assert "timesfm" not in by_id and "fcm_mlp" not in by_id
+    assert calls == []
+
+
+def test_model_cards_match_the_allow_list(monkeypatch):
+    calls = _install(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={"list": "cards"})))
+    assert status == 200 and isinstance(payload, list)
+    same, status_view, _ = _json(main.forecast(_request(query={"view": "cards"})))
+    assert status_view == 200 and same == payload
+    by_id = {card["id"]: card for card in payload}
+    assert len(by_id) == len(payload)
+    served = by_id["served"]
+    assert served["kind"] == "mix" and served["callable"] is True
+    assert {"lin_bq[frozen]", "persistence"} <= set(served["members"])
+    assert "components" not in served
+    assert any(card["kind"] == "mix" for card in payload)
+    single = by_id["persistence"]
+    assert single["kind"] == "single" and "components" not in single and "members" not in single
+    profile = by_id["profile"]
+    assert profile["kind"] == "single" and profile["name"] == "Typical day" and "members" not in profile
+    for spec in main.MODELS.values():
+        assert by_id[spec["id"]]["callable"] is spec["callable"]
+    for mid in ("timesfm", "fcm_mlp"):
+        assert by_id[mid]["callable"] is False and mid not in main.MODELS
+        assert by_id[mid]["summary"].startswith("Not served.")
+        assert "members" not in by_id[mid]
+    assert "mae" not in json.dumps(payload).lower()
     assert calls == []
 
 
@@ -223,6 +251,7 @@ def test_served_uses_the_selection_per_direction(monkeypatch):
     assert status == 200 and payload["source"] == "local model"
     for d, mid in main.SERVED_SELECTION.items():
         assert payload["directions"][d]["model"] == mid
+        assert "components" not in payload["directions"][d]
     assert set(payload["model_meta"]) == set(main.SERVED_SELECTION.values())
     # 03:50 closes at 04:00 (+ grace): the newest servable origin is 03:40
     my = payload["directions"]["MY_TO_SG"]
@@ -522,6 +551,7 @@ def test_forecast_curve_default_is_30_to_120_minutes(monkeypatch):
         assert [p["forecast_for"] for p in pts] == ["2026-10-03T04:10:00Z", "2026-10-03T04:40:00Z", "2026-10-03T05:10:00Z", "2026-10-03T05:40:00Z"]
         assert pts[0]["model"] == main.SERVED_SELECTION[d] and pts[0]["status"] == "evaluated"
         assert pts[1]["model"] == "xgb[maps]" and pts[2]["model"] == "xgb[maps+prof]" and pts[1]["status"] == "exploratory"
+        assert all("components" not in p for p in pts)
         assert [p["lead_min"] for p in pts] == [10.0, 40.0, 70.0, 100.0]
         assert all("baseline_min" in p for p in pts)
 
@@ -723,6 +753,110 @@ def test_non_ascii_digits_are_400(monkeypatch, query):
     _install(monkeypatch)
     payload, status, _ = _json(main.forecast(_request(query=query)))
     assert status == 400 and "error" in payload
+
+
+def _fixture_rows(directions, model_for):
+    """Rows a fake query can return. ``model_for(direction)`` is the producer, or (id, components)."""
+    rows = []
+    for d in directions:
+        produced = model_for(d)
+        components = None
+        if isinstance(produced, tuple):
+            produced, components = produced
+        row = {
+            "direction": d,
+            "forecast_min": 41.2 if d == "SG_TO_MY" else 25.0,
+            "forecast_for": "2026-10-03T04:00:00Z",
+            "origin_ts": "2026-10-03T03:30:00Z",
+            "model": produced,
+        }
+        if components is not None:
+            row["components"] = components
+        rows.append(row)
+    return {"source": "fixture", "rows": rows}
+
+
+def test_served_points_name_the_model_that_produced_them(monkeypatch):
+    """Default ``served`` keeps that id at the top level and labels each direction with its producer."""
+    def fake(model_id, directions, horizon=30):
+        assert model_id == "served" and horizon == 30
+        return _fixture_rows(directions, lambda d: main.SERVED_SELECTION[d])
+
+    monkeypatch.setattr(main, "query_forecast", fake)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert status == 200 and payload["model"] == "served"
+    assert payload["directions"]["SG_TO_MY"]["model"] == "lin_bq[frozen]"
+    assert payload["directions"]["MY_TO_SG"]["model"] == "persistence"
+    assert payload["directions"]["SG_TO_MY"]["model"] != payload["directions"]["MY_TO_SG"]["model"]
+    for row in payload["directions"].values():
+        assert "components" not in row
+
+
+def test_blend_point_lists_components_and_weights(monkeypatch):
+    blend = [
+        {"model": "lin_bq[frozen]", "weight": 0.5},
+        {"model": "persistence", "weight": 0.5},
+    ]
+
+    def fake(model_id, directions, horizon=30):
+        assert model_id == "served"
+        return _fixture_rows(
+            directions,
+            lambda d: ("mean[models]", blend) if d == "SG_TO_MY" else "persistence",
+        )
+
+    monkeypatch.setattr(main, "query_forecast", fake)
+    payload, status, _ = _json(main.forecast(_request()))
+    assert status == 200 and payload["model"] == "served"
+    sg = payload["directions"]["SG_TO_MY"]
+    assert sg["model"] == "mean[models]" and sg["components"] == blend
+    assert abs(sum(part["weight"] for part in sg["components"]) - 1) < 1e-9
+    assert payload["directions"]["MY_TO_SG"]["model"] == "persistence"
+    assert "components" not in payload["directions"]["MY_TO_SG"]
+
+
+def test_blend_weights_that_do_not_sum_to_one_are_rejected(monkeypatch):
+    def fake(model_id, directions, horizon=30):
+        return _fixture_rows(
+            directions,
+            lambda d: ("mean[models]", [{"model": "lin_bq[frozen]", "weight": 0.2}, {"model": "persistence", "weight": 0.2}]),
+        )
+
+    monkeypatch.setattr(main, "query_forecast", fake)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert status == 502 and payload == {"error": "Forecast query failed"}
+
+
+def test_single_model_is_echoed_on_the_point_without_components(monkeypatch):
+    def fake(model_id, directions, horizon=30):
+        assert model_id == "lin_bq[frozen]"
+        return _fixture_rows(directions, lambda d: "lin_bq[frozen]")
+
+    monkeypatch.setattr(main, "query_forecast", fake)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "lin_bq[frozen]", "direction": "SG_TO_MY"})))
+    assert status == 200 and payload["model"] == "lin_bq[frozen]"
+    assert payload["directions"]["SG_TO_MY"]["model"] == "lin_bq[frozen]"
+    assert "components" not in payload["directions"]["SG_TO_MY"]
+
+
+def test_curve_points_name_the_model_at_each_lead(monkeypatch):
+    """The public curve switches model by lead time; each point carries that id and no invented blend."""
+    origin = pd.Timestamp("2026-10-03 03:30", tz="UTC")
+    frame = pd.DataFrame({"direction": list(main.DIRECTIONS), "bin_ts": [origin, origin]})
+    monkeypatch.setattr(main, "fetch_latest", lambda directions, now: frame)
+    monkeypatch.setattr(main, "servable_origins", lambda bins, now: frame)
+    monkeypatch.setattr(main, "fitted_profile", lambda: object())
+
+    def predict(mid, sub, horizon, profile, now):
+        return float(horizon), 12.0, {"eval_id": mid, "version": "fixture"}
+
+    monkeypatch.setattr(main, "_predict_one", predict)
+    payload = main.forecast_curve(list(main.DIRECTIONS), 2)
+    sg = payload["directions"]["SG_TO_MY"]["points"]
+    my = payload["directions"]["MY_TO_SG"]["points"]
+    assert [p["model"] for p in sg] == ["lin_bq[frozen]", "xgb[maps]", "xgb[maps+prof]", "xgb[maps+prof]"]
+    assert [p["model"] for p in my] == ["persistence", "xgb[maps]", "xgb[maps+prof]", "xgb[maps+prof]"]
+    assert all("components" not in p for p in sg + my)
 
 
 def test_curve_note_does_not_claim_the_model_never_won_later(monkeypatch):

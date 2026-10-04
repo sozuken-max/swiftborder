@@ -2,7 +2,7 @@
 
 **Report section:** findings and discussion
 **Source of truth:** GCP project `swiftborder`
-**GCP facts:** [inventory.md](inventory.md) (dated copy, 2026-10-01). **Methods and scored results:** [evaluation.md](evaluation.md), from [`eval/runs/report/run.json`](../eval/runs/report/run.json). **Design:** [architecture.md](architecture.md).
+**GCP facts:** [inventory.md](inventory.md) (dated copy; cite the latest verification block). **Methods and scored results:** [evaluation.md](evaluation.md), from [`eval/runs/report/run.json`](../eval/runs/report/run.json). **Design:** [architecture.md](architecture.md).
 
 ---
 
@@ -61,8 +61,8 @@ Use this for the proposal, the presentations and the final report (31 Oct 2026).
 | --- | --- | --- |
 | Woodlands only; cameras 2701 and 2702 are in scope | The live divider covers 2702 | 2702 geometry exists and is demoed |
 | Layer A measures detection; Layer B measures duration. Camera-derived queue counts follow the same daily cycle as Maps travel time, and a queue forecast learned from them lowers 30-min MAE significantly, as much as a Maps-derived daily profile does. Observed counts are untested (no overlap with the Maps window) | Layer A output is highly correlated with the Layer B target; camera counts can replace Distance Matrix data; live queue counts improve the forecast; the camera adds information beyond the daily cycle | An observed-count row beats `maps+mpfc` with sufficient coverage in [evaluation.md](evaluation.md) |
-| Maps durations log live. `forecast-api` serves the evaluated 30-minute forecast: the mean Maps duration of the bin 30–40 min after the newest closed bin, with how far ahead that is (`lead_min`). It also shows exploratory forecasts every 30 minutes to 5.5 h, and a calendar-profile baseline after that, labelled as such | A 24-hour forecast is evaluated or beats the typical pattern; the forecast is "30 minutes from now"; the exploratory horizons are report results | Run A/B confirm a horizon beyond 30 minutes (claims added before 19 Oct) |
-| On 13–30 Sep, the ensemble has lower 30-min MAE than persistence (significant under family and run-wide Holm); `xgb_h30` does too within the BQML family | `xgb_h30` or the ensemble is the production model; a significant gain is a product-relevant gain | `model_registry` and `v_forecast_recent` are changed (an approved write) |
+| Maps durations log live. `forecast-api` serves the evaluated 30-minute forecast: the mean Maps duration of the bin 30-40 min after the newest closed bin, with how far ahead that is (`lead_min`). The public curve draws an exploratory model to 5.5 h (generous end; Holm keeps the profile win only to 3 h) and a calendar-profile baseline after that | A confirmed 24-hour forecast; the 5.5 h curve is a report result; the forecast is "30 minutes from now" | Run A/B confirm a horizon beyond 30 minutes (claims added before 19 Oct) |
+| On 13-30 Sep, the ensemble has lower 30-min MAE than persistence (significant under family and run-wide Holm); `xgb_h30` does too within the BQML family | `xgb_h30` or the ensemble is the production model; a significant gain is a product-relevant gain; "not significant" means the forecasts are equivalent | The frozen run sets `SERVED_SELECTION` ([ADR 0004](adr/0004-serve-local-models.md)). `v_forecast_recent` is history |
 | A daily-refit XGBoost (or a stack) would cut the served 30-min MAE by ~0.27 min (~16 s) on 13–30 Sep | The served forecast is significantly better than persistence; ensembling beats the best single model | A longer window shows it |
 | We tested LSTM, GRU and a patch Transformer; none beat XGBoost on 5 test days | Deep learning does not work for this problem | 3+ months of history are scored |
 | A fuzzy traffic-level forecast (light / moderate / heavy) is scored; the XGB-to-fuzzy hybrid has the best accuracy on a 6-day hold-out | The hybrid or the rule base is significantly better than persistence | A hold-out of 10+ shared calendar days is scored |
@@ -77,7 +77,7 @@ Use this for the proposal, the presentations and the final report (31 Oct 2026).
 | `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend`. `forecastapi/` changes on `main` run tests, deploy a no-traffic candidate, smoke-test it and promote `forecast-api`. Tests also run in GitHub Actions | The BigQuery views and BQML models deploy from git | A pipeline applies `sql/` |
 | Live Layer A runs on demand and stores nothing; `Cam2701` / `Cam2702` are a Mar–Apr 2026 batch of detections | BigQuery holds live camera predictions; the detections are ground truth | A writer for live detections exists and is inventoried |
 | `swiftbackend` is publicly callable (known risk) | The service is secured | The live service is changed and inventory re-checked |
-| A Firebase Hosting site (`swiftborder-92b45.web.app`) serves the UI and charts the public `traffic-24h.json`. Its public `app.js` calls `forecast-api` (inventory, 2026-10-03). It is not deployed from this repo or project `swiftborder` | The UI is deployed from git; the browser flow is rehearsed | Hosting source is in git ([ADR 0002](adr/0002-firebase-hosting-source.md)) and a full browser rehearsal is recorded |
+| `hosting/` is in git (`index.html`, `app.js`, `style.css`) and calls `forecast-api`. Deploy stays manual ([ADR 0002](adr/0002-firebase-hosting-source.md)). The live site can still differ from this tree. Visible page copy, by product decision, is one sourcing line ("Based on Google Maps travel-time estimates") and "Typical for this day and time". That copy is not the claim: only the 30-minute point is an evaluated result; later curve points are exploratory; Holm skill holds only to 3 h; 5.5 h is a generous end of the study | The live site matches git; the UI is deployed from git; the page's 5 h chart is a confirmed forecast; a full browser rehearsal is recorded | A recorded browser rehearsal, and a Hosting release taken from `hosting/` |
 
 Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `run.json` before the deck):
 
@@ -87,18 +87,18 @@ Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `r
 
 ## Discussion points for the report
 
-**Horizon.** Three bins ahead (`y_30`) is the evaluated, served horizon. The exploratory study ([horizon-study.md](horizon-study.md)) scores every 30 minutes to 24 h on the same folds:
-- current traffic beats the calendar profile to about 3 h;
-- with the profile as an input, to 5.5 h;
-- after that the typical pattern for the day and time is as good as anything tried.
+**Horizon.** Three bins ahead (`y_30`) is the evaluated, served horizon. The exploratory study ([horizon-study.md](horizon-study.md)) scores every 30 minutes to 24 h on the 13-30 Sep Maps-duration folds. It is not a confirmed 24-hour forecast:
+- Holm over all 336 comparisons keeps `xgb[maps+prof]` ahead of the profile only to 3 h, and ahead of "same time last week" only to 1.5 h;
+- without that correction, `xgb[maps+prof]` is ahead of the profile at every step to 5.5 h. That 5.5 h mark is the generous end, and it is the cutoff the public curve uses;
+- after 5.5 h the curve is the calendar profile, labelled as a baseline. At 24 h no win over the profile survives Holm.
 
-`forecast-api` serves those horizons and a forecast curve, labelled exploratory, so the demo can show them. The 24-hour target is not met in any useful sense: at 24 h nothing beats the profile.
+`forecast-api` can return those exploratory horizons, labelled, so the demo can show them. Collectors keep running after the report cutoff (labels on or before 2026-10-19 23:59 SGT). The 24-hour target is not met.
 
 **Unused features.** Weather gave no measurable gain on 18 days with few rain events; that is a limitation of the window, not evidence that rain never matters. Camera queue depth is the untested hypothesis most tied to the proposal. It can only help where Maps lags miss a change (queue onsets and clearings), which is where the remaining error is concentrated.
 
 **Ensembles and hybrids.** The combiners converge on the best single model, because the BQML models are older and weaker than a daily refit on the same features. The useful hybrid in this project is a regression forecast followed by fuzzy level assignment, not a blend of regressors.
 
-**Registry.** The harness supports keeping persistence for `MY_TO_SG` over `lin_h30`, but `xgb_h30` would do better there, and a daily-refit XGBoost better still in both directions. A registry change, or a daily retrain job, is an approved write, not a harness output.
+**Registry.** The harness supports keeping persistence for `MY_TO_SG` over `lin_h30`, but `xgb_h30` would do better there, and a daily-refit XGBoost better still in both directions. Changing what `forecast-api` serves is a `SERVED_SELECTION` edit in `forecastapi/main.py` and a push to `main`, not a harness output and not a change to `v_forecast_recent`. That view and the BQML models stay as history ([ADR 0004](adr/0004-serve-local-models.md)).
 
 **Camera as a substitute for Distance Matrix.** It is an attractive idea (no API cost, an independent sensor), but it is untested and faces structural limits: counts saturate when the frame is full, do not show speed, cover one stretch of road, and still need a label to calibrate against. Fog, haze and glare make frames look empty. The cheapest test is scoring the 6–11 Sep frames that overlap the Maps label (about 864 Roboflow calls), then a camera-only estimate of current travel time against a calendar baseline ([evaluation.md §7b](evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)).
 
@@ -108,4 +108,4 @@ Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `r
 
 **Deep learning is scored and not served.** With about three weeks of 5-minute data, LSTM, GRU and a patch Transformer trail XGBoost by 0.5–0.7 min at 60 minutes. Reasons and the conditions for revisiting: [deep-learning-assessment.md](deep-learning-assessment.md).
 
-**What to defer.** ResNet, bringing the Hosting client into git, and holiday calendars can wait. The order of work is in [roadmap.md](roadmap.md) and [plan-eval-integrity.md](plan-eval-integrity.md).
+**What to defer.** ResNet, a Firebase project file and an automated Hosting deploy, and holiday calendars can wait. The static client is already in `hosting/`. The order of work is in [roadmap.md](roadmap.md) and [plan-eval-integrity.md](plan-eval-integrity.md).

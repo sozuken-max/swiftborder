@@ -17,7 +17,7 @@ flowchart LR
   subgraph DELIVERY["Delivery and evaluation"]
     BUILD["Cloud Build<br/>two test/deploy pipelines"] --> SB
     BUILD --> API
-    UI["Firebase Hosting UI<br/>source outside git"]
+    UI["Firebase Hosting UI<br/>hosting/ in git; manual deploy"]
     SB --> UI
     API --> UI
     PUB["swiftborder-public<br/>traffic-24h.json history"] --> UI

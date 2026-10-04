@@ -2,7 +2,7 @@
 
 **Report section:** performance (methods, reasoning, scored results).
 **Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md)).
-**Source of every number on this page:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). It was made from committed code (`provenance.git_sha` `b3b6562`, clean tree, `code_sha256` `39fa1c24…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1–6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family).
+**Source of the numbers in sections 1-7:** [`eval/runs/report/run.json`](../eval/runs/report/run.json), run `20261003T035807Z_offline-bqml-joined-deep-fuzzy-ensemble` (schema v2). Section 8 is a separate local pass and is not in that file. The report run was made from committed code (`provenance.git_sha` `b3b6562`, clean tree, `code_sha256` `39fa1c24…`); `provenance` also records the OS, CPU and every installed package, and `deep.config.tensorflow` the TensorFlow build; promotion refuses dirty runs and runs whose code hash differs from the tree. Cells marked `pending` have no harness output yet. Sections 1-6 give the same numbers as the previous report run (same data; the Layer A forecast arm of section 7 is a separate Holm family). The snapshot was not refit for this doc pass. Figure series for the cited run were replayed, without a new fit, into [`eval/runs/replay-20261003T035807Z/`](../eval/runs/replay-20261003T035807Z/). `offline/holdout-sample` was never stored, so that replay has no CSV even though `eval/runs/report/offline/holdout-sample.png` remains. The schema-v1 run `20260926T073406Z` is not replayable from this snapshot.
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` were regenerated on 4 Oct 2026 ([diagrams/README.md](diagrams/README.md)).
 
@@ -10,7 +10,7 @@ Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diag
 
 ## What would count as success
 
-The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes. **Both stay targets.** The live `forecast-api` emits a local-model forecast of Google Maps `duration_in_traffic` with a nominal **30-minute bin-start shift**. The BQML results below evaluate the earlier `v_forecast_recent` policy; see [inventory.md](inventory.md) for current serving and [final-report-readiness.md](final-report-readiness.md) for timing and inference limitations. No model here forecasts beyond 60 minutes, and there is no independent crossing-time label to test the 15-minute target against.
+The product intent is a Woodlands-only forecast of causeway crossing time, up to 24 hours ahead, with mean absolute error at or below 15 minutes. **Both stay targets.** The live `forecast-api` emits a local-model forecast of Google Maps `duration_in_traffic` with a nominal **30-minute bin-start shift**. Longer horizons are exploratory only ([horizon-study.md](horizon-study.md)): the public curve draws the model to 5.5 h, which is the generous end of that study, and the calendar profile after that. Holm over the study's 336 comparisons keeps `xgb[maps+prof]` ahead of the profile only to 3 h. That is not a confirmed 24-hour forecast. The scored tables on this page stop at 60 minutes. The BQML results below evaluate the earlier `v_forecast_recent` policy; see [inventory.md](inventory.md) for current serving and [final-report-readiness.md](final-report-readiness.md) for timing and inference limitations. There is no independent crossing-time label to test the 15-minute target against.
 
 ---
 
@@ -57,7 +57,7 @@ Point forecasts are **paired** on the same `(direction, time)` rows. For each ro
 
 Directional results are reported separately. A pooled "challenger" is one result, not two independent confirmations.
 
-**"Not significant" is not "no effect".** It means no difference was detected on that window. Equivalence was never tested, because no margin was fixed in advance.
+**"Not significant" is not "no effect" and it is not equivalence.** It means no difference was detected on that window. Equivalence was never tested, because no margin was fixed in advance. A pooled comparison uses the joint calendar-day bootstrap; failing that test does not show the two forecasts are the same.
 
 The committed snapshot (`eval/runs/report/`, code `b3b6562`) used the earlier rule. Its 30-minute pooled comparisons cover 18 calendar days and pass the new gate. The pooled weekend slice (5 days) and every fuzzy comparison (5 days) do not, so under the new rule they are "insufficient data". The sensitivity re-run of the same cached data is summarised in [findings.md](findings.md#pooled-significance-sensitivity-2026-10-04).
 
@@ -111,7 +111,7 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 | Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
 | Deep learning (LSTM, GRU, patch Transformer) | [`eval/deep_forecast.py`](../eval/deep_forecast.py), [`eval/timeseries_transformer.py`](../eval/timeseries_transformer.py); same rows as offline XGB | Section 4 |
 | Fuzzy logic | Light / moderate / heavy traffic-level classifier with a learned fuzzy rule base ([`eval/fuzzy_traffic.py`](../eval/fuzzy_traffic.py)) | Section 5 |
-| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A scorer ready; results pending. As a Layer B input: section 7 |
+| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A detector metrics pending. Section 7a scores a March-April queue forecast as a Layer B input. Observed counts for the Maps window are pending (section 7c); a 2026-10-04 query still ends detections on 22 Apr 2026 |
 | Hybrid / ensemble | `ensemble_mean`; ridge + XGBoost; rolling LAD stack, rolling selection and a fuzzy-gated stack over BQML and daily-refit models; XGBoost regression defuzzified into traffic levels | Sections 1, 2, 5, 6 |
 
 ---
@@ -309,7 +309,7 @@ Backtest days are full days after the split. These numbers replace the 2026-09-2
 
 **Window features (not in the table).** Chad's day-2 note suggested a wavelet because trees get a ready-made trend and bend from it. [`eval/timeseries_xgb.py`](../eval/timeseries_xgb.py) can score three sets on this same split and the same `XGBTrainConfig`: (A) lags only, (B) lags plus a causal first difference and a 60-minute rolling mean (12 bins of 5 minutes, the same span as `keep_lags` and the horizon), (C) lags plus a per-window z-score wavelet. The default wavelet is Daubechies db2 at level 2; level 3 is a parameter. db4 is not the default because it smooths the bends. Mean and standard deviation of the window are separate columns so normalization does not throw away the level. `use_dwt` stays off for the rows above. Run `python timeseries_xgb.py` from `eval/` against `data/causeway_gdata.csv`. The hold-out in this section has 5 day-blocks, so a significance decision on that split is "insufficient data" (Diebold-Mariano, day-block bootstrap, and Holm need 10). Point estimates from the command are not part of this table.
 
-Plots: `eval/runs/report/offline/backtest-mae.png`, `offline/holdout-sample.png`, `offline/holdout-mae-diff.png`.
+Plots: `eval/runs/report/offline/backtest-mae.png`, `offline/holdout-sample.png`, `offline/holdout-mae-diff.png`. Replay CSVs for the first and third are under `eval/runs/replay-20261003T035807Z/offline/`. `offline/holdout-sample` has no replay CSV: that series was never stored.
 
 ### 4. Deep sequence models, 60 minutes, one route (`eval/deep_forecast.py`)
 
@@ -518,6 +518,48 @@ Observed counts depend on the camera backfill ([handoff-camera-pilot.md](handoff
 ### Do not combine
 
 Do not put the 60-minute one-route numbers and the 30-minute two-direction numbers in one headline. The 30-minute production window (section 1) is the headline for the served system.
+
+---
+
+### 8. TimesFM 2.5 and FCM + MLP (shared 13-30 Sep window, 2026-10-05)
+
+These two modules live in `Causeway/` and are not part of the frozen run above. Skill is still on the Maps duration series. Labels stay at or before 2026-10-19 23:59 SGT. `fcm_mlp_layer_a` and `timesfm_layer_a` are not scored: camera detections end on 22 Apr 2026 and do not overlap this Maps window.
+
+The earlier pass fit the TimesFM residual on 25 Sep only and scored both models on origin days 26-30 Sep. That is not this comparison. `xgb[maps]` on those five days was the section 2 daily refit, which had already seen the weeks before 26 Sep.
+
+**Protocol.** Both directions, the section 2 origin window 13-30 Sep 2026 SGT, label `y_30` (the bin that starts 30 minutes after the origin), and `after_gap = 0`. All 5,184 reference rows paired on `(direction, bin_ts)`; none were dropped. Persistence on these rows is 2.640 min, the same cell as section 2. `xgb[maps]` is a fresh `eval.joined` daily refit on Maps features only (`replicas=False`): each test day trains on rows whose label ends at or before that day starts (`bin_ts + 40 min`). That refit scores 2.276 min; the frozen-run cell in section 2 is 2.275 on this same window. `fcm_mlp` and the no-FCM `mlp` use the module defaults (c = 3, m = 2, MLP 32-16, five seeds) and refit on each test day from that same allowed history; the network's two-day inner split is the last two of those allowed days, so early stopping does not see the test day. TimesFM 2.5 is not retrained: each origin is one BigQuery `AI.FORECAST` series (context window 1024, about 7 days of bins at or before the origin, horizon 6, project `swiftborder`, location `US`), one query per SGT day from 6-30 Sep, with no table write. 6 Sep had no eligible origin. The residual ridge for `timesfm_calibrated` is refit every test day on the same label-end rule (1,988 joined rows on 13 Sep, 6,884 on 30 Sep). No production table was written: not `lin_h30`, `xgb_h30`, `model_registry`, `v_forecast_recent`, `layer_b_backtest`, or `layer_b_registry`. The table in [Causeway/layer-b-fcm-mlp-results.md](../Causeway/layer-b-fcm-mlp-results.md) is the modules' own 26-30 Sep split, not this table.
+
+Labels matched. Every TimesFM step-3 `actual` equalled `y_30`, and its persistence equalled `y_persistence`. Every `fcm_mlp` step-3 label equalled `y_30`. Significance is `eval/significance.py` (`compare_absolute_errors`, day blocks, Singapore offset, 4,999 resamples, seed 0, horizon step 3). Each model has its own Holm family of four, both directions pooled, and the decision uses the joint calendar-day 95% interval. Eighteen calendar days clears the 10-day gate, so a decision is allowed. This is 30 minutes only; `xgb[maps]` in this protocol is a 30-minute model.
+
+| Candidate | n | MAE (min) | Calendar days |
+| --- | --- | --- | --- |
+| Persistence | 5,184 | 2.640 | 18 |
+| `xgb[maps]` (daily refit, same rows) | 5,184 | 2.276 | 18 |
+| `timesfm` | 5,184 | 2.340 | 18 |
+| `timesfm_calibrated` | 5,184 | 2.310 | 18 |
+| `mlp` (no FCM) | 5,184 | 2.226 | 18 |
+| `fcm_mlp` | 5,184 | 2.230 | 18 |
+| Mean of `fcm_mlp` and `xgb[maps]` | 5,184 | 2.134 | 18 |
+
+TimesFM family (Holm over these four):
+
+| Challenger | Reference | Mean diff (min) | Joint day 95% CI | Decision |
+| --- | --- | --- | --- | --- |
+| `timesfm` | Persistence | -0.300 | [-0.421, -0.161] | challenger |
+| `timesfm` | `xgb[maps]` | +0.064 | [-0.071, +0.208] | not significant (Holm p = 0.51) |
+| `timesfm_calibrated` | Persistence | -0.330 | [-0.421, -0.225] | challenger |
+| `timesfm_calibrated` | `xgb[maps]` | +0.034 | [-0.110, +0.170] | not significant (Holm p = 0.54) |
+
+FCM family (Holm over these four):
+
+| Challenger | Reference | Mean diff (min) | Joint day 95% CI | Decision |
+| --- | --- | --- | --- | --- |
+| `fcm_mlp` | Persistence | -0.411 | [-0.529, -0.248] | challenger |
+| `fcm_mlp` | `xgb[maps]` | -0.047 | [-0.159, +0.047] | not significant (Holm p = 0.59) |
+| `mlp` (no FCM) | `xgb[maps]` | -0.050 | [-0.151, +0.028] | not significant (Holm p = 0.59) |
+| Mean of `fcm_mlp` and `xgb[maps]` | `xgb[maps]` | -0.142 | [-0.211, -0.090] | challenger |
+
+Against persistence, `timesfm`, `timesfm_calibrated` and `fcm_mlp` have lower error on the Maps duration series. Against `xgb[maps]`, the TimesFM point estimates are slightly higher and not significant, and `fcm_mlp` is 0.047 min lower and not significant. The equal mix is a challenger versus `xgb[maps]` in this family (Holm p = 5.7e-06) by 0.142 min, which is under the 0.5 min bar in the Significance section. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `timesfm`, `timesfm_calibrated` and `fcm_mlp` stay off the forecast mix and are not callable.
 
 ---
 
