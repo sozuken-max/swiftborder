@@ -41,6 +41,8 @@ The joined, fuzzy and ensemble components were re-run on the same cached data as
 
 The final numbers come from the frozen Runs A and B ([roadmap.md](roadmap.md)), which use this rule.
 
+12. **Exploratory: a forecast from current traffic beats a calendar baseline only up to about 4 hours.** Same 13–30 Sep folds, 30 min to 24 h, details in [horizon-study.md](horizon-study.md). Up to 3 h, XGBoost beats a time-of-day × weekend profile, and up to 4 h when the profile is added as an input. From about 6 h to 24 h no model beats the profile or "same time last week", whose MAE stays near 5 min. Long-horizon gains over persistence (5–6 min at 6–18 h) reflect persistence decaying, not forecasting skill. This finding is not in the report run and needs Run B before any claim.
+
 ## Known risk: public `swiftbackend` (documented, not changed)
 
 `swiftbackend` has the IAM invoker check disabled with an empty policy, ingress `all`, CORS `*` (`ALLOWED_ORIGIN` unset) and `ROBOFLOW_API_KEY` as a plain env var ([inventory.md](inventory.md)). Anyone who finds the URL can trigger billed Roboflow inference and exhaust the free-tier credits the camera backfill also needs. The team chose to document this rather than change the live service, and confirmed on 2026-10-03 that it does not block merging PR #2. Minimum mitigation when approved: set `ALLOWED_ORIGIN`, move the key to Secret Manager, require an invoker identity or an API key.

@@ -13,6 +13,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | What remains, and the order to do it | [roadmap.md](roadmap.md) |
 | Evaluation data cutoff (19 Oct 2026 23:59 SGT) | [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03) |
 | LSTM, GRU and Transformer forecasters: design, results, when to revisit | [deep-learning-assessment.md](deep-learning-assessment.md) |
+| Horizon study, 30 min to 24 h, with a calendar-profile baseline (exploratory) | [horizon-study.md](horizon-study.md) |
 | Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
 | Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |

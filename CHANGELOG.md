@@ -4,6 +4,11 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-04
 
+- `eval/horizon_study.py` and [docs/horizon-study.md](docs/horizon-study.md): an exploratory study of horizons from 30 min to 24 h on the report cache and the 13–30 Sep folds.
+  - Candidates: persistence, same time yesterday, same time last week, a calendar-profile baseline, `xgb[maps]` and `xgb[maps+prof]`.
+  - Result: forecasts from current traffic beat the profile up to about 3–4 h. From 6 h to 24 h nothing beats the profile or "same time last week" (about 5 min MAE).
+  - Not a report run, and not served. Findings item 12.
+
 - Address [docs/final-report-readiness.md](docs/final-report-readiness.md); the per-finding status is in its Response table.
   - `forecast-api` availability contract:
     - origins are closed bins only (60 s grace);
