@@ -48,7 +48,8 @@ import joined as jx
 from significance import compare_absolute_errors
 
 SGT = "Asia/Singapore"
-DEFAULT_HORIZONS = (30, 60, 90, 120, 180, 240, 360, 480, 720, 1080, 1440)
+DEFAULT_HORIZONS = tuple(range(30, 1441, 30))  # every 30 minutes, 30 min .. 24 h (the served curve's grid)
+TICK_HORIZONS = (30, 60, 90, 120, 180, 240, 360, 480, 720, 1080, 1440)
 TEST_START, TEST_END = "2026-09-13", "2026-09-30"
 PROFILE_HARMONICS = 8
 EVAL_ROOT = Path(__file__).resolve().parent
@@ -170,7 +171,7 @@ def run_horizon(feats: pd.DataFrame, h: int, n_bootstrap: int = 999) -> Tuple[Di
 
 def _hours_axis(ax, horizons: Sequence[int]) -> None:
     ax.set_xscale("log")
-    hrs = [h / 60 for h in horizons]
+    hrs = [h / 60 for h in horizons if h in TICK_HORIZONS] or [h / 60 for h in horizons]
     ax.set_xticks(hrs)
     ax.set_xticklabels([f"{x:g}" for x in hrs], fontsize=8)
     ax.minorticks_off()
@@ -307,6 +308,16 @@ def _git_sha() -> str:
         return ""
 
 
+def _study_code_dirty() -> bool:
+    """True when this file differs from HEAD (the recorded commit is then not the exact code)."""
+    try:
+        out = subprocess.run(["git", "status", "--porcelain", "--", str(Path(__file__).resolve())], cwd=REPO,
+                             capture_output=True, text=True, check=True).stdout
+        return bool(out.strip())
+    except Exception:
+        return True
+
+
 def summary(rows: List[Dict]) -> Dict:
     """Compact, served copy of the results (``forecast-api`` ``?list=horizon-study``)."""
     return {
@@ -317,6 +328,7 @@ def summary(rows: List[Dict]) -> Dict:
         "window_sgt": [TEST_START, TEST_END],
         "cache_sha256": hashlib.sha256(CACHE.read_bytes()).hexdigest(),
         "code_commit": _git_sha(),
+        "study_code_dirty": _study_code_dirty(),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "candidates": list(CANDIDATES),
         "horizons": [
