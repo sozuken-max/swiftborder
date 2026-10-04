@@ -13,6 +13,8 @@ htmlcov/
 **/*.csv
 # Figure series replayed from the cited eval run.json (not a data extract).
 !eval/runs/replay-*/*/*.csv
+# Plotted series of the published horizon-study charts (aggregates, not a data extract).
+!docs/images/horizon-study/*.csv
 **/*.log
 # Test fixtures are small, hand-built, and must be committed
 !**/tests/fixtures/**
