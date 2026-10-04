@@ -13,6 +13,11 @@ Callable ids:
 
 Other ids are listed from the eval harness and are not callable (``artifact`` / ``code-only``).
 
+Exploratory horizons (``horizon_min`` 60 .. 1440, docs/horizon-study.md): ``served``, ``persistence``,
+``xgb[maps]``, ``xgb[maps+prof]`` and the ``profile`` baseline take them; responses say
+``status: exploratory`` and carry the study's MAE. Every forecast response also carries the calendar
+profile as ``baseline`` (labelled: not a forecast), and ``?baseline=profile&hours=N`` returns its curve.
+
 Manual selection: ``model`` (default ``served``) picks one id for every requested direction;
 ``model_sg_to_my`` / ``model_my_to_sg`` override it for one direction. A request with an override
 answers ``model: custom`` and names the model used in each direction.
@@ -40,13 +45,40 @@ COMMIT_SHA = os.environ.get("COMMIT_SHA", "")
 CACHE_TTL_SECONDS = 300
 DIRECTIONS = ("SG_TO_MY", "MY_TO_SG")
 SOURCES = frozenset({"local model", "bigquery view", "fixture"})
-CALLABLE_STATES = frozenset({"production", "local"})
+CALLABLE_STATES = frozenset({"production", "local", "exploratory", "baseline"})
 
 # What ``served`` returns per direction. Interim value (until the frozen run, docs/roadmap.md): the
 # 2026-09-12 registry choice rebuilt from local replicas (lin_h30 for SG_TO_MY, persistence for
 # MY_TO_SG). After the frozen run it is set by the ADR 0004 selection rule.
 SERVED_SELECTION = {"SG_TO_MY": "lin_bq[frozen]", "MY_TO_SG": "persistence"}
 SELECTION_ID = "registry-2026-09-12-local-replica"
+
+# Exploratory horizons (docs/horizon-study.md). ``served`` at a horizon other than 30 minutes is the
+# lower-MAE model of eval/horizon_study.py on 13-30 Sep (both directions): xgb[maps] up to 1 h,
+# xgb[maps+prof] from 1.5 h. Chosen on the study window, not confirmed on Run B: every such response
+# says ``status: exploratory``. Beyond 5.5 h no model beat the profile baseline consistently in the study.
+EXPLORATORY_SELECTION = {h: ("xgb[maps]" if h <= 60 else "xgb[maps+prof]") for h in lm.HORIZONS if h != 30}
+# The forecast curve (?curve=forecast) uses the model up to this horizon and the labelled profile
+# baseline after it. In the study (every 30 min), xgb[maps+prof] beat the profile at every step from
+# 30 min to 5.5 h; from 6 h on only scattered, marginal results remain (48 uncorrected comparisons).
+CURVE_MODEL_MAX_MIN = 330
+CURVE_DEFAULT_HOURS = 2
+EXPLORATORY_SELECTION_ID = "horizon-study-2026-10-04"
+EXPLORATORY_MODELS = frozenset({"xgb[maps+prof]"})
+BASELINE_LABEL = "Baseline: typical for this day and time (calendar profile), not a forecast"
+CURVE_MAX_HOURS = 24
+STUDY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "horizon_study.json")
+
+
+def _load_study():
+    try:
+        with open(STUDY_PATH, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+STUDY = _load_study()
 PERSISTENCE_VERSION = "latest-bin"
 OVERRIDE_PARAMS = {"SG_TO_MY": "model_sg_to_my", "MY_TO_SG": "model_my_to_sg"}
 
@@ -87,7 +119,7 @@ _JOINED_SCORED = ("maps", "maps+weather", "maps+camfc", "maps+mpfc", "maps+mpfc+
 _JOINED_CODE_ONLY = ("maps+weather+camera",)
 
 
-def _spec(model_id, family, version, horizon_min, directions, deploy_state, eval_id=None):
+def _spec(model_id, family, version, horizon_min, directions, deploy_state, eval_id=None, horizons=None):
     if horizon_min not in (30, 60):
         raise RuntimeError("horizon")
     return {
@@ -95,7 +127,7 @@ def _spec(model_id, family, version, horizon_min, directions, deploy_state, eval
         "family": family,
         "default_version": version,
         "horizon_min": horizon_min,
-        "horizons": frozenset({horizon_min}),
+        "horizons": frozenset(horizons or {horizon_min}),
         "directions": directions,
         "deploy_state": deploy_state,
         "callable": deploy_state in CALLABLE_STATES,
@@ -104,13 +136,17 @@ def _spec(model_id, family, version, horizon_min, directions, deploy_state, eval
 
 
 def _build_models():
+    all_h = lm.HORIZONS
     rows = [
-        _spec("served", "selection", SELECTION_ID, 30, BOTH, "production"),
-        _spec("persistence", "baseline", PERSISTENCE_VERSION, 30, BOTH, "local", "persistence"),
+        _spec("served", "selection", SELECTION_ID, 30, BOTH, "production", horizons=all_h),
+        _spec("persistence", "baseline", PERSISTENCE_VERSION, 30, BOTH, "local", "persistence", horizons=all_h),
+        _spec("profile", "baseline", None, 30, BOTH, "baseline", "horizon_study:profile", horizons=all_h),
     ]
     for model_id, info in lm.LOCAL_MODELS.items():
         family = "bqml-replica" if "_bq" in model_id else "sklearn"
-        rows.append(_spec(model_id, family, None, 30, BOTH, "local", info["eval_id"]))
+        state = "exploratory" if model_id in EXPLORATORY_MODELS else "local"
+        hs = all_h if model_id in lm.MULTI_HORIZON_MODELS else None
+        rows.append(_spec(model_id, family, None, 30, BOTH, state, info["eval_id"], horizons=hs))
     local = set(lm.LOCAL_MODELS)
     for feature_set, state, version in (
         *((name, "artifact", REPORT_RUN_ID) for name in _JOINED_SCORED),
@@ -134,6 +170,8 @@ def _build_models():
         raise RuntimeError("duplicate model id")
     if set(SERVED_SELECTION) != set(DIRECTIONS) or not set(SERVED_SELECTION.values()) <= local | {"persistence"}:
         raise RuntimeError("SERVED_SELECTION must name a local model or persistence for each direction")
+    if set(EXPLORATORY_SELECTION) != set(lm.HORIZONS) - {30} or not set(EXPLORATORY_SELECTION.values()) <= set(lm.MULTI_HORIZON_MODELS):
+        raise RuntimeError("EXPLORATORY_SELECTION must name a multi-horizon model for every horizon but 30")
     return {row["id"]: row for row in rows}
 
 
@@ -143,19 +181,45 @@ _cache = {}
 _clock = time.monotonic
 _now = lambda: datetime.datetime.now(datetime.timezone.utc)  # noqa: E731
 _fit_lock = threading.Lock()
+_pinned = threading.local()
+
+
+def _serving_now():
+    """The request's serving clock, read once when the request starts (``forecast``).
+
+    Fits, the profile, predictions, cache keys and metadata all use it, so a request that spans
+    00:00 SGT uses one serving day throughout. Lead and expiry checks use the live ``_now()``.
+    """
+    pinned = getattr(_pinned, "now", None)
+    return pinned if pinned is not None else _now()
 _fitted = {}
 _training = {}
 
 
-def current_version(model_id):
+def current_version(model_id, horizon=30):
     spec = MODELS[model_id]
     if model_id == "served":
-        return SELECTION_ID
+        return SELECTION_ID if horizon == 30 else EXPLORATORY_SELECTION_ID
     if model_id == "persistence":
         return PERSISTENCE_VERSION
+    if model_id == "profile":
+        return profile_version(_serving_now())
     if model_id in lm.LOCAL_MODELS:
-        return lm.version_for(model_id, _now())
+        return lm.version_for(model_id, _serving_now())
     return spec["default_version"]
+
+
+def profile_version(now):
+    return "labels_before=" + lm.serving_day_start(now).tz_convert(lm.SGT).isoformat()
+
+
+def status_for(model_id, horizon):
+    """``evaluated``: a 30-minute model of the report harness; otherwise ``exploratory`` or ``baseline``."""
+    if model_id == "profile":
+        return "baseline"
+    if horizon != 30 or model_id in EXPLORATORY_MODELS:
+        return "exploratory"
+    return "evaluated"
 
 
 # --- BigQuery reads (replaced in tests) ----------------------------------------------------
@@ -200,21 +264,44 @@ def _training_frame(day_start):
     return _training[key]
 
 
-def fitted_model(model_id):
-    version = lm.version_for(model_id, _now())
-    key = (model_id, version)
+def fitted_profile():
+    """The calendar-profile baseline of the serving day (every closed bin before 00:00 SGT)."""
+    version = profile_version(_serving_now())
+    key = ("profile", version, 0)
     with _fit_lock:
         hit = _fitted.get(key)
         if hit is not None:
             return hit
-        day_start = lm.serving_day_start(_now())
+        frame = _training_frame(lm.serving_day_start(_serving_now()))
+        profile = lm.Profile().fit(frame)
+        for k in [k for k in _fitted if k[0] == "profile"]:
+            _fitted.pop(k)
+        _fitted[key] = profile
+        return profile
+
+
+def fitted_model(model_id, horizon=30):
+    version = lm.version_for(model_id, _serving_now())
+    key = (model_id, version, int(horizon))
+    with _fit_lock:
+        hit = _fitted.get(key)
+    if hit is not None:
+        return hit
+    profile = fitted_profile() if lm.LOCAL_MODELS[model_id]["kind"] == "harness_xgb_prof" else None
+    with _fit_lock:
+        hit = _fitted.get(key)
+        if hit is not None:
+            return hit
+        day_start = lm.serving_day_start(_serving_now())
         rows = lm.LOCAL_MODELS[model_id]["rows"]
         frame = _training_frame(day_start)  # every closed bin before day_start, harness features
-        train = lm.training_rows(frame, rows, day_start)
+        train = lm.training_rows(frame, rows, day_start, horizon)
         if len(train) < 100:
-            raise RuntimeError(f"only {len(train)} training rows for {model_id}")
-        model = lm.fit(model_id, train)
-        for k in [k for k in _fitted if k[0] == model_id]:
+            raise RuntimeError(f"only {len(train)} training rows for {model_id} at {horizon} min")
+        if profile is not None:
+            train = lm.with_profile(train, profile, horizon)
+        model = lm.fit(model_id, train, horizon)
+        for k in [k for k in _fitted if k[0] == model_id and k[2] == int(horizon)]:
             _fitted.pop(k)  # yesterday's fit
         _fitted[key] = model
         return model
@@ -249,53 +336,202 @@ def _empty_bins():
     return pd.DataFrame(columns=["route_id", "direction", "bin_ts", "dur_min", "congestion_ratio", "speed_kmh"])
 
 
-def resolve(model_id, direction):
+def resolve(model_id, direction, horizon=30):
     """The concrete model behind an id in one direction (``served`` -> its selection)."""
-    return SERVED_SELECTION[direction] if model_id == "served" else model_id
+    if model_id != "served":
+        return model_id
+    return SERVED_SELECTION[direction] if horizon == 30 else EXPLORATORY_SELECTION[horizon]
 
 
-def query_forecast(model_id, directions):
+def query_forecast(model_id, directions, horizon=30):
     """Forecast rows for one callable id. Tests replace this function."""
     spec = MODELS[model_id]
     if not spec["callable"]:
         raise RuntimeError("model is not deployed")
-    return query_selection({d: resolve(model_id, d) for d in directions})
+    return query_selection({d: resolve(model_id, d, horizon) for d in directions}, horizon)
 
 
-def query_selection(chosen):
-    """Forecast rows for a direction -> concrete model mapping. Tests replace this function."""
+def query_selection(chosen, horizon=30):
+    """Forecast rows for a direction -> concrete model mapping, plus the profile baseline.
+
+    Tests replace this function.
+    """
     directions = list(chosen)
-    now = _now()
+    now = _serving_now()
     origins = servable_origins(fetch_latest(directions, now), now)
-    rows, meta = [], {}
+    shift = datetime.timedelta(minutes=int(horizon))
+    profile = fitted_profile()
+    rows, meta, baseline = [], {}, {}
     for direction in directions:
         sub = origins[origins["direction"] == direction]
         if sub.empty:
             continue
         mid = chosen[direction]
-        if mid == "persistence":
-            value = float(sub["y_persistence"].iloc[0])
-            meta[mid] = {"eval_id": "persistence", "version": PERSISTENCE_VERSION}
-        else:
-            model = fitted_model(mid)
-            value = float(model.predict(sub)[0])
-            meta[mid] = {
-                "eval_id": lm.LOCAL_MODELS[mid]["eval_id"],
-                "version": lm.version_for(mid, _now()),
-                "training_rows": model.n_rows,
-                "seeds": model.seeds,
-            }
         origin = sub["bin_ts"].iloc[0]
+        value, target_value, meta[mid] = _predict_one(mid, sub, horizon, profile, now)
+        baseline[direction] = ({"forecast_min": round(target_value, 1)} if target_value is not None
+                               else {"forecast_min": None, "unavailable": "no profile history before the serving day"})
         rows.append(
             {
                 "direction": direction,
                 "forecast_min": value,
-                "forecast_for": _iso(origin + datetime.timedelta(minutes=30)),
+                "forecast_for": _iso(origin + shift),
                 "origin_ts": _iso(origin),
                 "model": mid,
             }
         )
-    return {"source": "local model", "rows": rows, "meta": meta}
+    return {
+        "source": "local model",
+        "rows": rows,
+        "meta": meta,
+        "baseline": {"model": "profile", "status": "baseline", "label": BASELINE_LABEL,
+                     "version": profile_version(now), "directions": baseline},
+    }
+
+
+def _predict_one(mid, sub, horizon, profile, now):
+    """(forecast, profile baseline at the same target, meta) for one origin row and horizon."""
+    origin = sub["bin_ts"].iloc[0]
+    direction = sub["direction"].iloc[0]
+    try:
+        target_value = float(profile.predict([direction], [origin + datetime.timedelta(minutes=int(horizon))])[0])
+    except lm.NoProfileHistory:
+        if mid == "profile" or lm.LOCAL_MODELS.get(mid, {}).get("kind") == "harness_xgb_prof":
+            raise  # the forecast itself needs the profile: 503
+        target_value = None  # the forecast stands; only its comparison baseline is unavailable
+    if mid == "persistence":
+        return float(sub["y_persistence"].iloc[0]), target_value, {"eval_id": "persistence", "version": PERSISTENCE_VERSION}
+    if mid == "profile":
+        return target_value, target_value, {"eval_id": "horizon_study:profile", "version": profile_version(now), "training_rows": profile.n_rows}
+    model = fitted_model(mid, horizon)
+    x = lm.with_profile(sub, profile, horizon) if lm.LOCAL_MODELS[mid]["kind"] == "harness_xgb_prof" else sub
+    meta = {
+        "eval_id": lm.LOCAL_MODELS[mid]["eval_id"],
+        "version": lm.version_for(mid, _serving_now()),
+        "training_rows": model.n_rows,
+        "seeds": model.seeds,
+    }
+    return float(model.predict(x)[0]), target_value, meta
+
+
+def curve_model(direction, horizon):
+    """What the forecast curve uses at a horizon: the served choice up to CURVE_MODEL_MAX_MIN, then the profile."""
+    if horizon > CURVE_MODEL_MAX_MIN:
+        return "profile"
+    return resolve("served", direction, horizon)
+
+
+def forecast_curve(directions, hours):
+    """Forecasts every 30 minutes from the same origin, plus the profile baseline at each target. Tests replace this."""
+    now = _serving_now()
+    origins = servable_origins(fetch_latest(directions, now), now)
+    profile = fitted_profile()
+    horizons = [h for h in lm.HORIZONS if h <= int(hours) * 60]
+    out, meta = {}, {}
+    for direction in directions:
+        sub = origins[origins["direction"] == direction]
+        if sub.empty:
+            raise NoRecentForecast(direction)
+        origin = sub["bin_ts"].iloc[0]
+        points = []
+        for h in horizons:
+            mid = curve_model(direction, h)
+            # one fit per (model, horizon): key the metadata by both so no fit's metadata is overwritten
+            meta_key = "%s@%dmin" % (mid, h)
+            value, base, meta[meta_key] = _predict_one(mid, sub, h, profile, now)
+            meta[meta_key] = dict(meta[meta_key], model=mid, horizon_min=h)
+            target = origin + datetime.timedelta(minutes=h)
+            point = {
+                "horizon_min": h,
+                "forecast_for": _iso(target),
+                "forecast_window_end": _iso(target + BIN),
+                "forecast_min": round(value, 1),
+                "baseline_min": None if base is None else round(base, 1),
+                "model": mid,
+                "model_meta_key": meta_key,
+                "status": status_for(mid, h),
+            }
+            mae = _study_mae(h, mid)
+            if mae:
+                point["study_mae_min"] = mae
+            points.append(point)
+        out[direction] = {"origin_ts": _iso(origin), "origin_closed_at": _iso(origin + BIN), "points": points}
+    return {
+        "kind": "forecast curve",
+        "status": "exploratory" if any(h != 30 for h in horizons) else "evaluated",
+        "generated_at": _iso(now),
+        "source": "local model",
+        "label": "maps_duration_in_traffic_min",
+        "hours": int(hours),
+        "step_min": 30,
+        "model_until_min": CURVE_MODEL_MAX_MIN,
+        "note": "Each point is the mean Maps duration of the 10-minute bin starting at forecast_for, forecast from the "
+                "same origin bin. 30 min is the evaluated model; later points are exploratory (docs/horizon-study.md). "
+                "After %d min the curve is the calendar-profile baseline (model: profile). Up to there the model beat "
+                "the profile at every 30-minute step of the study; after it the advantage was not consistent (a few "
+                "scattered steps won by under 0.1 min at the CI edge, uncorrected for multiple testing). baseline_min "
+                "is that baseline at every point, for comparison; it is not a forecast." % CURVE_MODEL_MAX_MIN,
+        "baseline_label": BASELINE_LABEL,
+        "directions": out,
+        "model_meta": meta,
+        **({"commit": COMMIT_SHA} if COMMIT_SHA else {}),
+    }
+
+
+def _study_mae(horizon, model):
+    """The study MAE at a horizon for a model (if studied), the profile and persistence."""
+    if not STUDY:
+        return None
+    entry = next((h for h in STUDY.get("horizons", []) if h["horizon_min"] == horizon), None)
+    if entry is None:
+        return None
+    names = ([model] if model in entry["mae_min"] else []) + ["profile", "persistence"]
+    return {m: entry["mae_min"][m] for m in dict.fromkeys(names)}
+
+
+def _curve_with_timing(payload, now):
+    """Copy with lead and age at ``now``; None once the first target has started or the origin is too old."""
+    out = dict(payload, directions={})
+    for direction, block in payload["directions"].items():
+        origin = _parse_ts(block["origin_ts"])
+        if origin + TARGET_SHIFT <= now:
+            return None
+        points = []
+        for p in block["points"]:
+            target = _parse_ts(p["forecast_for"])
+            if target <= now:
+                return None
+            points.append(dict(p, lead_min=round((target - now).total_seconds() / 60.0, 1)))
+        out["directions"][direction] = dict(
+            block, points=points,
+            observation_age_min=round((now - _parse_ts(block["origin_closed_at"])).total_seconds() / 60.0, 1),
+        )
+    return out
+
+
+def profile_curve(directions, hours):
+    """The profile baseline every 10 minutes for the next ``hours``, from the next bin start."""
+    now = pd.Timestamp(_serving_now())
+    start = now.floor("10min") + pd.Timedelta(minutes=10)
+    ts = pd.Series(pd.date_range(start, periods=int(hours) * 6, freq="10min"))
+    profile = fitted_profile()
+    out = {}
+    for d in directions:
+        vals = profile.predict([d] * len(ts), ts)
+        out[d] = [{"bin_start": _iso(t), "forecast_min": round(float(v), 1)} for t, v in zip(ts, vals)]
+    return {
+        "model": "profile",
+        "status": "baseline",
+        "label": BASELINE_LABEL,
+        "version": profile_version(now.to_pydatetime()),
+        "generated_at": _iso(now),
+        "hours": int(hours),
+        "note": "Mean Maps duration of each 10-minute bin expected from the time of day and weekday/weekend only; "
+                "it ignores current traffic. Use it to compare forecasts against, not as a forecast.",
+        "directions": out,
+        "study": STUDY and {"status": STUDY.get("status"), "profile_mae_min": {
+            str(h["horizon_min"]): h["mae_min"]["profile"] for h in STUDY.get("horizons", [])}},
+    }
 
 
 # --- HTTP -----------------------------------------------------------------------------------
@@ -317,6 +553,19 @@ class NoRecentForecast(Exception):
 def _error(message, status):
     headers = {**_cors_headers(), "Content-Type": "application/json"}
     return (json.dumps({"error": message}), status, headers)
+
+
+NO_PROFILE_ERROR = "No baseline history for the requested direction"
+
+
+def _ok(payload, headers):
+    """200 with strict JSON: a NaN or infinity anywhere is a server error, never an invalid body."""
+    try:
+        body = json.dumps(payload, allow_nan=False)
+    except ValueError:
+        logger.exception("response contains a non-finite number")
+        return _error("Forecast query failed", 502)
+    return (body, 200, headers)
 
 
 def _param(body, args, name):
@@ -350,8 +599,9 @@ def _with_timing(payload, now):
     out = dict(payload, directions={})
     for direction, row in payload["directions"].items():
         target = _parse_ts(row["forecast_for"])
-        if target <= now:
-            return None
+        origin = _parse_ts(row["origin_ts"])
+        if target <= now or origin + TARGET_SHIFT <= now:
+            return None  # target started, or the origin is older than any servable origin
         closed = _parse_ts(row["origin_closed_at"])
         out["directions"][direction] = dict(
             row,
@@ -359,6 +609,23 @@ def _with_timing(payload, now):
             lead_min=round((target - now).total_seconds() / 60.0, 1),
         )
     return out
+
+
+def study_for(horizon, models):
+    """The horizon study's MAE at this horizon for the models used, the profile and persistence."""
+    if not STUDY:
+        return None
+    entry = next((h for h in STUDY.get("horizons", []) if h["horizon_min"] == horizon), None)
+    if entry is None:
+        return None
+    names = [m for m in models if m in entry["mae_min"]] + ["profile", "persistence"]
+    return {
+        "status": STUDY.get("status", "exploratory"),
+        "window_sgt": STUDY.get("window_sgt"),
+        "mae_min": {m: entry["mae_min"][m] for m in dict.fromkeys(names)},
+        "vs_profile": {m: v for m, v in entry.get("vs_profile", {}).items() if m in models},
+        "note": STUDY.get("note"),
+    }
 
 
 def list_models():
@@ -374,8 +641,10 @@ def list_models():
             "deploy_state": spec["deploy_state"],
             "callable": spec["callable"],
         }
+        row["horizons_min"] = sorted(spec["horizons"])
         if spec["id"] == "served":
             row["selection"] = dict(SERVED_SELECTION)
+            row["selection_by_horizon"] = {str(h): m for h, m in EXPLORATORY_SELECTION.items()}
         models.append(row)
     return {
         "models": models,
@@ -385,7 +654,11 @@ def list_models():
             "model_my_to_sg": "callable id for MY_TO_SG only (overrides model)",
             "direction": "SG_TO_MY, MY_TO_SG or both (default both)",
             "version": "optional; must equal the current version (not allowed with an override)",
-            "horizon_min": "30",
+            "horizon_min": "30 (evaluated) or a multiple of 30 up to 1440 (exploratory; see list=horizon-study)",
+            "curve": "forecast, with hours=1..%d (default %d): forecasts every 30 minutes from one origin; the model "
+                     "up to %d min, the profile baseline after it" % (CURVE_MAX_HOURS, CURVE_DEFAULT_HOURS, CURVE_MODEL_MAX_MIN),
+            "baseline": "profile, with hours=1..%d: the calendar-profile baseline curve (not a forecast)" % CURVE_MAX_HOURS,
+            "list": "models, or horizon-study for the exploratory study results",
         },
     }
 
@@ -402,7 +675,30 @@ def _cache_get(key):
 
 
 def _cache_put(key, payload):
-    _cache[key] = (_clock() + CACHE_TTL_SECONDS, payload)
+    now = _clock()
+    for stale in [k for k, (expires_at, _) in _cache.items() if now >= expires_at]:
+        _cache.pop(stale, None)  # keys that are never read again (e.g. per-bin baseline curves) still go
+    _cache[key] = (now + CACHE_TTL_SECONDS, payload)
+
+
+def _browser_max_age(payload, now):
+    """Seconds a browser may reuse a forecast or curve: never past its first target or origin expiry."""
+    limits = [CACHE_TTL_SECONDS]
+    for block in payload.get("directions", {}).values():
+        first = block["points"][0]["forecast_for"] if "points" in block else block["forecast_for"]
+        for end in (_parse_ts(first), _parse_ts(block["origin_ts"]) + TARGET_SHIFT):
+            limits.append((end - now).total_seconds())
+    return max(0, int(min(limits)))
+
+
+def _json_headers(max_age=CACHE_TTL_SECONDS):
+    cache = "private, max-age=%d" % max_age if max_age > 0 else "no-store"
+    return {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": cache}
+
+
+def _is_number(text):
+    """ASCII digits only: ``str.isdigit`` accepts superscripts such as '\u00b2' that ``int`` rejects."""
+    return text.isascii() and text.isdecimal()
 
 
 def _parse_horizon(raw, spec):
@@ -410,7 +706,7 @@ def _parse_horizon(raw, spec):
         horizon = spec["horizon_min"]
     else:
         text = str(raw).strip()
-        if not text.isdigit():
+        if not _is_number(text):
             return None
         horizon = int(text)
     if horizon not in spec["horizons"]:
@@ -422,6 +718,8 @@ def _horizon_error(spec):
     allowed = sorted(spec["horizons"])
     if len(allowed) == 1:
         return "horizon_min must be %s" % allowed[0]
+    if tuple(allowed) == tuple(lm.HORIZONS):
+        return "horizon_min must be a multiple of 30 from 30 to 1440"
     return "horizon_min must be %s" % " or ".join(str(item) for item in allowed)
 
 
@@ -481,20 +779,34 @@ def _assemble(model_id, version_id, horizon, directions, result):
     if set(by_direction) != set(directions):
         raise NoRecentForecast("missing direction")
     ordered = {direction: by_direction[direction] for direction in directions}
+    for payload in ordered.values():
+        # each direction says what it is: a per-direction override can mix, e.g. evaluated and baseline
+        payload["status"] = status_for(payload.get("model") or model_id, horizon)
+    used = {payload.get("model") for payload in ordered.values()} - {None}
+    statuses = {payload["status"] for payload in ordered.values()}
     out = {
         "model": model_id,
         "version": version_id,
         "horizon_min": horizon,
-        "generated_at": _iso(_now()),
+        # evaluated (30-minute report harness) / exploratory (horizon study) / baseline (profile);
+        # "mixed" when the directions differ: read directions.<d>.status then
+        "status": statuses.pop() if len(statuses) == 1 else "mixed",
+        "generated_at": _iso(_serving_now()),
         "source": source,
         "label": "maps_duration_in_traffic_min",
-        # the label is the mean over the target bin, 30-40 minutes after the origin bin starts
-        "target_offset_min": [30, 40],
+        # the label is the mean over the target bin, h to h+10 minutes after the origin bin starts
+        "target_offset_min": [horizon, horizon + 10],
         "directions": ordered,
     }
     meta = result.get("meta") if isinstance(result, dict) else None
     if meta:
         out["model_meta"] = meta
+    baseline = result.get("baseline") if isinstance(result, dict) else None
+    if baseline:
+        out["baseline"] = baseline
+    study = study_for(horizon, used)
+    if study:
+        out["study"] = study
     if COMMIT_SHA:
         out["commit"] = COMMIT_SHA
     return out
@@ -502,6 +814,14 @@ def _assemble(model_id, version_id, horizon, directions, result):
 
 @functions_framework.http
 def forecast(request):
+    _pinned.now = _now()  # one serving day for the whole request
+    try:
+        return _handle(request)
+    finally:
+        _pinned.now = None
+
+
+def _handle(request):
     if request.method == "OPTIONS":
         return ("", 204, _cors_headers())
     if request.method != "GET":
@@ -512,12 +832,72 @@ def forecast(request):
     if not isinstance(body, dict):
         body = {}
 
+    headers = _json_headers()  # catalog, study and baseline curve: no forecast target to expire
     list_raw = _param(body, args, "list")
     if list_raw is not None and str(list_raw).strip() != "":
-        if str(list_raw).strip() != "models":
-            return _error("list must be models", 400)
-        headers = {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": "private, max-age=300"}
-        return (json.dumps(list_models()), 200, headers)
+        what = str(list_raw).strip()
+        if what == "models":
+            return _ok(list_models(), headers)
+        if what == "horizon-study":
+            if not STUDY:
+                return _error("horizon study results are not bundled", 503)
+            return _ok(STUDY, headers)
+        return _error("list must be models or horizon-study", 400)
+
+    baseline_raw = _param(body, args, "baseline")
+    if baseline_raw is not None and str(baseline_raw).strip() != "":
+        if str(baseline_raw).strip() != "profile":
+            return _error("baseline must be profile", 400)
+        hours_raw = _param(body, args, "hours")
+        text = "24" if hours_raw is None or str(hours_raw).strip() == "" else str(hours_raw).strip()
+        if not _is_number(text) or not 1 <= int(text) <= CURVE_MAX_HOURS:
+            return _error("hours must be 1 to %d" % CURVE_MAX_HOURS, 400)
+        directions = _parse_directions(_param(body, args, "direction"))
+        if directions is None:
+            return _error("direction must be SG_TO_MY, MY_TO_SG, or both", 400)
+        key = ("baseline-curve", profile_version(_serving_now()), tuple(directions), int(text), pd.Timestamp(_serving_now()).floor("10min").isoformat())
+        payload = _cache_get(key)
+        if payload is None:
+            try:
+                payload = profile_curve(directions, int(text))
+            except lm.NoProfileHistory:
+                return _error(NO_PROFILE_ERROR, 503)
+            except Exception:
+                logger.exception("baseline curve failed")
+                return _error("Forecast query failed", 502)
+            _cache_put(key, payload)
+        return _ok(payload, headers)
+
+    curve_raw = _param(body, args, "curve")
+    if curve_raw is not None and str(curve_raw).strip() != "":
+        if str(curve_raw).strip() != "forecast":
+            return _error("curve must be forecast", 400)
+        hours_raw = _param(body, args, "hours")
+        text = str(CURVE_DEFAULT_HOURS) if hours_raw is None or str(hours_raw).strip() == "" else str(hours_raw).strip()
+        if not _is_number(text) or not 1 <= int(text) <= CURVE_MAX_HOURS:
+            return _error("hours must be 1 to %d" % CURVE_MAX_HOURS, 400)
+        directions = _parse_directions(_param(body, args, "direction"))
+        if directions is None:
+            return _error("direction must be SG_TO_MY, MY_TO_SG, or both", 400)
+        key = ("forecast-curve", tuple(directions), int(text), SELECTION_ID, EXPLORATORY_SELECTION_ID, profile_version(_serving_now()))
+        cached = _cache_get(key)
+        payload = _curve_with_timing(cached, _now()) if cached is not None else None
+        if payload is None:
+            _cache.pop(key, None)
+            try:
+                fresh = forecast_curve(directions, int(text))
+            except NoRecentForecast:
+                return _error("No recent forecast for the requested direction", 503)
+            except lm.NoProfileHistory:
+                return _error(NO_PROFILE_ERROR, 503)
+            except Exception:
+                logger.exception("forecast curve failed")
+                return _error("Forecast query failed", 502)
+            payload = _curve_with_timing(fresh, _now())
+            if payload is None:
+                return _error("No recent forecast for the requested direction", 503)
+            _cache_put(key, fresh)
+        return _ok(payload, _json_headers(_browser_max_age(payload, _now())))
 
     model_raw = _param(body, args, "model")
     model_id = "served" if model_raw is None or str(model_raw).strip() == "" else str(model_raw).strip()
@@ -539,6 +919,13 @@ def forecast(request):
             return _error("model in %s is not deployed" % name, 400)
         overrides[direction] = mid
 
+    horizon = _parse_horizon(_param(body, args, "horizon_min"), spec)
+    if horizon is None:
+        return _error(_horizon_error(spec), 400)
+    for direction, mid in overrides.items():
+        if horizon not in MODELS[mid]["horizons"]:
+            return _error("model in %s has no %d-minute horizon" % (OVERRIDE_PARAMS[direction], horizon), 400)
+
     version_raw = _param(body, args, "version")
     has_version = version_raw is not None and str(version_raw).strip() != ""
 
@@ -551,29 +938,28 @@ def forecast(request):
     if overrides:
         if has_version:
             return _error("version cannot be combined with a per-direction model", 400)
-        chosen = {d: resolve(overrides.get(d, model_id), d) for d in directions}
+        chosen = {d: resolve(overrides.get(d, model_id), d, horizon) for d in directions}
         model_id = "custom"
-        version_id = ",".join("%s=%s:%s" % (d, m, current_version(m)) for d, m in chosen.items())
+        version_id = ",".join("%s=%s:%s" % (d, m, current_version(m, horizon)) for d, m in chosen.items())
     else:
         chosen = None
-        version_id = current_version(model_id)
+        version_id = current_version(model_id, horizon)
         if has_version and str(version_raw).strip() != version_id:
             return _error("unknown version", 400)
 
-    horizon = _parse_horizon(_param(body, args, "horizon_min"), spec)
-    if horizon is None:
-        return _error(_horizon_error(spec), 400)
-
-    cache_key = (model_id, version_id, tuple(directions), horizon)
+    # the serving day too: fixed-version ids (served, persistence) still change fit and profile at 00:00 SGT
+    cache_key = (model_id, version_id, tuple(directions), horizon, profile_version(_serving_now()))
     cached = _cache_get(cache_key)
     payload = _with_timing(cached, _now()) if cached is not None else None
     if payload is None:
         _cache.pop(cache_key, None)  # absent, or a cached target bin has started
         try:
-            result = query_selection(chosen) if chosen else query_forecast(model_id, directions)
+            result = query_selection(chosen, horizon) if chosen else query_forecast(model_id, directions, horizon)
             fresh = _assemble(model_id, version_id, horizon, directions, result)
         except NoRecentForecast:
             return _error("No recent forecast for the requested direction", 503)
+        except lm.NoProfileHistory:
+            return _error(NO_PROFILE_ERROR, 503)
         except Exception:
             logger.exception("forecast query failed")
             return _error("Forecast query failed", 502)
@@ -583,5 +969,4 @@ def forecast(request):
             return _error("No recent forecast for the requested direction", 503)
         _cache_put(cache_key, fresh)
 
-    headers = {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": "private, max-age=300"}
-    return (json.dumps(payload), 200, headers)
+    return _ok(payload, _json_headers(_browser_max_age(payload, _now())))

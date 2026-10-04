@@ -4,6 +4,18 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-04
 
+- `eval/horizon_study.py` and [docs/horizon-study.md](docs/horizon-study.md): an exploratory study of horizons from 30 min to 24 h on the report cache and the 13–30 Sep folds.
+  - Candidates: persistence, same time yesterday, same time last week, a calendar-profile baseline, `xgb[maps]` and `xgb[maps+prof]`.
+  - Result (30-minute grid): `xgb[maps+prof]` beats the profile and "same time last week" at every step to 5.5 h, or to 3 h / 1.5 h under Holm over all 336 comparisons. After that there is no consistent winner (about 5 min MAE).
+  - The study also tests `xgb[maps+prof]` against "same time last week" (7 comparisons per horizon).
+  - Not a report run. Findings item 12.
+  - The study writes three charts by default (MAE by horizon, skill over the profile with joint CIs, example days), each with a CSV. `--publish` copies them to `docs/images/horizon-study/` and writes `forecastapi/horizon_study.json`.
+  - `forecast-api` exposes the study, labelled. `horizon_min` takes 60 to 1440 for `served`, `persistence`, `xgb[maps]`, the new `xgb[maps+prof]` and the `profile` baseline. Exploratory responses carry `status: exploratory` and the study MAE.
+  - Every forecast response carries the profile as `baseline` ("not a forecast"). `?baseline=profile&hours=N` returns its curve, and `?list=horizon-study` returns the study summary.
+  - The 30-minute `served` selection is unchanged.
+  - The study grid is now every 30 minutes (48 horizons). `?curve=forecast&hours=N` returns forecasts every 30 minutes from one origin (default 2 h, four points). On the 30-minute grid `xgb[maps+prof]` beats the profile at every step to 5.5 h, so model points run to 5.5 h; after that the points are the profile baseline, labelled. Each point carries its baseline value and study MAE.
+  - `eval/tests/test_forecastapi_models.py` asserts the service equals the study at 2 h and 24 h.
+
 - Address [docs/final-report-readiness.md](docs/final-report-readiness.md); the per-finding status is in its Response table.
   - `forecast-api` availability contract:
     - origins are closed bins only (60 s grace);

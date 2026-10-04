@@ -1,0 +1,2374 @@
+{
+ "status": "exploratory",
+ "note": "Exploratory study on the 13-30 Sep 2026 daily folds; not a report run and not confirmed on Run B. The label is Google Maps duration_in_traffic, not a measured crossing time. The profile is a calendar baseline for comparison, not a forecast.",
+ "window_sgt": [
+  "2026-09-13",
+  "2026-09-30"
+ ],
+ "cache_sha256": "13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07",
+ "code_commit": "44ae102e38332eef8217f7139ca5e1ce7bac6729",
+ "study_code_dirty": false,
+ "generated_at": "2026-10-04T05:47:35Z",
+ "candidates": [
+  "persistence",
+  "same time yesterday",
+  "same time last week",
+  "profile",
+  "xgb[maps]",
+  "xgb[maps+prof]"
+ ],
+ "horizons": [
+  {
+   "horizon_min": 30,
+   "rows": 5184,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 2.64,
+    "same time yesterday": 6.169,
+    "same time last week": 5.189,
+    "profile": 5.192,
+    "xgb[maps]": 2.275,
+    "xgb[maps+prof]": 2.271
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 2.777,
+     "same time yesterday": 6.257,
+     "same time last week": 5.048,
+     "profile": 4.972,
+     "xgb[maps]": 2.399,
+     "xgb[maps+prof]": 2.411
+    },
+    "MY_TO_SG": {
+     "persistence": 2.504,
+     "same time yesterday": 6.08,
+     "same time last week": 5.33,
+     "profile": 5.412,
+     "xgb[maps]": 2.15,
+     "xgb[maps+prof]": 2.132
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -2.918,
+     "ci_min": [
+      -3.68,
+      -2.258
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -2.921,
+     "ci_min": [
+      -3.58,
+      -2.338
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 60,
+   "rows": 5180,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 4.294,
+    "same time yesterday": 6.166,
+    "same time last week": 5.188,
+    "profile": 5.19,
+    "xgb[maps]": 3.203,
+    "xgb[maps+prof]": 3.213
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 4.5,
+     "same time yesterday": 6.265,
+     "same time last week": 5.048,
+     "profile": 4.978,
+     "xgb[maps]": 3.298,
+     "xgb[maps+prof]": 3.248
+    },
+    "MY_TO_SG": {
+     "persistence": 4.087,
+     "same time yesterday": 6.067,
+     "same time last week": 5.328,
+     "profile": 5.403,
+     "xgb[maps]": 3.109,
+     "xgb[maps+prof]": 3.179
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -1.987,
+     "ci_min": [
+      -2.658,
+      -1.446
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -1.977,
+     "ci_min": [
+      -2.401,
+      -1.579
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 90,
+   "rows": 5174,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 5.681,
+    "same time yesterday": 6.164,
+    "same time last week": 5.188,
+    "profile": 5.188,
+    "xgb[maps]": 3.9,
+    "xgb[maps+prof]": 3.656
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 5.939,
+     "same time yesterday": 6.271,
+     "same time last week": 5.048,
+     "profile": 4.983,
+     "xgb[maps]": 3.895,
+     "xgb[maps+prof]": 3.602
+    },
+    "MY_TO_SG": {
+     "persistence": 5.423,
+     "same time yesterday": 6.057,
+     "same time last week": 5.328,
+     "profile": 5.392,
+     "xgb[maps]": 3.905,
+     "xgb[maps+prof]": 3.709
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -1.288,
+     "ci_min": [
+      -1.786,
+      -0.889
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -1.532,
+     "ci_min": [
+      -1.893,
+      -1.182
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 120,
+   "rows": 5168,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 6.863,
+    "same time yesterday": 6.164,
+    "same time last week": 5.189,
+    "profile": 5.189,
+    "xgb[maps]": 4.27,
+    "xgb[maps+prof]": 3.963
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 7.141,
+     "same time yesterday": 6.278,
+     "same time last week": 5.049,
+     "profile": 4.991,
+     "xgb[maps]": 4.106,
+     "xgb[maps+prof]": 3.813
+    },
+    "MY_TO_SG": {
+     "persistence": 6.584,
+     "same time yesterday": 6.05,
+     "same time last week": 5.328,
+     "profile": 5.387,
+     "xgb[maps]": 4.433,
+     "xgb[maps+prof]": 4.113
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.919,
+     "ci_min": [
+      -1.313,
+      -0.576
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -1.226,
+     "ci_min": [
+      -1.556,
+      -0.922
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 150,
+   "rows": 5162,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 7.802,
+    "same time yesterday": 6.168,
+    "same time last week": 5.193,
+    "profile": 5.194,
+    "xgb[maps]": 4.617,
+    "xgb[maps+prof]": 4.175
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 8.122,
+     "same time yesterday": 6.285,
+     "same time last week": 5.054,
+     "profile": 4.999,
+     "xgb[maps]": 4.435,
+     "xgb[maps+prof]": 3.999
+    },
+    "MY_TO_SG": {
+     "persistence": 7.482,
+     "same time yesterday": 6.051,
+     "same time last week": 5.331,
+     "profile": 5.39,
+     "xgb[maps]": 4.799,
+     "xgb[maps+prof]": 4.35
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.577,
+     "ci_min": [
+      -0.874,
+      -0.282
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -1.019,
+     "ci_min": [
+      -1.336,
+      -0.727
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 180,
+   "rows": 5156,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 8.568,
+    "same time yesterday": 6.174,
+    "same time last week": 5.198,
+    "profile": 5.201,
+    "xgb[maps]": 4.799,
+    "xgb[maps+prof]": 4.306
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 8.972,
+     "same time yesterday": 6.291,
+     "same time last week": 5.06,
+     "profile": 5.005,
+     "xgb[maps]": 4.603,
+     "xgb[maps+prof]": 4.147
+    },
+    "MY_TO_SG": {
+     "persistence": 8.165,
+     "same time yesterday": 6.057,
+     "same time last week": 5.336,
+     "profile": 5.396,
+     "xgb[maps]": 4.995,
+     "xgb[maps+prof]": 4.464
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.402,
+     "ci_min": [
+      -0.705,
+      -0.099
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.895,
+     "ci_min": [
+      -1.204,
+      -0.589
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 210,
+   "rows": 5150,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 9.283,
+    "same time yesterday": 6.179,
+    "same time last week": 5.203,
+    "profile": 5.206,
+    "xgb[maps]": 5.029,
+    "xgb[maps+prof]": 4.419
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 9.833,
+     "same time yesterday": 6.296,
+     "same time last week": 5.065,
+     "profile": 5.011,
+     "xgb[maps]": 4.9,
+     "xgb[maps+prof]": 4.249
+    },
+    "MY_TO_SG": {
+     "persistence": 8.732,
+     "same time yesterday": 6.062,
+     "same time last week": 5.341,
+     "profile": 5.402,
+     "xgb[maps]": 5.158,
+     "xgb[maps+prof]": 4.588
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.178,
+     "ci_min": [
+      -0.528,
+      0.162
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.788,
+     "ci_min": [
+      -1.103,
+      -0.474
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 240,
+   "rows": 5144,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 9.878,
+    "same time yesterday": 6.184,
+    "same time last week": 5.209,
+    "profile": 5.211,
+    "xgb[maps]": 5.206,
+    "xgb[maps+prof]": 4.489
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 10.558,
+     "same time yesterday": 6.301,
+     "same time last week": 5.071,
+     "profile": 5.015,
+     "xgb[maps]": 5.119,
+     "xgb[maps+prof]": 4.287
+    },
+    "MY_TO_SG": {
+     "persistence": 9.199,
+     "same time yesterday": 6.067,
+     "same time last week": 5.347,
+     "profile": 5.407,
+     "xgb[maps]": 5.292,
+     "xgb[maps+prof]": 4.691
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.005,
+     "ci_min": [
+      -0.412,
+      0.422
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.722,
+     "ci_min": [
+      -1.018,
+      -0.407
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 270,
+   "rows": 5138,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.368,
+    "same time yesterday": 6.19,
+    "same time last week": 5.215,
+    "profile": 5.215,
+    "xgb[maps]": 5.244,
+    "xgb[maps+prof]": 4.578
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.106,
+     "same time yesterday": 6.306,
+     "same time last week": 5.076,
+     "profile": 5.018,
+     "xgb[maps]": 5.208,
+     "xgb[maps+prof]": 4.392
+    },
+    "MY_TO_SG": {
+     "persistence": 9.63,
+     "same time yesterday": 6.074,
+     "same time last week": 5.353,
+     "profile": 5.412,
+     "xgb[maps]": 5.281,
+     "xgb[maps+prof]": 4.763
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.029,
+     "ci_min": [
+      -0.406,
+      0.467
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.637,
+     "ci_min": [
+      -0.94,
+      -0.324
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 300,
+   "rows": 5132,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.723,
+    "same time yesterday": 6.193,
+    "same time last week": 5.219,
+    "profile": 5.22,
+    "xgb[maps]": 5.351,
+    "xgb[maps+prof]": 4.69
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.458,
+     "same time yesterday": 6.307,
+     "same time last week": 5.08,
+     "profile": 5.022,
+     "xgb[maps]": 5.281,
+     "xgb[maps+prof]": 4.495
+    },
+    "MY_TO_SG": {
+     "persistence": 9.988,
+     "same time yesterday": 6.079,
+     "same time last week": 5.359,
+     "profile": 5.418,
+     "xgb[maps]": 5.421,
+     "xgb[maps+prof]": 4.884
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.131,
+     "ci_min": [
+      -0.296,
+      0.599
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.53,
+     "ci_min": [
+      -0.827,
+      -0.226
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 330,
+   "rows": 5126,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.965,
+    "same time yesterday": 6.194,
+    "same time last week": 5.224,
+    "profile": 5.224,
+    "xgb[maps]": 5.354,
+    "xgb[maps+prof]": 4.79
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.643,
+     "same time yesterday": 6.302,
+     "same time last week": 5.084,
+     "profile": 5.023,
+     "xgb[maps]": 5.188,
+     "xgb[maps+prof]": 4.574
+    },
+    "MY_TO_SG": {
+     "persistence": 10.287,
+     "same time yesterday": 6.085,
+     "same time last week": 5.364,
+     "profile": 5.424,
+     "xgb[maps]": 5.521,
+     "xgb[maps+prof]": 5.005
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.131,
+     "ci_min": [
+      -0.262,
+      0.572
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.434,
+     "ci_min": [
+      -0.775,
+      -0.11
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 360,
+   "rows": 5120,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.1,
+    "same time yesterday": 6.195,
+    "same time last week": 5.229,
+    "profile": 5.223,
+    "xgb[maps]": 5.349,
+    "xgb[maps+prof]": 4.891
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.706,
+     "same time yesterday": 6.3,
+     "same time last week": 5.088,
+     "profile": 5.018,
+     "xgb[maps]": 5.081,
+     "xgb[maps+prof]": 4.61
+    },
+    "MY_TO_SG": {
+     "persistence": 10.494,
+     "same time yesterday": 6.091,
+     "same time last week": 5.37,
+     "profile": 5.428,
+     "xgb[maps]": 5.616,
+     "xgb[maps+prof]": 5.173
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.125,
+     "ci_min": [
+      -0.263,
+      0.507
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.332,
+     "ci_min": [
+      -0.704,
+      0.002
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 390,
+   "rows": 5114,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.187,
+    "same time yesterday": 6.195,
+    "same time last week": 5.232,
+    "profile": 5.219,
+    "xgb[maps]": 5.354,
+    "xgb[maps+prof]": 4.925
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.695,
+     "same time yesterday": 6.295,
+     "same time last week": 5.088,
+     "profile": 5.007,
+     "xgb[maps]": 5.026,
+     "xgb[maps+prof]": 4.679
+    },
+    "MY_TO_SG": {
+     "persistence": 10.678,
+     "same time yesterday": 6.095,
+     "same time last week": 5.375,
+     "profile": 5.432,
+     "xgb[maps]": 5.682,
+     "xgb[maps+prof]": 5.171
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.135,
+     "ci_min": [
+      -0.249,
+      0.533
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.295,
+     "ci_min": [
+      -0.671,
+      0.057
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 420,
+   "rows": 5108,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.216,
+    "same time yesterday": 6.189,
+    "same time last week": 5.23,
+    "profile": 5.216,
+    "xgb[maps]": 5.292,
+    "xgb[maps+prof]": 4.951
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.676,
+     "same time yesterday": 6.28,
+     "same time last week": 5.079,
+     "profile": 4.994,
+     "xgb[maps]": 4.947,
+     "xgb[maps+prof]": 4.684
+    },
+    "MY_TO_SG": {
+     "persistence": 10.756,
+     "same time yesterday": 6.098,
+     "same time last week": 5.381,
+     "profile": 5.438,
+     "xgb[maps]": 5.638,
+     "xgb[maps+prof]": 5.219
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.076,
+     "ci_min": [
+      -0.279,
+      0.438
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.265,
+     "ci_min": [
+      -0.625,
+      0.073
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 450,
+   "rows": 5102,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.179,
+    "same time yesterday": 6.177,
+    "same time last week": 5.225,
+    "profile": 5.209,
+    "xgb[maps]": 5.216,
+    "xgb[maps+prof]": 4.969
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.703,
+     "same time yesterday": 6.254,
+     "same time last week": 5.063,
+     "profile": 4.975,
+     "xgb[maps]": 4.923,
+     "xgb[maps+prof]": 4.609
+    },
+    "MY_TO_SG": {
+     "persistence": 10.655,
+     "same time yesterday": 6.1,
+     "same time last week": 5.386,
+     "profile": 5.442,
+     "xgb[maps]": 5.508,
+     "xgb[maps+prof]": 5.328
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.007,
+     "ci_min": [
+      -0.368,
+      0.387
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.24,
+     "ci_min": [
+      -0.588,
+      0.078
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 480,
+   "rows": 5096,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.074,
+    "same time yesterday": 6.165,
+    "same time last week": 5.218,
+    "profile": 5.198,
+    "xgb[maps]": 5.192,
+    "xgb[maps+prof]": 4.861
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.733,
+     "same time yesterday": 6.231,
+     "same time last week": 5.046,
+     "profile": 4.948,
+     "xgb[maps]": 4.873,
+     "xgb[maps+prof]": 4.453
+    },
+    "MY_TO_SG": {
+     "persistence": 10.415,
+     "same time yesterday": 6.099,
+     "same time last week": 5.391,
+     "profile": 5.448,
+     "xgb[maps]": 5.51,
+     "xgb[maps+prof]": 5.269
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.006,
+     "ci_min": [
+      -0.387,
+      0.389
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.337,
+     "ci_min": [
+      -0.671,
+      -0.013
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 510,
+   "rows": 5090,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.959,
+    "same time yesterday": 6.151,
+    "same time last week": 5.212,
+    "profile": 5.186,
+    "xgb[maps]": 5.156,
+    "xgb[maps+prof]": 4.834
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.761,
+     "same time yesterday": 6.205,
+     "same time last week": 5.029,
+     "profile": 4.923,
+     "xgb[maps]": 4.962,
+     "xgb[maps+prof]": 4.506
+    },
+    "MY_TO_SG": {
+     "persistence": 10.157,
+     "same time yesterday": 6.098,
+     "same time last week": 5.395,
+     "profile": 5.449,
+     "xgb[maps]": 5.351,
+     "xgb[maps+prof]": 5.161
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.029,
+     "ci_min": [
+      -0.409,
+      0.357
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.352,
+     "ci_min": [
+      -0.696,
+      -0.013
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 540,
+   "rows": 5084,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.897,
+    "same time yesterday": 6.138,
+    "same time last week": 5.205,
+    "profile": 5.176,
+    "xgb[maps]": 5.196,
+    "xgb[maps+prof]": 4.825
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.918,
+     "same time yesterday": 6.179,
+     "same time last week": 5.013,
+     "profile": 4.901,
+     "xgb[maps]": 4.988,
+     "xgb[maps+prof]": 4.446
+    },
+    "MY_TO_SG": {
+     "persistence": 9.875,
+     "same time yesterday": 6.096,
+     "same time last week": 5.398,
+     "profile": 5.452,
+     "xgb[maps]": 5.404,
+     "xgb[maps+prof]": 5.204
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.019,
+     "ci_min": [
+      -0.349,
+      0.382
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.351,
+     "ci_min": [
+      -0.692,
+      -0.011
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 570,
+   "rows": 5078,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.845,
+    "same time yesterday": 6.129,
+    "same time last week": 5.197,
+    "profile": 5.166,
+    "xgb[maps]": 5.218,
+    "xgb[maps+prof]": 4.846
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.101,
+     "same time yesterday": 6.157,
+     "same time last week": 4.998,
+     "profile": 4.881,
+     "xgb[maps]": 4.983,
+     "xgb[maps+prof]": 4.41
+    },
+    "MY_TO_SG": {
+     "persistence": 9.589,
+     "same time yesterday": 6.1,
+     "same time last week": 5.397,
+     "profile": 5.451,
+     "xgb[maps]": 5.452,
+     "xgb[maps+prof]": 5.282
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.052,
+     "ci_min": [
+      -0.367,
+      0.447
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.32,
+     "ci_min": [
+      -0.681,
+      0.035
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 600,
+   "rows": 5072,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.846,
+    "same time yesterday": 6.124,
+    "same time last week": 5.184,
+    "profile": 5.155,
+    "xgb[maps]": 5.247,
+    "xgb[maps+prof]": 4.871
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.291,
+     "same time yesterday": 6.145,
+     "same time last week": 4.968,
+     "profile": 4.86,
+     "xgb[maps]": 4.954,
+     "xgb[maps+prof]": 4.384
+    },
+    "MY_TO_SG": {
+     "persistence": 9.401,
+     "same time yesterday": 6.103,
+     "same time last week": 5.399,
+     "profile": 5.45,
+     "xgb[maps]": 5.541,
+     "xgb[maps+prof]": 5.357
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.092,
+     "ci_min": [
+      -0.353,
+      0.533
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.284,
+     "ci_min": [
+      -0.663,
+      0.101
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 630,
+   "rows": 5066,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.952,
+    "same time yesterday": 6.118,
+    "same time last week": 5.167,
+    "profile": 5.145,
+    "xgb[maps]": 5.375,
+    "xgb[maps+prof]": 4.945
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.522,
+     "same time yesterday": 6.13,
+     "same time last week": 4.935,
+     "profile": 4.839,
+     "xgb[maps]": 5.04,
+     "xgb[maps+prof]": 4.432
+    },
+    "MY_TO_SG": {
+     "persistence": 9.381,
+     "same time yesterday": 6.107,
+     "same time last week": 5.399,
+     "profile": 5.45,
+     "xgb[maps]": 5.71,
+     "xgb[maps+prof]": 5.458
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.23,
+     "ci_min": [
+      -0.241,
+      0.69
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.2,
+     "ci_min": [
+      -0.593,
+      0.177
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 660,
+   "rows": 5060,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.076,
+    "same time yesterday": 6.109,
+    "same time last week": 5.153,
+    "profile": 5.136,
+    "xgb[maps]": 5.505,
+    "xgb[maps+prof]": 4.959
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.708,
+     "same time yesterday": 6.111,
+     "same time last week": 4.901,
+     "profile": 4.818,
+     "xgb[maps]": 5.056,
+     "xgb[maps+prof]": 4.359
+    },
+    "MY_TO_SG": {
+     "persistence": 9.444,
+     "same time yesterday": 6.108,
+     "same time last week": 5.404,
+     "profile": 5.453,
+     "xgb[maps]": 5.953,
+     "xgb[maps+prof]": 5.558
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.369,
+     "ci_min": [
+      -0.146,
+      0.857
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.177,
+     "ci_min": [
+      -0.589,
+      0.249
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 690,
+   "rows": 5054,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.179,
+    "same time yesterday": 6.097,
+    "same time last week": 5.145,
+    "profile": 5.125,
+    "xgb[maps]": 5.491,
+    "xgb[maps+prof]": 4.917
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.816,
+     "same time yesterday": 6.091,
+     "same time last week": 4.88,
+     "profile": 4.796,
+     "xgb[maps]": 5.038,
+     "xgb[maps+prof]": 4.389
+    },
+    "MY_TO_SG": {
+     "persistence": 9.541,
+     "same time yesterday": 6.103,
+     "same time last week": 5.41,
+     "profile": 5.454,
+     "xgb[maps]": 5.944,
+     "xgb[maps+prof]": 5.446
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.366,
+     "ci_min": [
+      -0.169,
+      0.871
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.208,
+     "ci_min": [
+      -0.603,
+      0.192
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 720,
+   "rows": 5048,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.222,
+    "same time yesterday": 6.085,
+    "same time last week": 5.135,
+    "profile": 5.119,
+    "xgb[maps]": 5.438,
+    "xgb[maps+prof]": 4.9
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.87,
+     "same time yesterday": 6.076,
+     "same time last week": 4.86,
+     "profile": 4.782,
+     "xgb[maps]": 4.956,
+     "xgb[maps+prof]": 4.371
+    },
+    "MY_TO_SG": {
+     "persistence": 9.573,
+     "same time yesterday": 6.094,
+     "same time last week": 5.41,
+     "profile": 5.456,
+     "xgb[maps]": 5.92,
+     "xgb[maps+prof]": 5.43
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.32,
+     "ci_min": [
+      -0.207,
+      0.822
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.218,
+     "ci_min": [
+      -0.623,
+      0.159
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 750,
+   "rows": 5042,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.165,
+    "same time yesterday": 6.072,
+    "same time last week": 5.125,
+    "profile": 5.111,
+    "xgb[maps]": 5.317,
+    "xgb[maps+prof]": 4.84
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.843,
+     "same time yesterday": 6.062,
+     "same time last week": 4.842,
+     "profile": 4.764,
+     "xgb[maps]": 4.763,
+     "xgb[maps+prof]": 4.305
+    },
+    "MY_TO_SG": {
+     "persistence": 9.487,
+     "same time yesterday": 6.082,
+     "same time last week": 5.408,
+     "profile": 5.458,
+     "xgb[maps]": 5.87,
+     "xgb[maps+prof]": 5.374
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.206,
+     "ci_min": [
+      -0.283,
+      0.657
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.271,
+     "ci_min": [
+      -0.716,
+      0.144
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 780,
+   "rows": 5036,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.016,
+    "same time yesterday": 6.06,
+    "same time last week": 5.118,
+    "profile": 5.101,
+    "xgb[maps]": 5.171,
+    "xgb[maps+prof]": 4.765
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.697,
+     "same time yesterday": 6.054,
+     "same time last week": 4.83,
+     "profile": 4.746,
+     "xgb[maps]": 4.535,
+     "xgb[maps+prof]": 4.257
+    },
+    "MY_TO_SG": {
+     "persistence": 9.336,
+     "same time yesterday": 6.066,
+     "same time last week": 5.406,
+     "profile": 5.457,
+     "xgb[maps]": 5.806,
+     "xgb[maps+prof]": 5.273
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.069,
+     "ci_min": [
+      -0.371,
+      0.484
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.336,
+     "ci_min": [
+      -0.797,
+      0.086
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 810,
+   "rows": 5030,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.84,
+    "same time yesterday": 6.044,
+    "same time last week": 5.114,
+    "profile": 5.094,
+    "xgb[maps]": 5.063,
+    "xgb[maps+prof]": 4.755
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.551,
+     "same time yesterday": 6.038,
+     "same time last week": 4.819,
+     "profile": 4.731,
+     "xgb[maps]": 4.504,
+     "xgb[maps+prof]": 4.305
+    },
+    "MY_TO_SG": {
+     "persistence": 9.129,
+     "same time yesterday": 6.05,
+     "same time last week": 5.409,
+     "profile": 5.457,
+     "xgb[maps]": 5.622,
+     "xgb[maps+prof]": 5.206
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.031,
+     "ci_min": [
+      -0.519,
+      0.42
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.338,
+     "ci_min": [
+      -0.765,
+      0.071
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 840,
+   "rows": 5024,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.699,
+    "same time yesterday": 6.023,
+    "same time last week": 5.109,
+    "profile": 5.079,
+    "xgb[maps]": 5.113,
+    "xgb[maps+prof]": 4.762
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.383,
+     "same time yesterday": 6.013,
+     "same time last week": 4.802,
+     "profile": 4.709,
+     "xgb[maps]": 4.601,
+     "xgb[maps+prof]": 4.324
+    },
+    "MY_TO_SG": {
+     "persistence": 9.015,
+     "same time yesterday": 6.033,
+     "same time last week": 5.415,
+     "profile": 5.449,
+     "xgb[maps]": 5.626,
+     "xgb[maps+prof]": 5.2
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.034,
+     "ci_min": [
+      -0.481,
+      0.5
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.317,
+     "ci_min": [
+      -0.754,
+      0.094
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 870,
+   "rows": 5018,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.696,
+    "same time yesterday": 6.0,
+    "same time last week": 5.1,
+    "profile": 5.067,
+    "xgb[maps]": 5.054,
+    "xgb[maps+prof]": 4.792
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.23,
+     "same time yesterday": 5.982,
+     "same time last week": 4.787,
+     "profile": 4.687,
+     "xgb[maps]": 4.609,
+     "xgb[maps+prof]": 4.318
+    },
+    "MY_TO_SG": {
+     "persistence": 9.162,
+     "same time yesterday": 6.018,
+     "same time last week": 5.413,
+     "profile": 5.446,
+     "xgb[maps]": 5.499,
+     "xgb[maps+prof]": 5.265
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.013,
+     "ci_min": [
+      -0.589,
+      0.469
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.275,
+     "ci_min": [
+      -0.732,
+      0.149
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 900,
+   "rows": 5012,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.742,
+    "same time yesterday": 5.982,
+    "same time last week": 5.096,
+    "profile": 5.058,
+    "xgb[maps]": 5.06,
+    "xgb[maps+prof]": 4.816
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.082,
+     "same time yesterday": 5.957,
+     "same time last week": 4.783,
+     "profile": 4.666,
+     "xgb[maps]": 4.607,
+     "xgb[maps+prof]": 4.3
+    },
+    "MY_TO_SG": {
+     "persistence": 9.402,
+     "same time yesterday": 6.008,
+     "same time last week": 5.408,
+     "profile": 5.45,
+     "xgb[maps]": 5.514,
+     "xgb[maps+prof]": 5.332
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.002,
+     "ci_min": [
+      -0.559,
+      0.493
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.242,
+     "ci_min": [
+      -0.759,
+      0.235
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 930,
+   "rows": 5006,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.823,
+    "same time yesterday": 5.967,
+    "same time last week": 5.094,
+    "profile": 5.056,
+    "xgb[maps]": 5.109,
+    "xgb[maps+prof]": 4.827
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.992,
+     "same time yesterday": 5.937,
+     "same time last week": 4.784,
+     "profile": 4.653,
+     "xgb[maps]": 4.655,
+     "xgb[maps+prof]": 4.393
+    },
+    "MY_TO_SG": {
+     "persistence": 9.653,
+     "same time yesterday": 5.997,
+     "same time last week": 5.405,
+     "profile": 5.458,
+     "xgb[maps]": 5.563,
+     "xgb[maps+prof]": 5.261
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.054,
+     "ci_min": [
+      -0.492,
+      0.558
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.229,
+     "ci_min": [
+      -0.818,
+      0.287
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 960,
+   "rows": 5000,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.951,
+    "same time yesterday": 5.957,
+    "same time last week": 5.093,
+    "profile": 5.055,
+    "xgb[maps]": 5.067,
+    "xgb[maps+prof]": 4.799
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.02,
+     "same time yesterday": 5.928,
+     "same time last week": 4.782,
+     "profile": 4.647,
+     "xgb[maps]": 4.603,
+     "xgb[maps+prof]": 4.393
+    },
+    "MY_TO_SG": {
+     "persistence": 9.883,
+     "same time yesterday": 5.986,
+     "same time last week": 5.405,
+     "profile": 5.463,
+     "xgb[maps]": 5.53,
+     "xgb[maps+prof]": 5.204
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.012,
+     "ci_min": [
+      -0.577,
+      0.52
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.256,
+     "ci_min": [
+      -0.838,
+      0.259
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 990,
+   "rows": 4994,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.059,
+    "same time yesterday": 5.957,
+    "same time last week": 5.084,
+    "profile": 5.056,
+    "xgb[maps]": 5.077,
+    "xgb[maps+prof]": 4.797
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.107,
+     "same time yesterday": 5.924,
+     "same time last week": 4.779,
+     "profile": 4.643,
+     "xgb[maps]": 4.677,
+     "xgb[maps+prof]": 4.496
+    },
+    "MY_TO_SG": {
+     "persistence": 10.012,
+     "same time yesterday": 5.99,
+     "same time last week": 5.39,
+     "profile": 5.47,
+     "xgb[maps]": 5.478,
+     "xgb[maps+prof]": 5.098
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.021,
+     "ci_min": [
+      -0.55,
+      0.505
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.259,
+     "ci_min": [
+      -0.822,
+      0.244
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1020,
+   "rows": 4988,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.134,
+    "same time yesterday": 5.957,
+    "same time last week": 5.08,
+    "profile": 5.058,
+    "xgb[maps]": 5.11,
+    "xgb[maps+prof]": 4.745
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.191,
+     "same time yesterday": 5.919,
+     "same time last week": 4.78,
+     "profile": 4.635,
+     "xgb[maps]": 4.687,
+     "xgb[maps+prof]": 4.443
+    },
+    "MY_TO_SG": {
+     "persistence": 10.076,
+     "same time yesterday": 5.995,
+     "same time last week": 5.38,
+     "profile": 5.482,
+     "xgb[maps]": 5.533,
+     "xgb[maps+prof]": 5.046
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.052,
+     "ci_min": [
+      -0.539,
+      0.539
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.314,
+     "ci_min": [
+      -0.923,
+      0.198
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1050,
+   "rows": 4982,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.161,
+    "same time yesterday": 5.95,
+    "same time last week": 5.079,
+    "profile": 5.056,
+    "xgb[maps]": 5.185,
+    "xgb[maps+prof]": 4.693
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.281,
+     "same time yesterday": 5.903,
+     "same time last week": 4.775,
+     "profile": 4.622,
+     "xgb[maps]": 4.831,
+     "xgb[maps+prof]": 4.382
+    },
+    "MY_TO_SG": {
+     "persistence": 10.041,
+     "same time yesterday": 5.996,
+     "same time last week": 5.382,
+     "profile": 5.489,
+     "xgb[maps]": 5.54,
+     "xgb[maps+prof]": 5.003
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.13,
+     "ci_min": [
+      -0.485,
+      0.616
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.363,
+     "ci_min": [
+      -0.935,
+      0.119
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1080,
+   "rows": 4976,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.103,
+    "same time yesterday": 5.941,
+    "same time last week": 5.073,
+    "profile": 5.053,
+    "xgb[maps]": 5.156,
+    "xgb[maps+prof]": 4.561
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.32,
+     "same time yesterday": 5.881,
+     "same time last week": 4.767,
+     "profile": 4.609,
+     "xgb[maps]": 4.84,
+     "xgb[maps+prof]": 4.293
+    },
+    "MY_TO_SG": {
+     "persistence": 9.887,
+     "same time yesterday": 6.001,
+     "same time last week": 5.379,
+     "profile": 5.496,
+     "xgb[maps]": 5.471,
+     "xgb[maps+prof]": 4.829
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.103,
+     "ci_min": [
+      -0.542,
+      0.595
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.491,
+     "ci_min": [
+      -1.073,
+      0.019
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1110,
+   "rows": 4970,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.982,
+    "same time yesterday": 5.933,
+    "same time last week": 5.059,
+    "profile": 5.046,
+    "xgb[maps]": 5.052,
+    "xgb[maps+prof]": 4.506
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.288,
+     "same time yesterday": 5.862,
+     "same time last week": 4.748,
+     "profile": 4.599,
+     "xgb[maps]": 4.901,
+     "xgb[maps+prof]": 4.282
+    },
+    "MY_TO_SG": {
+     "persistence": 9.675,
+     "same time yesterday": 6.005,
+     "same time last week": 5.37,
+     "profile": 5.494,
+     "xgb[maps]": 5.202,
+     "xgb[maps+prof]": 4.731
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.005,
+     "ci_min": [
+      -0.62,
+      0.546
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.54,
+     "ci_min": [
+      -1.162,
+      0.008
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1140,
+   "rows": 4964,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.795,
+    "same time yesterday": 5.923,
+    "same time last week": 5.045,
+    "profile": 5.034,
+    "xgb[maps]": 5.002,
+    "xgb[maps+prof]": 4.425
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.171,
+     "same time yesterday": 5.846,
+     "same time last week": 4.74,
+     "profile": 4.584,
+     "xgb[maps]": 4.904,
+     "xgb[maps+prof]": 4.231
+    },
+    "MY_TO_SG": {
+     "persistence": 9.419,
+     "same time yesterday": 6.0,
+     "same time last week": 5.349,
+     "profile": 5.484,
+     "xgb[maps]": 5.099,
+     "xgb[maps+prof]": 4.618
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.033,
+     "ci_min": [
+      -0.717,
+      0.525
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.61,
+     "ci_min": [
+      -1.244,
+      -0.081
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1170,
+   "rows": 4958,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.505,
+    "same time yesterday": 5.915,
+    "same time last week": 5.035,
+    "profile": 5.026,
+    "xgb[maps]": 4.924,
+    "xgb[maps+prof]": 4.404
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.838,
+     "same time yesterday": 5.835,
+     "same time last week": 4.736,
+     "profile": 4.576,
+     "xgb[maps]": 5.012,
+     "xgb[maps+prof]": 4.265
+    },
+    "MY_TO_SG": {
+     "persistence": 9.172,
+     "same time yesterday": 5.996,
+     "same time last week": 5.334,
+     "profile": 5.475,
+     "xgb[maps]": 4.837,
+     "xgb[maps+prof]": 4.544
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.101,
+     "ci_min": [
+      -0.796,
+      0.47
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.621,
+     "ci_min": [
+      -1.256,
+      -0.084
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1200,
+   "rows": 4952,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 10.111,
+    "same time yesterday": 5.91,
+    "same time last week": 5.028,
+    "profile": 5.024,
+    "xgb[maps]": 4.987,
+    "xgb[maps+prof]": 4.405
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.26,
+     "same time yesterday": 5.832,
+     "same time last week": 4.74,
+     "profile": 4.577,
+     "xgb[maps]": 5.062,
+     "xgb[maps+prof]": 4.272
+    },
+    "MY_TO_SG": {
+     "persistence": 8.962,
+     "same time yesterday": 5.988,
+     "same time last week": 5.315,
+     "profile": 5.472,
+     "xgb[maps]": 4.912,
+     "xgb[maps+prof]": 4.539
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.037,
+     "ci_min": [
+      -0.668,
+      0.448
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.619,
+     "ci_min": [
+      -1.219,
+      -0.087
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1230,
+   "rows": 4946,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 9.67,
+    "same time yesterday": 5.91,
+    "same time last week": 5.02,
+    "profile": 5.026,
+    "xgb[maps]": 4.89,
+    "xgb[maps+prof]": 4.464
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 10.596,
+     "same time yesterday": 5.837,
+     "same time last week": 4.742,
+     "profile": 4.581,
+     "xgb[maps]": 4.818,
+     "xgb[maps+prof]": 4.258
+    },
+    "MY_TO_SG": {
+     "persistence": 8.745,
+     "same time yesterday": 5.983,
+     "same time last week": 5.297,
+     "profile": 5.472,
+     "xgb[maps]": 4.962,
+     "xgb[maps+prof]": 4.67
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.136,
+     "ci_min": [
+      -0.703,
+      0.304
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.562,
+     "ci_min": [
+      -1.154,
+      -0.043
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1260,
+   "rows": 4940,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 9.161,
+    "same time yesterday": 5.908,
+    "same time last week": 5.013,
+    "profile": 5.03,
+    "xgb[maps]": 4.902,
+    "xgb[maps+prof]": 4.494
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 9.845,
+     "same time yesterday": 5.842,
+     "same time last week": 4.741,
+     "profile": 4.589,
+     "xgb[maps]": 4.749,
+     "xgb[maps+prof]": 4.247
+    },
+    "MY_TO_SG": {
+     "persistence": 8.476,
+     "same time yesterday": 5.975,
+     "same time last week": 5.284,
+     "profile": 5.472,
+     "xgb[maps]": 5.055,
+     "xgb[maps+prof]": 4.741
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.128,
+     "ci_min": [
+      -0.629,
+      0.281
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.536,
+     "ci_min": [
+      -1.099,
+      -0.046
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1290,
+   "rows": 4934,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 8.606,
+    "same time yesterday": 5.9,
+    "same time last week": 5.0,
+    "profile": 5.029,
+    "xgb[maps]": 4.868,
+    "xgb[maps+prof]": 4.488
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 9.067,
+     "same time yesterday": 5.848,
+     "same time last week": 4.733,
+     "profile": 4.594,
+     "xgb[maps]": 4.615,
+     "xgb[maps+prof]": 4.165
+    },
+    "MY_TO_SG": {
+     "persistence": 8.145,
+     "same time yesterday": 5.951,
+     "same time last week": 5.267,
+     "profile": 5.464,
+     "xgb[maps]": 5.121,
+     "xgb[maps+prof]": 4.81
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.161,
+     "ci_min": [
+      -0.655,
+      0.238
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.541,
+     "ci_min": [
+      -1.112,
+      -0.034
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1320,
+   "rows": 4928,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 7.991,
+    "same time yesterday": 5.888,
+    "same time last week": 4.987,
+    "profile": 5.024,
+    "xgb[maps]": 4.839,
+    "xgb[maps+prof]": 4.501
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 8.278,
+     "same time yesterday": 5.855,
+     "same time last week": 4.733,
+     "profile": 4.6,
+     "xgb[maps]": 4.6,
+     "xgb[maps+prof]": 4.163
+    },
+    "MY_TO_SG": {
+     "persistence": 7.705,
+     "same time yesterday": 5.921,
+     "same time last week": 5.241,
+     "profile": 5.448,
+     "xgb[maps]": 5.078,
+     "xgb[maps+prof]": 4.838
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.185,
+     "ci_min": [
+      -0.636,
+      0.206
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.523,
+     "ci_min": [
+      -1.076,
+      -0.012
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1350,
+   "rows": 4922,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 7.286,
+    "same time yesterday": 5.873,
+    "same time last week": 4.97,
+    "profile": 5.016,
+    "xgb[maps]": 4.803,
+    "xgb[maps+prof]": 4.519
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 7.407,
+     "same time yesterday": 5.861,
+     "same time last week": 4.738,
+     "profile": 4.607,
+     "xgb[maps]": 4.606,
+     "xgb[maps+prof]": 4.163
+    },
+    "MY_TO_SG": {
+     "persistence": 7.165,
+     "same time yesterday": 5.885,
+     "same time last week": 5.202,
+     "profile": 5.424,
+     "xgb[maps]": 5.0,
+     "xgb[maps+prof]": 4.875
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.213,
+     "ci_min": [
+      -0.569,
+      0.135
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.497,
+     "ci_min": [
+      -1.004,
+      -0.004
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1380,
+   "rows": 4916,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 6.61,
+    "same time yesterday": 5.857,
+    "same time last week": 4.957,
+    "profile": 5.006,
+    "xgb[maps]": 4.659,
+    "xgb[maps+prof]": 4.5
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 6.611,
+     "same time yesterday": 5.868,
+     "same time last week": 4.743,
+     "profile": 4.614,
+     "xgb[maps]": 4.456,
+     "xgb[maps+prof]": 4.195
+    },
+    "MY_TO_SG": {
+     "persistence": 6.608,
+     "same time yesterday": 5.847,
+     "same time last week": 5.171,
+     "profile": 5.397,
+     "xgb[maps]": 4.861,
+     "xgb[maps+prof]": 4.804
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.347,
+     "ci_min": [
+      -0.79,
+      0.097
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.506,
+     "ci_min": [
+      -0.974,
+      -0.001
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 1410,
+   "rows": 4910,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 6.07,
+    "same time yesterday": 5.845,
+    "same time last week": 4.947,
+    "profile": 4.999,
+    "xgb[maps]": 4.683,
+    "xgb[maps+prof]": 4.537
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 6.06,
+     "same time yesterday": 5.873,
+     "same time last week": 4.743,
+     "profile": 4.62,
+     "xgb[maps]": 4.526,
+     "xgb[maps+prof]": 4.226
+    },
+    "MY_TO_SG": {
+     "persistence": 6.08,
+     "same time yesterday": 5.817,
+     "same time last week": 5.15,
+     "profile": 5.379,
+     "xgb[maps]": 4.84,
+     "xgb[maps+prof]": 4.848
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.316,
+     "ci_min": [
+      -0.788,
+      0.153
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.463,
+     "ci_min": [
+      -0.888,
+      0.015
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1440,
+   "rows": 4904,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 5.832,
+    "same time yesterday": 5.832,
+    "same time last week": 4.942,
+    "profile": 5.001,
+    "xgb[maps]": 4.664,
+    "xgb[maps+prof]": 4.574
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 5.876,
+     "same time yesterday": 5.876,
+     "same time last week": 4.744,
+     "profile": 4.626,
+     "xgb[maps]": 4.496,
+     "xgb[maps+prof]": 4.281
+    },
+    "MY_TO_SG": {
+     "persistence": 5.789,
+     "same time yesterday": 5.789,
+     "same time last week": 5.139,
+     "profile": 5.375,
+     "xgb[maps]": 4.832,
+     "xgb[maps+prof]": 4.866
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.337,
+     "ci_min": [
+      -0.855,
+      0.157
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.427,
+     "ci_min": [
+      -0.848,
+      0.054
+     ],
+     "decision": "not significant"
+    }
+   }
+  }
+ ]
+}

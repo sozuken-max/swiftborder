@@ -82,7 +82,7 @@ Neither run uses `--bqml`, so the ensemble pool is local (`ensemble.pool_30_loca
 ## Already true
 
 - Maps durations log every 5 minutes into `causeway.travel_times` (both directions; counts in [inventory.md](inventory.md)).
-- `v_forecast_recent` serves a 30-minute forecast: persistence or `lin_h30`. `xgb_h30` is trained and not called. `y_60` is computed and not served.
+- `forecast-api` (Cloud Run, public) serves the 30-minute forecast from local models ([ADR 0004](adr/0004-serve-local-models.md)): the `lin_h30` replica for SG→MY and persistence for MY→SG. It also serves exploratory horizons to 24 h, a 30-minute forecast curve and a calendar-profile baseline ([horizon-study.md](horizon-study.md)). `v_forecast_recent` and the BQML models remain as history.
 - Weather and camera-2701 congestion views exist and are not joined.
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.

@@ -8,7 +8,7 @@ A **public** HTTP read of the Woodlands 30-minute forecast (the invoker IAM chec
 
 What it is not:
 - **Not a crossing-time measurement.** The label is Maps' own estimate.
-- **Not a 24-hour forecast.** Only 30-minute models are callable.
+- **Not an evaluated long-range forecast.** Only the 30-minute forecast is evaluated by the report harness. Horizons from 60 min to 24 h and the 30-minute forecast curve are exploratory (`status: exploratory`). Past 5.5 h the curve is the calendar-profile baseline. See [Exploratory horizons and the profile baseline](#exploratory-horizons-and-the-profile-baseline).
 - **Not the public `traffic-24h.json`** the Firebase cards read ([ADR 0001](../adr/0001-firebase-client-api-calls.md)).
 
 ## How a forecast is made
@@ -43,7 +43,10 @@ What it is not:
 | `model_my_to_sg` | none | a callable id for `MY_TO_SG` only; overrides `model` there |
 | `version` | current | must equal the current version, otherwise 400; not allowed with a per-direction override |
 | `direction` | `both` | `SG_TO_MY`, `MY_TO_SG`, `both` |
-| `horizon_min` | 30 | 30 only |
+| `horizon_min` | 30 | 30 for every model. Any multiple of 30 up to 1440 (exploratory) for `served`, `persistence`, `xgb[maps]`, `xgb[maps+prof]` and `profile` |
+| `baseline` | none | `profile` returns the baseline curve instead of a forecast (with `hours`, 1–24, default 24) |
+| `curve` | none | `forecast` returns forecasts every 30 minutes (with `hours`, 1–24, default 2); see [the forecast curve](#exploratory-horizons-and-the-profile-baseline) |
+| `list` | none | `models` (catalog) or `horizon-study` (the exploratory study summary) |
 
 **Manual selection.**
 - `?model=xgb[maps]` uses one model for both directions.
@@ -55,7 +58,8 @@ What it is not:
 - daily models: `labels_before=YYYY-MM-DDT00:00:00+08:00`;
 - frozen replicas: `bqml-replica-2026-09-12`;
 - `persistence`: `latest-bin`;
-- `served`: the `SELECTION_ID`.
+- `served`: the `SELECTION_ID` at 30 min; `horizon-study-2026-10-04` (`EXPLORATORY_SELECTION_ID`) at other horizons;
+- `profile`: `labels_before=...` (refitted each SGT day).
 
 ## Response
 
@@ -85,11 +89,67 @@ What it is not:
 
 **Timing fields.** `forecast_for` / `forecast_window_end` bound the target bin; the forecast is its mean Maps duration. `origin_closed_at` is when the newest observation bin closed. `observation_age_min` and `lead_min` are measured when the response is sent, including from the cache. The example is a local run against live BigQuery at 2026-10-03 17:00:17 UTC: the 16:50 bin had not cleared its grace minute, so the origin was 16:40.
 
+## Exploratory horizons and the profile baseline
+
+The source is [docs/horizon-study.md](../horizon-study.md): an exploratory study on 13–30 Sep, not confirmed on Run B. The figures are exposed on purpose, labelled.
+
+- **`status`** (top level):
+  - `evaluated`: a 30-minute model of the report harness;
+  - `exploratory`: any horizon other than 30, or `xgb[maps+prof]`;
+  - `baseline`: `model=profile`.
+  - `mixed`: the directions differ, e.g. `model=served&model_my_to_sg=profile`. Each direction also carries its own `status`, so read `directions.<d>.status`.
+- **No profile history:** when a direction has no closed bin before the serving day (a new route, or data starting today), there is no profile.
+  - A forecast that does not need the profile (persistence, `xgb[maps]`, the 30-minute models) still answers 200 with `baseline.directions.<d>.forecast_min: null`.
+  - `model=profile`, `xgb[maps+prof]`, `?curve=forecast` and `?baseline=profile` answer 503 "No baseline history for the requested direction".
+  - No response ever contains `NaN`: a non-finite number becomes a 502.
+- **Curve metadata:** `model_meta` in a curve is keyed `<model>@<h>min`, one entry per fit, and each point names its entry in `model_meta_key`.
+- **Serving-day rollover:** cached answers are keyed by the serving day, so the first request after 00:00 SGT uses the new fit and profile. Each request reads the clock once when it starts (`_serving_now`). A request that spans midnight therefore fits, predicts, keys its cache and writes its metadata on one serving day; only lead and expiry use the live clock.
+- **Browser caching:** forecast and curve responses send `Cache-Control: private, max-age=N`. `N` is at most 300 and never past the first target or the origin's 30-minute expiry, so a browser cannot reuse an expired forecast. It is `no-store` once that time is under a second.
+- **`served` at an exploratory horizon:** `xgb[maps]` up to 60 min, `xgb[maps+prof]` from 90 min (`EXPLORATORY_SELECTION`, version `horizon-study-2026-10-04`). At 30 min it stays `SERVED_SELECTION`.
+- **Timing:** `target_offset_min` is `[h, h+10]` and `lead_min` is about `h − 10` to `h − 20` with current ingestion. The origin rules do not change with the horizon: the newest closed bin, at most 30 minutes old. A 24-hour request therefore still answers 503 when ingestion is stale.
+- **`baseline`** (in every forecast response): the calendar profile at the same target bin, per direction. It carries `"status": "baseline"` and the label *"Baseline: typical for this day and time (calendar profile), not a forecast"*. It is a per-direction Fourier (K = 8) × weekend ridge, refitted each SGT day on every closed bin before 00:00 SGT, so it ignores current traffic.
+- **`study`** (when the summary is bundled): the study MAE at this horizon for the model used, the profile and persistence, with `vs_profile` differences and decisions.
+- **`?baseline=profile&hours=N`:** the profile for the next `N` hours in 10-minute bins (`bin_start`, `forecast_min`) per direction. It needs no latest-bin read.
+- **`?list=horizon-study`:** `forecastapi/horizon_study.json`, written by `cd eval; python horizon_study.py --publish`. Re-run and commit it after the study changes; the service only reads it.
+
+Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:50 UTC):
+
+| Request | Model | SG → JB | JB → SG | Profile baseline (SG → JB / JB → SG) | Study MAE (model / profile / persistence) |
+| --- | --- | --- | --- | --- | --- |
+| `horizon_min=120` | `xgb[maps+prof]` | 34.4 | 22.1 | 42.0 / 24.3 | 3.96 / 5.19 / 6.86 |
+| `horizon_min=240` | `xgb[maps+prof]` | 26.4 | 31.9 | 32.1 / 30.8 | 4.49 / 5.21 / 9.88 |
+| `horizon_min=1440` | `xgb[maps+prof]` | 24.8 | 25.2 | 28.4 / 26.2 | 4.57 / 5.00 / 5.83 |
+
+**Forecast curve, `?curve=forecast&hours=N`** (the recommended call for a chart):
+- Returns the forecast every 30 minutes from one origin, out to `N` hours (1–24, default **2**: four points at 30, 60, 90 and 120 min).
+- **Each point** carries `horizon_min`, `forecast_for`, `forecast_window_end`, `forecast_min`, `baseline_min` (the profile at the same target), `model`, `status`, `lead_min` and `study_mae_min`.
+- **Which model per point:**
+  - 30 min uses the evaluated `served` choice;
+  - 60 min uses `xgb[maps]`;
+  - 90–330 min use `xgb[maps+prof]`;
+  - after 330 min (5.5 h) the point **is** the profile baseline (`model: profile`, `status: baseline`), because in the study no model beat it consistently there (`CURVE_MODEL_MAX_MIN`). There are scattered uncorrected wins at 8–9 h and 19–23 h, and none survives Holm over the 336 comparisons.
+- **Per direction:** `origin_ts`, `origin_closed_at` and `observation_age_min`.
+- **Caching:** the curve is cached for 5 minutes and dropped when its first target starts.
+- **Live check** (local run against live BigQuery, 2026-10-04 02:01 UTC, origin 01:50 UTC):
+  - SG → JB: 33.0 / 36.3 / 36.2 / 31.7 min at 30 / 60 / 90 / 120 min ahead, with the baseline at 39.4 / 42.0 / 41.7 / 38.5.
+  - The first call took 29 s: the training read, the profile and four fits. `hours=24` then took 10 s more for its extra fits.
+- **Cost:** each 30-minute step is one daily fit, about 0.6–1 s locally. The default curve costs about 4 fits per instance per day, and `hours=24` costs 11, because the baseline points need none.
+
+Why not model points every 30 minutes to 24 h: from 6 h on, the model points would be, within the study's uncertainty, the baseline under another name. A single horizon past 5.5 h can still be requested with `horizon_min` (exploratory).
+
+**For the page (`app.js`, outside git):**
+- Call `?curve=forecast` (or `&hours=4` for 8 points) and plot each point's `forecast_min` at `forecast_for`. This gives the three or more points 60–120 min ahead the page asked for, all from one origin and one request.
+- Plot `?baseline=profile&hours=24` as a separately styled line labelled with `label`.
+- Show `status` on exploratory values, and use `lead_min` rather than a fixed "30 minutes ahead".
+- With `hours` above 5, draw the points where `model` is `profile` in the baseline style. The curve can step at the switch: in a live run on 2026-10-04, SG → JB went 23.5 → 27.3 between 5.5 h and 6 h. That step is the model letting go, not a predicted change.
+- Past about 5.5 h, the study found the forecast no better than the baseline. Say so next to those values.
+- Each new horizon costs one daily fit per instance on its first request (about 4–5 s locally).
+
 ## Performance
 
 A local run against live BigQuery on 2026-10-03 took:
-- **Cold start:** about 13 s for the first `served` request (training read plus fits).
-- **Each later request:** about 3 s, mostly the latest-row read; a repeat inside 5 minutes is served from the cache.
+- **Cold start:** about 13 s for the first `served` request (training read plus fits). On 2026-10-04, after the exploratory horizons and the profile were added, it was about 22 s.
+- **Each later request:** about 3 s, mostly the latest-row read; a repeat inside 5 minutes is served from the cache. The first request at a new exploratory horizon took 4–6 s (one more fit).
 
 The fitted daily models are reused until 00:00 SGT. Memory is 1 GiB.
 

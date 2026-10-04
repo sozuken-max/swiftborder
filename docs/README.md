@@ -13,10 +13,11 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | What remains, and the order to do it | [roadmap.md](roadmap.md) |
 | Evaluation data cutoff (19 Oct 2026 23:59 SGT) | [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03) |
 | LSTM, GRU and Transformer forecasters: design, results, when to revisit | [deep-learning-assessment.md](deep-learning-assessment.md) |
+| Horizon study, 30 min to 24 h, with a calendar-profile baseline (exploratory) | [horizon-study.md](horizon-study.md) |
 | Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
 | Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
 | How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |
-| 30-minute forecast HTTP API (deployed; current access and timing findings in inventory/review) | [runbooks/forecast-api.md](runbooks/forecast-api.md); serving local models: [adr/0004](adr/0004-serve-local-models.md) |
+| Forecast HTTP API (deployed, public): evaluated 30-minute forecast, exploratory horizons and forecast curve, profile baseline | [runbooks/forecast-api.md](runbooks/forecast-api.md); serving local models: [adr/0004](adr/0004-serve-local-models.md) |
 | Release checklist for PR #2: redeploy smoke test and rollback, weather-append verification and retention, credential risk | [release-pr2.md](release-pr2.md) |
 | Evidence appendix (dated GCP copy) | [inventory.md](inventory.md) |
 | Layer B harness and report figures | [../eval/README.md](../eval/README.md), committed snapshot [../eval/runs/report/](../eval/runs/report/) |

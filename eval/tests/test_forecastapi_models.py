@@ -8,7 +8,9 @@ import pandas as pd
 import pytest
 
 import bq_replica as bq
+import camera_forecast as cf
 import features as fx
+import horizon_study as hs
 import joined as jx
 
 REPO = Path(__file__).resolve().parents[2]
@@ -32,7 +34,10 @@ def test_feature_lists_and_settings_match_eval():
     ridge = jx._ridge(jx.FEATURE_SETS["maps"])
     assert ridge.steps[-1][1].alpha == lm.HARNESS_RIDGE_ALPHA
     assert ridge.steps[0][1].strategy == "median" and ridge.steps[0][1].add_indicator is True
-    assert set(lm.LOCAL_MODELS) == {"ridge[maps]", "xgb[maps]", "lin_bq[daily]", "xgb_bq[daily]", "lin_bq[frozen]", "xgb_bq[frozen]"}
+    assert set(lm.LOCAL_MODELS) == {"ridge[maps]", "xgb[maps]", "lin_bq[daily]", "xgb_bq[daily]", "lin_bq[frozen]", "xgb_bq[frozen]", "xgb[maps+prof]"}
+    assert tuple(lm.HORIZONS) == tuple(hs.DEFAULT_HORIZONS)
+    assert lm.PROFILE_HARMONICS == hs.PROFILE_HARMONICS and lm.PROFILE_NOW_OFFSET == cf.NOW_OFFSET
+    assert lm.PROFILE_ALPHA == cf.FourierProfile().alpha
 
 
 def _view(days=14, seed=0):
@@ -103,3 +108,54 @@ def test_service_features_equal_the_harness_features_with_missing_bins():
     )
     single = harness[harness["bin_ts"] == t0 + pd.Timedelta(minutes=10 * 201)]
     assert single["lag_10"].isna().all() and (single["after_gap"] == 0).all()
+
+
+def _study_bins(days=10, seed=5):
+    rng = np.random.default_rng(seed)
+    t0 = pd.Timestamp("2026-09-05 16:00", tz="UTC")
+    rows = []
+    for d, route in (("SG_TO_MY", "r_sg"), ("MY_TO_SG", "r_my")):
+        for i in range(days * 144):
+            if i in (300, 301, 777):
+                continue
+            ts = t0 + pd.Timedelta(minutes=10 * i)
+            base = 25 + 8 * np.sin(2 * np.pi * i / 144) + rng.normal(0, 1.5)
+            rows.append({"route_id": route, "direction": d, "bin_ts": ts, "dur_min": base, "typical_min": 20.0,
+                         "congestion_ratio": 1 + rng.normal(0, 0.1), "speed_kmh": 40 + rng.normal(0, 3)})
+    bins = pd.DataFrame(rows)
+    bins["gap_min"] = bins.groupby("route_id")["bin_ts"].diff().dt.total_seconds() / 60.0
+    return bins
+
+
+@pytest.mark.parametrize("horizon", [120, 1440])
+def test_service_reproduces_the_horizon_study(horizon):
+    """Labels, the profile baseline and xgb[maps+prof] equal eval/horizon_study.py on one fold."""
+    bins = _study_bins()
+    day = "2026-09-13"
+    day_start = pd.Timestamp(day).tz_localize("Asia/Singapore").tz_convert("UTC")
+
+    # study side (horizon_study.run_horizon, one fold)
+    feats = fx.maps_features(bins)
+    feats["is_my_to_sg"] = (feats["direction"] == "MY_TO_SG").astype(int)
+    feats["date_sgt"] = feats["bin_ts"].dt.tz_convert("Asia/Singapore").dt.strftime("%Y-%m-%d")
+    frame = feats.assign(y_h=hs._lookup(feats, [horizon])[horizon])
+    data = frame[frame["y_h"].notna() & (frame["after_gap"] == 0)]
+    train_h = data[data["bin_ts"] + pd.Timedelta(minutes=horizon + 10) <= day_start]
+    test_h = data[data["date_sgt"] == day]
+    prof_h = hs.fit_profile(feats, day_start)
+    train_h, test_h = hs.add_profile(train_h, prof_h, horizon), hs.add_profile(test_h, prof_h, horizon)
+    cols = jx.FEATURE_SETS["maps"] + ["prof_now", "prof_h"]
+    study_pred = jx._xgb().fit(train_h[cols], train_h["y_h"].to_numpy()).predict(test_h[cols])
+
+    # service side: closed bins before the day, features_from_bins, Profile, training_rows, fit
+    closed = bins[bins["bin_ts"] + pd.Timedelta(minutes=10) <= day_start].drop(columns=["gap_min", "typical_min"])
+    frame_s = lm.prepare(lm.features_from_bins(closed))
+    profile = lm.Profile().fit(frame_s)
+    train_s = lm.with_profile(lm.training_rows(frame_s, "daily", day_start, horizon), profile, horizon)
+    model = lm.fit("xgb[maps+prof]", train_s, horizon)
+    test_s = lm.with_profile(lm.prepare(test_h.drop(columns=["is_my_to_sg", "date_sgt", "prof_now", "prof_h"])), profile, horizon)
+
+    assert len(train_s) == len(train_h)
+    np.testing.assert_allclose(train_s[lm.label_column(horizon)].to_numpy(), train_h["y_h"].to_numpy())
+    np.testing.assert_allclose(test_s["prof_h"].to_numpy(), test_h["prof_h"].to_numpy(), atol=1e-9)
+    np.testing.assert_allclose(model.predict(test_s), study_pred, rtol=0, atol=1e-6)

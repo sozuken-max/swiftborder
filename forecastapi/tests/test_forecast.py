@@ -44,7 +44,7 @@ def _rows(directions=("SG_TO_MY", "MY_TO_SG")):
 def _install(monkeypatch):
     calls = []
 
-    def fake(model_id, requested):
+    def fake(model_id, requested, horizon=30):
         calls.append((model_id, tuple(requested)))
         return _rows(requested)
 
@@ -114,8 +114,11 @@ def test_catalog_states_and_served_selection(monkeypatch):
     by_id = {row["id"]: row for row in payload["models"]}
     assert by_id["served"]["deploy_state"] == "production"
     assert by_id["served"]["selection"] == main.SERVED_SELECTION
-    for mid in list(lm.LOCAL_MODELS) + ["persistence"]:
+    for mid in [m for m in lm.LOCAL_MODELS if m not in main.EXPLORATORY_MODELS] + ["persistence"]:
         assert by_id[mid]["deploy_state"] == "local" and by_id[mid]["callable"] is True
+    assert by_id["xgb[maps+prof]"]["deploy_state"] == "exploratory" and by_id["xgb[maps+prof]"]["callable"] is True
+    assert by_id["profile"]["deploy_state"] == "baseline" and by_id["profile"]["horizons_min"] == list(lm.HORIZONS)
+    assert by_id["lin_bq[frozen]"]["horizons_min"] == [30]
     assert "lin_h30" not in by_id and "xgb_h30" not in by_id  # BigQuery ML is no longer called
     assert by_id["ensemble[maps]"]["callable"] is False
     assert by_id["lstm"]["deploy_state"] == "artifact"
@@ -154,7 +157,9 @@ def test_cache_does_not_query_twice_inside_ttl(monkeypatch):
 def test_bad_direction_and_horizon_are_400(monkeypatch):
     calls = _install(monkeypatch)
     assert _json(main.forecast(_request(query={"model": "served", "direction": "north"})))[1] == 400
-    payload, status, _ = _json(main.forecast(_request(query={"model": "served", "horizon_min": "1440"})))
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served", "horizon_min": "45"})))
+    assert status == 400 and payload["error"] == "horizon_min must be a multiple of 30 from 30 to 1440"
+    payload, status, _ = _json(main.forecast(_request(query={"model": "lin_bq[frozen]", "horizon_min": "60"})))
     assert status == 400 and payload["error"] == "horizon_min must be 30"
     assert calls == []
 
@@ -162,7 +167,7 @@ def test_bad_direction_and_horizon_are_400(monkeypatch):
 def test_missing_direction_is_503_and_not_cached(monkeypatch):
     calls = []
 
-    def empty(model_id, directions):
+    def empty(model_id, directions, horizon=30):
         calls.append(model_id)
         return {"source": "fixture", "rows": []}
 
@@ -174,7 +179,7 @@ def test_missing_direction_is_503_and_not_cached(monkeypatch):
 
 
 def test_query_failure_is_502_without_detail(monkeypatch):
-    def boom(model_id, directions):
+    def boom(model_id, directions, horizon=30):
         raise RuntimeError("SELECT secret FROM `swiftborder.traffic_prediction.v_training_set`")
 
     monkeypatch.setattr(main, "query_forecast", boom)
@@ -338,7 +343,7 @@ def test_training_rows_follow_the_harness_folds():
 def _install_selection(monkeypatch):
     calls = []
 
-    def fake(chosen):
+    def fake(chosen, horizon=30):
         calls.append(dict(chosen))
         return {
             "source": "fixture",
@@ -405,3 +410,324 @@ def test_live_path_with_override(monkeypatch):
     assert status == 200 and payload["source"] == "local model"
     assert payload["directions"]["SG_TO_MY"]["model"] == "ridge[maps]"
     assert set(payload["model_meta"]) == {"ridge[maps]", "persistence"}
+
+
+# --- exploratory horizons and the profile baseline (docs/horizon-study.md) -------------------
+
+
+def test_exploratory_horizon_uses_the_study_selection_and_says_so(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "120"})))
+    assert status == 200 and payload["status"] == "exploratory" and payload["horizon_min"] == 120
+    assert payload["version"] == main.EXPLORATORY_SELECTION_ID and payload["target_offset_min"] == [120, 130]
+    for d in main.DIRECTIONS:
+        row = payload["directions"][d]
+        assert row["model"] == "xgb[maps+prof]"
+        assert row["origin_ts"] == "2026-10-03T03:40:00Z" and row["forecast_for"] == "2026-10-03T05:40:00Z"
+        assert row["lead_min"] == 100.0
+    base = payload["baseline"]
+    assert base["model"] == "profile" and base["status"] == "baseline" and "not a forecast" in base["label"]
+    assert set(base["directions"]) == set(main.DIRECTIONS)
+    if main.STUDY:
+        assert {"xgb[maps+prof]", "profile", "persistence"} <= set(payload["study"]["mae_min"])
+        assert payload["study"]["status"] == "exploratory"
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "60"})))
+    assert status == 200 and payload["directions"]["SG_TO_MY"]["model"] == "xgb[maps]"
+
+
+def test_thirty_minutes_stays_evaluated_and_carries_the_baseline(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={})))
+    assert status == 200 and payload["status"] == "evaluated" and payload["target_offset_min"] == [30, 40]
+    assert payload["directions"]["SG_TO_MY"]["model"] == main.SERVED_SELECTION["SG_TO_MY"]
+    assert payload["baseline"]["status"] == "baseline"
+
+
+def test_profile_model_returns_the_baseline_value(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "profile", "horizon_min": "240"})))
+    assert status == 200 and payload["status"] == "baseline"
+    for d in main.DIRECTIONS:
+        assert payload["directions"][d]["forecast_min"] == payload["baseline"]["directions"][d]["forecast_min"]
+
+
+def test_long_horizon_still_needs_a_fresh_origin(monkeypatch):
+    bins = _bins()
+    bins = bins[bins["bin_ts"] < pd.Timestamp("2026-10-03 02:00", tz="UTC")]
+    now = {"t": dt.datetime(2026, 10, 3, 2, 25, tzinfo=UTC)}  # newest origin 01:50 is 35 min old
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "1440"})))
+    assert status == 503
+
+
+def test_override_without_that_horizon_is_400(monkeypatch):
+    _install_selection(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "120", "model_sg_to_my": "lin_bq[frozen]"})))
+    assert status == 400 and payload["error"] == "model in model_sg_to_my has no 120-minute horizon"
+
+
+def test_baseline_curve(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 3, tzinfo=UTC)}
+    reads = _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"baseline": "profile", "hours": "6"})))
+    assert status == 200 and payload["status"] == "baseline" and "not a forecast" in payload["label"]
+    for d in main.DIRECTIONS:
+        pts = payload["directions"][d]
+        assert len(pts) == 36 and pts[0]["bin_start"] == "2026-10-03T04:10:00Z" and pts[-1]["bin_start"] == "2026-10-03T10:00:00Z"
+    assert reads["latest"] == []  # the curve needs no latest bins
+    assert _json(main.forecast(_request(query={"baseline": "profile", "hours": "25"})))[1] == 400
+    assert _json(main.forecast(_request(query={"baseline": "trend"})))[1] == 400
+
+
+def test_horizon_study_listing():
+    payload, status, _ = _json(main.forecast(_request(query={"list": "horizon-study"})))
+    if main.STUDY is None:
+        assert status == 503
+        return
+    assert status == 200 and payload["status"] == "exploratory"
+    assert [h["horizon_min"] for h in payload["horizons"]] == list(lm.HORIZONS)
+
+
+def test_training_rows_per_horizon():
+    view = lm.prepare(lm.features_from_bins(_bins()))
+    day = pd.Timestamp("2026-10-02 16:00", tz="UTC")
+    for h in (60, 240, 1440):
+        rows = lm.training_rows(view, "daily", day, h)
+        assert (rows["bin_ts"] + pd.Timedelta(minutes=h + 10) <= day).all() and rows[lm.label_column(h)].notna().all()
+    with pytest.raises(ValueError):
+        lm.training_rows(view, "frozen", day, 60)
+
+
+# --- forecast curve (?curve=forecast) -------------------------------------------------------
+
+
+def test_forecast_curve_default_is_30_to_120_minutes(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200 and payload["step_min"] == 30 and payload["hours"] == 2
+    for d in main.DIRECTIONS:
+        block = payload["directions"][d]
+        assert block["origin_ts"] == "2026-10-03T03:40:00Z"
+        pts = block["points"]
+        assert [p["horizon_min"] for p in pts] == [30, 60, 90, 120]
+        assert [p["forecast_for"] for p in pts] == ["2026-10-03T04:10:00Z", "2026-10-03T04:40:00Z", "2026-10-03T05:10:00Z", "2026-10-03T05:40:00Z"]
+        assert pts[0]["model"] == main.SERVED_SELECTION[d] and pts[0]["status"] == "evaluated"
+        assert pts[1]["model"] == "xgb[maps]" and pts[2]["model"] == "xgb[maps+prof]" and pts[1]["status"] == "exploratory"
+        assert [p["lead_min"] for p in pts] == [10.0, 40.0, 70.0, 100.0]
+        assert all("baseline_min" in p for p in pts)
+
+
+def test_forecast_curve_points_match_single_horizon_requests(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    curve, _, _ = _json(main.forecast(_request(query={"curve": "forecast", "hours": "2"})))
+    for h in (60, 120):
+        single, status, _ = _json(main.forecast(_request(query={"horizon_min": str(h)})))
+        assert status == 200
+        for d in main.DIRECTIONS:
+            p = next(p for p in curve["directions"][d]["points"] if p["horizon_min"] == h)
+            assert p["forecast_min"] == single["directions"][d]["forecast_min"]
+            assert p["baseline_min"] == single["baseline"]["directions"][d]["forecast_min"]
+
+
+def test_forecast_curve_switches_to_the_baseline_after_four_hours(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast", "hours": "24", "direction": "MY_TO_SG"})))
+    assert status == 200 and list(payload["directions"]) == ["MY_TO_SG"]
+    pts = payload["directions"]["MY_TO_SG"]["points"]
+    assert len(pts) == 48 and pts[-1]["horizon_min"] == 1440
+    for p in pts:
+        if p["horizon_min"] > main.CURVE_MODEL_MAX_MIN:
+            assert p["model"] == "profile" and p["status"] == "baseline" and p["forecast_min"] == p["baseline_min"]
+        else:
+            assert p["model"] != "profile"
+
+
+def test_forecast_curve_errors_and_staleness(monkeypatch):
+    bins = _bins()
+    bins = bins[bins["bin_ts"] < pd.Timestamp("2026-10-03 02:00", tz="UTC")]
+    now = {"t": dt.datetime(2026, 10, 3, 2, 25, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    assert _json(main.forecast(_request(query={"curve": "forecast"})))[1] == 503
+    assert _json(main.forecast(_request(query={"curve": "forecast", "hours": "0"})))[1] == 400
+    assert _json(main.forecast(_request(query={"curve": "forecast", "hours": "25"})))[1] == 400
+    assert _json(main.forecast(_request(query={"curve": "baseline"})))[1] == 400
+
+
+def test_cached_curve_expires_with_its_first_target(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(main, "_clock", lambda: clock["t"])
+    calls = []
+    real = main.forecast_curve
+    monkeypatch.setattr(main, "forecast_curve", lambda d, h: calls.append(h) or real(d, h))
+    assert _json(main.forecast(_request(query={"curve": "forecast"})))[1] == 200
+    now["t"] = dt.datetime(2026, 10, 3, 4, 3, tzinfo=UTC)
+    clock["t"] += 180
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200 and len(calls) == 1 and payload["directions"]["SG_TO_MY"]["points"][0]["lead_min"] == 7.0
+    now["t"] = dt.datetime(2026, 10, 3, 4, 10, 30, tzinfo=UTC)  # first target 04:10 has started
+    clock["t"] += 60
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200 and len(calls) == 2  # re-queried; the 03:50 origin is now servable
+    assert payload["directions"]["SG_TO_MY"]["origin_ts"] == "2026-10-03T03:50:00Z"
+
+
+# --- review fixes (PR #7) --------------------------------------------------------------------
+
+
+def test_mixed_selection_labels_each_direction(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served", "model_my_to_sg": "profile"})))
+    assert status == 200 and payload["status"] == "mixed"
+    assert payload["directions"]["SG_TO_MY"]["status"] == "evaluated"
+    assert payload["directions"]["MY_TO_SG"]["status"] == "baseline"
+    payload, _, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert payload["status"] == "evaluated" and {r["status"] for r in payload["directions"].values()} == {"evaluated"}
+
+
+def test_expired_cache_entries_are_evicted_on_put(monkeypatch):
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(main, "_clock", lambda: clock["t"])
+    for i in range(144):  # one baseline curve per 10-minute bin for a day, each key read once
+        main._cache_put(("baseline-curve", i), {"i": i})
+        clock["t"] += 600
+    assert len(main._cache) == 1
+
+
+def test_browser_cache_never_outlives_the_first_target(monkeypatch):
+    bins = _bins()
+    # ingestion stops after 03:40: at 04:09:30 that origin's first target (04:10) is 30 s away
+    stopped = bins[bins["bin_ts"] <= pd.Timestamp("2026-10-03 03:40", tz="UTC")]
+    now = {"t": dt.datetime(2026, 10, 3, 4, 9, 30, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, stopped, now)
+    payload, status, headers = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200 and payload["directions"]["SG_TO_MY"]["points"][0]["forecast_for"] == "2026-10-03T04:10:00Z"
+    assert headers["Cache-Control"] == "private, max-age=30"
+    _, _, headers = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert headers["Cache-Control"] == "private, max-age=30"  # origin 03:40 + 30 min
+    now["t"] = dt.datetime(2026, 10, 3, 3, 52, tzinfo=UTC)  # fresh origin 03:40: 18 min to target
+    main._cache.clear()
+    _, _, headers = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert headers["Cache-Control"] == "private, max-age=300"
+    _, _, headers = _json(main.forecast(_request(query={"list": "models"})))
+    assert headers["Cache-Control"] == "private, max-age=300"
+
+
+# --- review fixes, round 2 (PR #7) -----------------------------------------------------------
+
+
+def _new_route_bins():
+    """MY_TO_SG starts at 00:00 SGT 3 Oct: no closed bin before the serving day, so no profile."""
+    bins = _bins()
+    day = pd.Timestamp("2026-10-02 16:00", tz="UTC")
+    return bins[(bins["direction"] == "SG_TO_MY") | (bins["bin_ts"] >= day)]
+
+
+def test_no_profile_history_never_sends_nan(monkeypatch):
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, _new_route_bins(), now)
+    body, status, _ = main.forecast(_request(query={"model": "persistence"}))
+    assert status == 200 and "NaN" not in body
+    payload = json.loads(body)
+    assert payload["baseline"]["directions"]["MY_TO_SG"]["forecast_min"] is None
+    assert payload["baseline"]["directions"]["SG_TO_MY"]["forecast_min"] is not None
+    for query in ({"model": "profile"}, {"baseline": "profile"}, {"curve": "forecast"}, {"horizon_min": "120"}):
+        main._cache.clear()
+        payload, status, _ = _json(main.forecast(_request(query=query)))
+        assert status == 503 and payload == {"error": main.NO_PROFILE_ERROR}, query
+
+
+def test_non_finite_numbers_are_a_502_not_invalid_json(monkeypatch):
+    monkeypatch.setattr(main, "list_models", lambda: {"x": float("nan")})
+    payload, status, _ = _json(main.forecast(_request(query={"list": "models"})))
+    assert status == 502 and payload == {"error": "Forecast query failed"}
+
+
+def test_single_forecast_cache_rolls_over_at_midnight_sgt(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 15, 59, tzinfo=UTC)}  # 23:59 SGT
+    reads = _fake_bigquery(monkeypatch, bins, now)
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(main, "_clock", lambda: clock["t"])
+    first, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 200 and len(reads["latest"]) == 1
+    now["t"] = dt.datetime(2026, 10, 3, 16, 1, 30, tzinfo=UTC)  # 00:01:30 SGT, inside the 5-minute TTL
+    clock["t"] += 150
+    second, status, _ = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert status == 200 and len(reads["latest"]) == 2  # not yesterday's cached answer
+    assert first["baseline"]["version"] != second["baseline"]["version"]
+
+
+def test_curve_metadata_is_kept_per_model_and_horizon(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast", "hours": "4"})))
+    assert status == 200
+    meta = payload["model_meta"]
+    for p in payload["directions"]["SG_TO_MY"]["points"]:
+        m = meta[p["model_meta_key"]]
+        assert m["model"] == p["model"] and m["horizon_min"] == p["horizon_min"]
+    prof_fits = {k: v for k, v in meta.items() if v["model"] == "xgb[maps+prof]"}
+    assert sorted(v["horizon_min"] for v in prof_fits.values()) == [90, 120, 150, 180, 210, 240]
+    assert len({v["training_rows"] for v in prof_fits.values()}) > 1  # each fit has its own rows
+
+
+# --- review fixes, round 3 (PR #7) -----------------------------------------------------------
+
+
+def test_request_spanning_midnight_uses_one_serving_day(monkeypatch):
+    """The clock advances 5 s on every read during the request, starting at 23:59:50 SGT."""
+    bins = _bins()
+    reads = _fake_bigquery(monkeypatch, bins, {"t": None})
+    ticks = {"t": dt.datetime(2026, 10, 3, 15, 59, 50, tzinfo=UTC)}
+
+    def advancing():
+        ticks["t"] += dt.timedelta(seconds=5)
+        return ticks["t"]
+
+    monkeypatch.setattr(main, "_now", advancing)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast", "hours": "4"})))
+    assert status == 200 and ticks["t"] > dt.datetime(2026, 10, 3, 16, 0, tzinfo=UTC)  # the request crossed 00:00 SGT
+    day = "labels_before=2026-10-03T00:00:00+08:00"
+    daily = lambda vs: {v for v in vs if v.startswith("labels_before=")}  # noqa: E731 (frozen replicas have fixed versions)
+    assert daily(m["version"] for m in payload["model_meta"].values()) == {day}
+    assert daily(k[1] for k in main._fitted) == {day}  # every daily fit and the profile are from one serving day
+    assert reads["training"] == 1 and len(reads["latest"]) == 1
+
+
+@pytest.mark.parametrize("query", [
+    {"curve": "forecast", "hours": "\u00b2"},
+    {"baseline": "profile", "hours": "\u00b2"},
+    {"horizon_min": "\u00b2"},
+    {"curve": "forecast", "hours": "\u0663"},  # Arabic-Indic three: ASCII digits only
+])
+def test_non_ascii_digits_are_400(monkeypatch, query):
+    _install(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query=query)))
+    assert status == 400 and "error" in payload
+
+
+def test_curve_note_does_not_claim_the_model_never_won_later(monkeypatch):
+    # the study has scattered, uncorrected wins after the cutoff: the note says "not consistent", not "never"
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, _bins(), now)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200 and "not consistent" in payload["note"] and "no model beat it" not in payload["note"]
