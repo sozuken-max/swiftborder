@@ -688,3 +688,38 @@ def test_curve_metadata_is_kept_per_model_and_horizon(monkeypatch):
     prof_fits = {k: v for k, v in meta.items() if v["model"] == "xgb[maps+prof]"}
     assert sorted(v["horizon_min"] for v in prof_fits.values()) == [90, 120, 150, 180, 210, 240]
     assert len({v["training_rows"] for v in prof_fits.values()}) > 1  # each fit has its own rows
+
+
+# --- review fixes, round 3 (PR #7) -----------------------------------------------------------
+
+
+def test_request_spanning_midnight_uses_one_serving_day(monkeypatch):
+    """The clock advances 5 s on every read during the request, starting at 23:59:50 SGT."""
+    bins = _bins()
+    reads = _fake_bigquery(monkeypatch, bins, {"t": None})
+    ticks = {"t": dt.datetime(2026, 10, 3, 15, 59, 50, tzinfo=UTC)}
+
+    def advancing():
+        ticks["t"] += dt.timedelta(seconds=5)
+        return ticks["t"]
+
+    monkeypatch.setattr(main, "_now", advancing)
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast", "hours": "4"})))
+    assert status == 200 and ticks["t"] > dt.datetime(2026, 10, 3, 16, 0, tzinfo=UTC)  # the request crossed 00:00 SGT
+    day = "labels_before=2026-10-03T00:00:00+08:00"
+    daily = lambda vs: {v for v in vs if v.startswith("labels_before=")}  # noqa: E731 (frozen replicas have fixed versions)
+    assert daily(m["version"] for m in payload["model_meta"].values()) == {day}
+    assert daily(k[1] for k in main._fitted) == {day}  # every daily fit and the profile are from one serving day
+    assert reads["training"] == 1 and len(reads["latest"]) == 1
+
+
+@pytest.mark.parametrize("query", [
+    {"curve": "forecast", "hours": "\u00b2"},
+    {"baseline": "profile", "hours": "\u00b2"},
+    {"horizon_min": "\u00b2"},
+    {"curve": "forecast", "hours": "\u0663"},  # Arabic-Indic three: ASCII digits only
+])
+def test_non_ascii_digits_are_400(monkeypatch, query):
+    _install(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query=query)))
+    assert status == 400 and "error" in payload

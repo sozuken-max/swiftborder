@@ -181,6 +181,17 @@ _cache = {}
 _clock = time.monotonic
 _now = lambda: datetime.datetime.now(datetime.timezone.utc)  # noqa: E731
 _fit_lock = threading.Lock()
+_pinned = threading.local()
+
+
+def _serving_now():
+    """The request's serving clock, read once when the request starts (``forecast``).
+
+    Fits, the profile, predictions, cache keys and metadata all use it, so a request that spans
+    00:00 SGT uses one serving day throughout. Lead and expiry checks use the live ``_now()``.
+    """
+    pinned = getattr(_pinned, "now", None)
+    return pinned if pinned is not None else _now()
 _fitted = {}
 _training = {}
 
@@ -192,9 +203,9 @@ def current_version(model_id, horizon=30):
     if model_id == "persistence":
         return PERSISTENCE_VERSION
     if model_id == "profile":
-        return profile_version(_now())
+        return profile_version(_serving_now())
     if model_id in lm.LOCAL_MODELS:
-        return lm.version_for(model_id, _now())
+        return lm.version_for(model_id, _serving_now())
     return spec["default_version"]
 
 
@@ -255,13 +266,13 @@ def _training_frame(day_start):
 
 def fitted_profile():
     """The calendar-profile baseline of the serving day (every closed bin before 00:00 SGT)."""
-    version = profile_version(_now())
+    version = profile_version(_serving_now())
     key = ("profile", version, 0)
     with _fit_lock:
         hit = _fitted.get(key)
         if hit is not None:
             return hit
-        frame = _training_frame(lm.serving_day_start(_now()))
+        frame = _training_frame(lm.serving_day_start(_serving_now()))
         profile = lm.Profile().fit(frame)
         for k in [k for k in _fitted if k[0] == "profile"]:
             _fitted.pop(k)
@@ -270,7 +281,7 @@ def fitted_profile():
 
 
 def fitted_model(model_id, horizon=30):
-    version = lm.version_for(model_id, _now())
+    version = lm.version_for(model_id, _serving_now())
     key = (model_id, version, int(horizon))
     with _fit_lock:
         hit = _fitted.get(key)
@@ -281,7 +292,7 @@ def fitted_model(model_id, horizon=30):
         hit = _fitted.get(key)
         if hit is not None:
             return hit
-        day_start = lm.serving_day_start(_now())
+        day_start = lm.serving_day_start(_serving_now())
         rows = lm.LOCAL_MODELS[model_id]["rows"]
         frame = _training_frame(day_start)  # every closed bin before day_start, harness features
         train = lm.training_rows(frame, rows, day_start, horizon)
@@ -346,7 +357,7 @@ def query_selection(chosen, horizon=30):
     Tests replace this function.
     """
     directions = list(chosen)
-    now = _now()
+    now = _serving_now()
     origins = servable_origins(fetch_latest(directions, now), now)
     shift = datetime.timedelta(minutes=int(horizon))
     profile = fitted_profile()
@@ -396,7 +407,7 @@ def _predict_one(mid, sub, horizon, profile, now):
     x = lm.with_profile(sub, profile, horizon) if lm.LOCAL_MODELS[mid]["kind"] == "harness_xgb_prof" else sub
     meta = {
         "eval_id": lm.LOCAL_MODELS[mid]["eval_id"],
-        "version": lm.version_for(mid, _now()),
+        "version": lm.version_for(mid, _serving_now()),
         "training_rows": model.n_rows,
         "seeds": model.seeds,
     }
@@ -412,7 +423,7 @@ def curve_model(direction, horizon):
 
 def forecast_curve(directions, hours):
     """Forecasts every 30 minutes from the same origin, plus the profile baseline at each target. Tests replace this."""
-    now = _now()
+    now = _serving_now()
     origins = servable_origins(fetch_latest(directions, now), now)
     profile = fitted_profile()
     horizons = [h for h in lm.HORIZONS if h <= int(hours) * 60]
@@ -498,7 +509,7 @@ def _curve_with_timing(payload, now):
 
 def profile_curve(directions, hours):
     """The profile baseline every 10 minutes for the next ``hours``, from the next bin start."""
-    now = pd.Timestamp(_now())
+    now = pd.Timestamp(_serving_now())
     start = now.floor("10min") + pd.Timedelta(minutes=10)
     ts = pd.Series(pd.date_range(start, periods=int(hours) * 6, freq="10min"))
     profile = fitted_profile()
@@ -683,12 +694,17 @@ def _json_headers(max_age=CACHE_TTL_SECONDS):
     return {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": cache}
 
 
+def _is_number(text):
+    """ASCII digits only: ``str.isdigit`` accepts superscripts such as '\u00b2' that ``int`` rejects."""
+    return text.isascii() and text.isdecimal()
+
+
 def _parse_horizon(raw, spec):
     if raw is None or str(raw).strip() == "":
         horizon = spec["horizon_min"]
     else:
         text = str(raw).strip()
-        if not text.isdigit():
+        if not _is_number(text):
             return None
         horizon = int(text)
     if horizon not in spec["horizons"]:
@@ -773,7 +789,7 @@ def _assemble(model_id, version_id, horizon, directions, result):
         # evaluated (30-minute report harness) / exploratory (horizon study) / baseline (profile);
         # "mixed" when the directions differ: read directions.<d>.status then
         "status": statuses.pop() if len(statuses) == 1 else "mixed",
-        "generated_at": _iso(_now()),
+        "generated_at": _iso(_serving_now()),
         "source": source,
         "label": "maps_duration_in_traffic_min",
         # the label is the mean over the target bin, h to h+10 minutes after the origin bin starts
@@ -796,6 +812,14 @@ def _assemble(model_id, version_id, horizon, directions, result):
 
 @functions_framework.http
 def forecast(request):
+    _pinned.now = _now()  # one serving day for the whole request
+    try:
+        return _handle(request)
+    finally:
+        _pinned.now = None
+
+
+def _handle(request):
     if request.method == "OPTIONS":
         return ("", 204, _cors_headers())
     if request.method != "GET":
@@ -824,12 +848,12 @@ def forecast(request):
             return _error("baseline must be profile", 400)
         hours_raw = _param(body, args, "hours")
         text = "24" if hours_raw is None or str(hours_raw).strip() == "" else str(hours_raw).strip()
-        if not text.isdigit() or not 1 <= int(text) <= CURVE_MAX_HOURS:
+        if not _is_number(text) or not 1 <= int(text) <= CURVE_MAX_HOURS:
             return _error("hours must be 1 to %d" % CURVE_MAX_HOURS, 400)
         directions = _parse_directions(_param(body, args, "direction"))
         if directions is None:
             return _error("direction must be SG_TO_MY, MY_TO_SG, or both", 400)
-        key = ("baseline-curve", profile_version(_now()), tuple(directions), int(text), pd.Timestamp(_now()).floor("10min").isoformat())
+        key = ("baseline-curve", profile_version(_serving_now()), tuple(directions), int(text), pd.Timestamp(_serving_now()).floor("10min").isoformat())
         payload = _cache_get(key)
         if payload is None:
             try:
@@ -848,12 +872,12 @@ def forecast(request):
             return _error("curve must be forecast", 400)
         hours_raw = _param(body, args, "hours")
         text = str(CURVE_DEFAULT_HOURS) if hours_raw is None or str(hours_raw).strip() == "" else str(hours_raw).strip()
-        if not text.isdigit() or not 1 <= int(text) <= CURVE_MAX_HOURS:
+        if not _is_number(text) or not 1 <= int(text) <= CURVE_MAX_HOURS:
             return _error("hours must be 1 to %d" % CURVE_MAX_HOURS, 400)
         directions = _parse_directions(_param(body, args, "direction"))
         if directions is None:
             return _error("direction must be SG_TO_MY, MY_TO_SG, or both", 400)
-        key = ("forecast-curve", tuple(directions), int(text), SELECTION_ID, EXPLORATORY_SELECTION_ID, profile_version(_now()))
+        key = ("forecast-curve", tuple(directions), int(text), SELECTION_ID, EXPLORATORY_SELECTION_ID, profile_version(_serving_now()))
         cached = _cache_get(key)
         payload = _curve_with_timing(cached, _now()) if cached is not None else None
         if payload is None:
@@ -922,7 +946,7 @@ def forecast(request):
             return _error("unknown version", 400)
 
     # the serving day too: fixed-version ids (served, persistence) still change fit and profile at 00:00 SGT
-    cache_key = (model_id, version_id, tuple(directions), horizon, profile_version(_now()))
+    cache_key = (model_id, version_id, tuple(directions), horizon, profile_version(_serving_now()))
     cached = _cache_get(cache_key)
     payload = _with_timing(cached, _now()) if cached is not None else None
     if payload is None:

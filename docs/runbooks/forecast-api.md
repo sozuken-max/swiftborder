@@ -103,7 +103,7 @@ The source is [docs/horizon-study.md](../horizon-study.md): an exploratory study
   - `model=profile`, `xgb[maps+prof]`, `?curve=forecast` and `?baseline=profile` answer 503 "No baseline history for the requested direction".
   - No response ever contains `NaN`: a non-finite number becomes a 502.
 - **Curve metadata:** `model_meta` in a curve is keyed `<model>@<h>min`, one entry per fit, and each point names its entry in `model_meta_key`.
-- **Serving-day rollover:** cached answers are keyed by the serving day, so the first request after 00:00 SGT uses the new fit and profile.
+- **Serving-day rollover:** cached answers are keyed by the serving day, so the first request after 00:00 SGT uses the new fit and profile. Each request reads the clock once when it starts (`_serving_now`). A request that spans midnight therefore fits, predicts, keys its cache and writes its metadata on one serving day; only lead and expiry use the live clock.
 - **Browser caching:** forecast and curve responses send `Cache-Control: private, max-age=N`. `N` is at most 300 and never past the first target or the origin's 30-minute expiry, so a browser cannot reuse an expired forecast. It is `no-store` once that time is under a second.
 - **`served` at an exploratory horizon:** `xgb[maps]` up to 60 min, `xgb[maps+prof]` from 90 min (`EXPLORATORY_SELECTION`, version `horizon-study-2026-10-04`). At 30 min it stays `SERVED_SELECTION`.
 - **Timing:** `target_offset_min` is `[h, h+10]` and `lead_min` is about `h − 10` to `h − 20` with current ingestion. The origin rules do not change with the horizon: the newest closed bin, at most 30 minutes old. A 24-hour request therefore still answers 503 when ingestion is stale.
