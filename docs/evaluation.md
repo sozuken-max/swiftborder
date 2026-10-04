@@ -525,7 +525,34 @@ Do not put the 60-minute one-route numbers and the 30-minute two-direction numbe
 
 These two modules live in `Causeway/` and are not part of the frozen run above. Skill is still on the Maps duration series. Labels stay at or before 2026-10-19 23:59 SGT. `fcm_mlp_layer_a` and `timesfm_layer_a` are not scored: camera detections end on 22 Apr 2026 and do not overlap this Maps window.
 
-**TimesFM (`timesfm`, `timesfm_calibrated`, `timesfm_layer_a`). Not scored.** `layer_b_timesfm.py` has no local predict path. A backtest is one `AI.FORECAST` query that builds a context-1024 series for every 10-minute origin (the documented window is 13-30 Sep). That job was not run. The TimesFM column in [Causeway/layer-b-fcm-mlp-results.md](../Causeway/layer-b-fcm-mlp-results.md) is not a result of this pass. Decision: not served, not callable, not in the ensemble.
+**TimesFM (`timesfm`, `timesfm_calibrated`). Scored. Not served.** `layer_b_timesfm.py` has no local predict path. The score is BigQuery `AI.FORECAST` (TimesFM 2.5, context window 1024, horizon 6 steps, both directions) in project `swiftborder`, location `US`.
+
+Command shape: `python layer_b_timesfm.py train --start 2026-09-25 --end 2026-09-30 --validation-days 5 --chunk-days 1`, with no `--register` and no `--write`. One `AI.FORECAST` query per SGT day, 25-30 Sep. The residual ridge is fit on 25 Sep only (141 labelled step-3 rows per direction) and scored on origin days 26-30 Sep. That is the shortest window that still fits `timesfm_calibrated` and uses the same validation days as the `fcm_mlp` test below. It is not the 13-30 Sep window in the module docstring. No production table was written: not `lin_h30`, `xgb_h30`, `model_registry`, `v_forecast_recent`, `layer_b_backtest`, or `layer_b_registry`.
+
+`timesfm_layer_a` was not scored. `traffic_prediction.layer_a_counts` is not in location `US`, and camera detections still end on 22 Apr 2026. The TimesFM column in [Causeway/layer-b-fcm-mlp-results.md](../Causeway/layer-b-fcm-mlp-results.md) is an earlier figure, not this billed run.
+
+Step 3 is 30 minutes from the origin bin start; step 6 is 60 minutes. On the step-3 rows, all 1,434 labels matched `y_30` and persistence matched `y_persistence` in `eval/data/causeway_gdata.csv` (the same SHA-256 as the `fcm_mlp` test). `xgb[maps]` is `eval.joined.run_folds` on Maps features only, daily refit, `replicas=False`, restricted to 26-30 Sep. Significance is `eval/significance.py` (`compare_absolute_errors`, day blocks, Singapore offset, 4,999 resamples, seed 0, horizon step 3) with Holm over this family of four. A pooled decision uses distinct calendar days. Five days is below the 10-day gate, so every decision is **insufficient data**.
+
+| Candidate | Horizon | n | MAE (min) | Calendar days |
+| --- | --- | --- | --- | --- |
+| Persistence | 30 min | 1,434 | 2.804 | 5 |
+| `timesfm` | 30 min | 1,434 | 2.449 | 5 |
+| `timesfm_calibrated` | 30 min | 1,434 | 2.436 | 5 |
+| `xgb[maps]` (daily refit, same rows) | 30 min | 1,434 | 2.195 | 5 |
+| Persistence | 60 min | 1,428 | 4.559 | 5 |
+| `timesfm` | 60 min | 1,428 | 3.525 | 5 |
+| `timesfm_calibrated` | 60 min | 1,428 | 3.526 | 5 |
+
+| Challenger | Reference | Mean diff (min) | Day-block 95% CI | Decision |
+| --- | --- | --- | --- | --- |
+| `timesfm` | Persistence | -0.355 | [-0.524, -0.243] | insufficient data |
+| `timesfm` | `xgb[maps]` | +0.254 | [+0.139, +0.307] | insufficient data |
+| `timesfm_calibrated` | Persistence | -0.368 | [-0.540, -0.255] | insufficient data |
+| `timesfm_calibrated` | `xgb[maps]` | +0.240 | [+0.127, +0.291] | insufficient data |
+| `timesfm` | Persistence (60 min) | -1.034 | [-1.482, -0.694] | insufficient data |
+| `timesfm_calibrated` | Persistence (60 min) | -1.033 | [-1.461, -0.669] | insufficient data |
+
+The 30-minute point estimates are worse than `xgb[maps]` on the same rows (`timesfm` +0.254 min, `timesfm_calibrated` +0.240 min). The 60-minute rows were compared with persistence only; `xgb[maps]` in this protocol is a 30-minute model. The module's own validation rule (three days, no Holm) would have kept `timesfm_calibrated` for `SG_TO_MY` at 30 minutes and `timesfm` on the other 30- and 60-minute cells; that rule is not the harness gate. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `timesfm` and `timesfm_calibrated` stay off the forecast mix and are not callable.
 
 **FCM + MLP (`fcm_mlp`), no camera.** Computed locally from `eval/data/causeway_gdata.csv` (SHA-256 `13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07`), binned the same way as `v_bins_10min`. No BigQuery write.
 

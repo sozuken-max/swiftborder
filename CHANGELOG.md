@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-05
+
+- `timesfm` and `timesfm_calibrated` were scored with BigQuery `AI.FORECAST` (TimesFM 2.5) on Maps durations. Fit day 25 Sep, validation origins 26-30 Sep: 30-minute MAE 2.449 and 2.436 against persistence 2.804 and `xgb[maps]` 2.195 on 1,434 rows. Five calendar days, so the harness decision is insufficient data. Both point estimates are worse than `xgb[maps]`, so they stay out of the served mix and the forecast API does not call them. `timesfm_layer_a` was not scored. No Cloud Run deploy. `lin_h30`, `xgb_h30`, `model_registry`, and `v_forecast_recent` were not changed.
+
 ## 2026-10-04
 
 - Layer B point models were scored locally where that was possible. `fcm_mlp` (no camera) on the script's 26-30 Sep test split has five calendar days, so the harness decision is insufficient data; it is worse than `xgb[maps]` on those same 30-minute rows and stays out of the served mix. `timesfm` was not scored (`AI.FORECAST` was not run). `forecast-api` cards stay non-callable. No Cloud Run deploy. `lin_h30`, `xgb_h30`, `model_registry`, and `v_forecast_recent` were not changed.

@@ -850,8 +850,8 @@ def _layer_b_cards():
         _card(
             "timesfm",
             "TimesFM 2.5",
-            "Not served. TimesFM 2.5 is a BigQuery AI.FORECAST batch in Causeway/layer_b_timesfm.py. "
-            "It was not scored, and this API does not call it.",
+            "Not served. TimesFM 2.5 was scored on a five-day Maps window and stays out of the served mix. "
+            "This API does not call Causeway/layer_b_timesfm.py.",
             "single",
         ),
         _card(
