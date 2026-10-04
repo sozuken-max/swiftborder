@@ -76,7 +76,7 @@ LOCAL_MODELS: Dict[str, Dict[str, str]] = {
 
 # Horizons (minutes) of eval/horizon_study.py. 30 is the evaluated horizon of the report; the others
 # are exploratory. Only these models and the baselines take a horizon other than 30.
-HORIZONS = (30, 60, 90, 120, 180, 240, 360, 480, 720, 1080, 1440)
+HORIZONS = tuple(range(30, 1441, 30))  # every 30 minutes, 30 min .. 24 h
 MULTI_HORIZON_MODELS = ("xgb[maps]", "xgb[maps+prof]")
 PROFILE_FEATURES = ["prof_now", "prof_h"]
 

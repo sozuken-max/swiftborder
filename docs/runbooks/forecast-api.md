@@ -43,8 +43,9 @@ What it is not:
 | `model_my_to_sg` | none | a callable id for `MY_TO_SG` only; overrides `model` there |
 | `version` | current | must equal the current version, otherwise 400; not allowed with a per-direction override |
 | `direction` | `both` | `SG_TO_MY`, `MY_TO_SG`, `both` |
-| `horizon_min` | 30 | 30 for every model. 60, 90, 120, 180, 240, 360, 480, 720, 1080 and 1440 (exploratory) for `served`, `persistence`, `xgb[maps]`, `xgb[maps+prof]` and `profile` |
+| `horizon_min` | 30 | 30 for every model. Any multiple of 30 up to 1440 (exploratory) for `served`, `persistence`, `xgb[maps]`, `xgb[maps+prof]` and `profile` |
 | `baseline` | none | `profile` returns the baseline curve instead of a forecast (with `hours`, 1–24, default 24) |
+| `curve` | none | `forecast` returns forecasts every 30 minutes (with `hours`, 1–24, default 2); see [the forecast curve](#exploratory-horizons-and-the-profile-baseline) |
 | `list` | none | `models` (catalog) or `horizon-study` (the exploratory study summary) |
 
 **Manual selection.**
@@ -110,11 +111,29 @@ Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:
 | `horizon_min=240` | `xgb[maps+prof]` | 26.4 | 31.9 | 32.1 / 30.8 | 4.49 / 5.21 / 9.88 |
 | `horizon_min=1440` | `xgb[maps+prof]` | 24.8 | 25.2 | 28.4 / 26.2 | 4.57 / 5.00 / 5.83 |
 
+**Forecast curve, `?curve=forecast&hours=N`** (the recommended call for a chart):
+- Returns the forecast every 30 minutes from one origin, out to `N` hours (1–24, default **2**: four points at 30, 60, 90 and 120 min).
+- **Each point** carries `horizon_min`, `forecast_for`, `forecast_window_end`, `forecast_min`, `baseline_min` (the profile at the same target), `model`, `status`, `lead_min` and `study_mae_min`.
+- **Which model per point:**
+  - 30 min uses the evaluated `served` choice;
+  - 60 min uses `xgb[maps]`;
+  - 90–330 min use `xgb[maps+prof]`;
+  - after 330 min (5.5 h) the point **is** the profile baseline (`model: profile`, `status: baseline`), because in the study no model beat it consistently there (`CURVE_MODEL_MAX_MIN`).
+- **Per direction:** `origin_ts`, `origin_closed_at` and `observation_age_min`.
+- **Caching:** the curve is cached for 5 minutes and dropped when its first target starts.
+- **Live check** (local run against live BigQuery, 2026-10-04 02:01 UTC, origin 01:50 UTC):
+  - SG → JB: 33.0 / 36.3 / 36.2 / 31.7 min at 30 / 60 / 90 / 120 min ahead, with the baseline at 39.4 / 42.0 / 41.7 / 38.5.
+  - The first call took 29 s: the training read, the profile and four fits. `hours=24` then took 10 s more for its extra fits.
+- **Cost:** each 30-minute step is one daily fit, about 0.6–1 s locally. The default curve costs about 4 fits per instance per day, and `hours=24` costs 11, because the baseline points need none.
+
+Why not model points every 30 minutes to 24 h: from 6 h on, the model points would be, within the study's uncertainty, the baseline under another name. A single horizon past 5.5 h can still be requested with `horizon_min` (exploratory).
+
 **For the page (`app.js`, outside git):**
-- Request each horizon you show (`?horizon_min=120`, ...) and plot `forecast_min` at `forecast_for`.
+- Call `?curve=forecast` (or `&hours=4` for 8 points) and plot each point's `forecast_min` at `forecast_for`. This gives the three or more points 60–120 min ahead the page asked for, all from one origin and one request.
 - Plot `?baseline=profile&hours=24` as a separately styled line labelled with `label`.
 - Show `status` on exploratory values, and use `lead_min` rather than a fixed "30 minutes ahead".
-- Past about 4 h, the study found the forecast no better than the baseline. Say so next to those values.
+- With `hours` above 5, draw the points where `model` is `profile` in the baseline style. The curve can step at the switch: in a live run on 2026-10-04, SG → JB went 23.5 → 27.3 between 5.5 h and 6 h. That step is the model letting go, not a predicted change.
+- Past about 5.5 h, the study found the forecast no better than the baseline. Say so next to those values.
 - Each new horizon costs one daily fit per instance on its first request (about 4–5 s locally).
 
 ## Performance

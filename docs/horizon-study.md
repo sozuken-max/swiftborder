@@ -8,7 +8,7 @@
 
 ## Design
 
-- **Folds:** rolling-origin daily folds over 13–30 Sep SGT (18 test days), as in `joined.py`. For horizon `h`, the label of origin bin `t` is the mean over `[t+h, t+h+10)`. A training row counts only once that label bin closed before the test day started (`bin_ts + h + 10 <= day_start`). Features are the harness's time-based Maps features (`joined.FEATURE_SETS["maps"]`). There is one **direct** model per horizon; nothing is chained.
+- **Folds:** rolling-origin daily folds over 13–30 Sep SGT (18 test days), as in `joined.py`. For horizon `h`, the label of origin bin `t` is the mean over `[t+h, t+h+10)`. A training row counts only once that label bin closed before the test day started (`bin_ts + h + 10 <= day_start`). Features are the harness's time-based Maps features (`joined.FEATURE_SETS["maps"]`). There is one **direct** model per horizon; nothing is chained. The study runs every 30 minutes from 30 min to 24 h (48 horizons). The tables below show 11 of them, and the charts and `?list=horizon-study` show all 48.
 - **Candidates:**
   - **persistence:** the origin bin.
   - **same time yesterday:** the bin at target − 1 day.
@@ -75,8 +75,8 @@ The chart shows origins on 24–26 Sep (Thursday to Saturday), plotted at their 
 
 ## Findings
 
-1. **Current traffic carries information for about 3–4 hours.** `xgb[maps]` beats the calendar profile up to 3 h (−0.40 at 3 h) and matches it from 4 h on. With the profile as an input, `xgb[maps+prof]` beats the profile up to 4 h (−0.72). Beyond that its edge is marginal (8 h) or not detected (6, 12, 18, 24 h).
-2. **Beyond about 4 hours, a forecast on this data is a calendar baseline.** The profile and "same time last week" stay near 5.0–5.2 min MAE out to 24 h. No model beats them significantly at 6, 12, 18 or 24 h, apart from the one marginal 8-hour result. A "24-hour forecast" built from these features would be the profile in another form.
+1. **Current traffic carries information for about 3 hours, and about 5.5 hours with the profile as an input.** On the 30-minute grid, `xgb[maps]` beats the calendar profile at every step to 3 h (−0.40 at 3 h) and matches it from 3.5 h on. `xgb[maps+prof]` beats the profile at every step from 30 min to 5.5 h (−0.45 [−0.78, −0.11] at 5.5 h). The 11-point table above showed the same pattern (−0.72). Beyond that its edge is marginal (8 h) or not detected (6, 12, 18, 24 h).
+2. **Beyond about 5.5 hours, a forecast on this data is essentially a calendar baseline.** On the 30-minute grid a few later steps (8–9 h and 19–23 h) clear 0 by less than 0.1 min at the CI edge, among 48 uncorrected comparisons; they are not evidence of skill. The profile and "same time last week" stay near 5.0–5.2 min MAE out to 24 h. No model beats them significantly at 6, 12, 18 or 24 h, apart from the one marginal 8-hour result. A "24-hour forecast" built from these features would be the profile in another form.
 3. **Persistence is the wrong yardstick past 1 hour.** It degrades to about 11 min by 6 h, so every model "beats persistence" by 5–6 minutes there (and still by 1.2 min at 24 h). Those gains say nothing about forecasting skill. Long-horizon results must be reported against the profile and "same time last week".
 4. **The profile is the right baseline to show beside a forecast.** It is worse than persistence up to 1 h, level at about 1.5 h, and better from 2 h. Its MAE is lower than "same time yesterday" (about 6.2) at every horizon, because it averages over days and separates weekends. That comparison was not significance-tested.
 5. **The profile also helps as a model input, but only at 2 h and beyond.** At 30 min and 1 h it changes nothing; from 2 h it lowers XGBoost MAE by 0.3–0.7 min. This arm was chosen on this window, so it needs Run B before any claim.
@@ -92,14 +92,18 @@ The chart shows origins on 24–26 Sep (Thursday to Saturday), plotted at their 
 ## What is served
 
 `forecast-api` exposes the study, labelled. Details are in the [runbook](runbooks/forecast-api.md#exploratory-horizons-and-the-profile-baseline).
-- **`horizon_min`:** 30 (evaluated), or 60, 90, 120, 180, 240, 360, 480, 720, 1080 or 1440 (exploratory). At an exploratory horizon `served` is the study's lower-MAE model: `xgb[maps]` up to 1 h, `xgb[maps+prof]` from 1.5 h. Every such response says `"status": "exploratory"`.
+- **`horizon_min`:** 30 (evaluated), or any multiple of 30 up to 1440 (exploratory). At an exploratory horizon `served` is the study's lower-MAE model: `xgb[maps]` up to 1 h, `xgb[maps+prof]` from 1.5 h. Every such response says `"status": "exploratory"`.
+- **`?curve=forecast&hours=N`:** forecasts every 30 minutes from one origin, 30–120 min by default.
+  - Model points run to 5.5 h, the end of the unbroken run of 30-minute steps where the model beat the profile. After that each point is the profile baseline, labelled so.
+  - Each point carries its study MAE.
+  - The study grid is every 30 minutes, so every plotted point has its own row in `?list=horizon-study`.
 - **The profile baseline:** every forecast response carries it as `baseline`, labelled *"Baseline: typical for this day and time (calendar profile), not a forecast"*. `model=profile` returns it alone. `?baseline=profile&hours=24` returns its 10-minute curve.
 - **The study's own numbers:** each response carries the study MAE at that horizon (`study`), for the model used, the profile and persistence. `?list=horizon-study` returns the whole summary.
-- **Recommendation for the page:** past about 4 h, show the forecast next to the baseline. The study found no difference between them there, and the page should say so instead of implying long-range skill.
+- **Recommendation for the page:** past about 5.5 h, show the forecast next to the baseline. The study found no difference between them there, and the page should say so instead of implying long-range skill.
 
 The service fits the same models as the study, once per SGT day. `eval/tests/test_forecastapi_models.py` asserts this at 2 h and 24 h: the same labels and profile, and the same `xgb[maps+prof]` predictions to 1e-6.
 
 ## What this means for the report
 
-- **Report wording:** "Forecasts using current traffic beat a calendar baseline up to about 4 hours ahead. Beyond that, no model on 25 days of data did better than the typical pattern for the day and time." Do not report long-horizon gains over persistence as forecasting skill.
+- **Report wording:** "Forecasts using current traffic beat a calendar baseline up to about 5 hours ahead. Beyond that, no model on 25 days of data did better than the typical pattern for the day and time." Do not report long-horizon gains over persistence as forecasting skill.
 - **Before 19 Oct (team decision):** to claim any of this, add the horizons, the profile baseline and the `xgb[maps+prof]` arm to the frozen-run claims and the ADR 0004 serving rule. Until then it is shown as exploratory, not claimed.
