@@ -662,11 +662,7 @@ async function fetchAndRenderCongestionChart() {
             if (li < 0) return '';
             const pts = [[xOf(li), yOf(map[allLabels[li]])]]
                 .concat(slots.map(sl => [xOf(n - 1 + sl), yOf(bySlot[sl].mins)]));
-            const end = pts[pts.length - 1];
-            const dots = pts.slice(1, -1).map(([x, y]) =>
-                `<circle class="lc-fc-dot ${cls}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6"/>`).join('');
-            return `<polyline class="lc-fc-line ${cls}" points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}"/>
-                    ${dots}<circle class="lc-fc-marker ${cls}" cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="5"/>`;
+            return `<polyline class="lc-fc-line ${cls}" points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}"/>`;
         }
         const fcZone = fc ? `
             <rect class="lc-fc-zone" x="${xOf(n - 1).toFixed(1)}" y="${padT}" width="${(xOf(fcIdx) - xOf(n - 1)).toFixed(1)}" height="${plotH}"/>
