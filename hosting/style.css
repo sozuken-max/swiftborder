@@ -2447,29 +2447,14 @@ h4 {
     fill: rgba(148, 163, 184, 0.75);
 }
 
-.fc-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem 1.5rem;
-    font-size: 0.8rem;
-    color: var(--text-muted);
+.fc-line-label {
+    font-size: 11px;
+    font-weight: 700;
 }
 
-.fc-legend span {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-}
-
-.fc-legend-fc::before,
-.fc-legend-base::before {
-    content: '';
-    width: 20px;
-    border-top: 2.4px solid var(--text-main);
-}
-
-.fc-legend-base::before {
-    border-top: 2px dashed rgba(148, 163, 184, 0.9);
+.fc-line-label-base {
+    fill: rgba(148, 163, 184, 0.95);
+    font-weight: 600;
 }
 
 /* "Next 5 h | Full day" toggle */

@@ -943,7 +943,7 @@ function forecastCompare(d, view, spanH) {
     const vals = fcPts.map(p => p.mins).concat(base.map(b => b.mins));
     const lo = Math.min(...vals), hi = Math.max(...vals);
     const pad = Math.max(1, (hi - lo) * 0.12);
-    const W = 420, H = 150, padL = 30, padR = 8, padT = 8, padB = 22;
+    const W = 420, H = 150, padL = 30, padR = 58, padT = 8, padB = 22;
     const x = t => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
     const y = v => padT + (H - padT - padB) - ((v - (lo - pad)) / ((hi + pad) - (lo - pad) || 1)) * (H - padT - padB);
     const poly = arr => arr.map(p => `${x(p.t ?? p.at).toFixed(1)},${y(p.mins).toFixed(1)}`).join(' ');
@@ -958,12 +958,24 @@ function forecastCompare(d, view, spanH) {
     const last = fcPts[fcPts.length - 1];
     const dots = fcPts.slice(0, -1).map(p => `<circle cx="${x(p.at).toFixed(1)}" cy="${y(p.mins).toFixed(1)}" r="2.4" fill="${d.color}"/>`).join('');
 
+    // Label each line at its right-hand end; push the labels apart if the ends are close.
+    const baseEnd = base.length > 1 ? base[base.length - 1] : null;
+    let fy = y(last.mins), by = baseEnd ? y(baseEnd.mins) : null;
+    if (by != null && Math.abs(fy - by) < 14) {
+        const gap = (14 - Math.abs(fy - by)) / 2;
+        if (fy <= by) { fy -= gap; by += gap; } else { fy += gap; by -= gap; }
+    }
+    const lx = x(last.at) + 8;
+    const endLabels = `<text class="fc-line-label" x="${lx.toFixed(1)}" y="${(fy + 3).toFixed(1)}" fill="${d.color}">Forecast</text>`
+        + (baseEnd ? `<text class="fc-line-label fc-line-label-base" x="${(x(baseEnd.t) + 8).toFixed(1)}" y="${(by + 3).toFixed(1)}">Typical</text>` : '');
+
     return `<svg viewBox="0 0 ${W} ${H}" class="fc-compare" role="img"
                  aria-label="${d.label} forecast against the typical day">
         ${ticks}${yLab(lo)}${yLab(hi)}
         ${base.length > 1 ? `<polyline class="fc-base-line" points="${poly(base)}"/>` : ''}
         <polyline class="fc-fc-line" stroke="${d.color}" points="${poly(fcPts)}"/>
         ${dots}<circle cx="${x(last.at).toFixed(1)}" cy="${y(last.mins).toFixed(1)}" r="4" fill="${d.color}" stroke="#070b13" stroke-width="1.5"/>
+        ${endLabels}
     </svg>`;
 }
 
@@ -1019,8 +1031,6 @@ function renderForecastCards() {
     }).join('');
 
     const withBaseline = forecastView.curve && FORECAST_DIRECTIONS.some(d => forecastView.dirs[d.key].points.length > 1);
-    const legend = document.getElementById('fc-legend');
-    if (legend) legend.style.display = withBaseline ? '' : 'none';
     const range = document.getElementById('fc-range');
     if (range) range.style.display = withBaseline && baselineDay ? '' : 'none';
     document.querySelectorAll('#fc-range button').forEach(b =>
