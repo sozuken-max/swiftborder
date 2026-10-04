@@ -585,3 +585,46 @@ def test_cached_curve_expires_with_its_first_target(monkeypatch):
     payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
     assert status == 200 and len(calls) == 2  # re-queried; the 03:50 origin is now servable
     assert payload["directions"]["SG_TO_MY"]["origin_ts"] == "2026-10-03T03:50:00Z"
+
+
+# --- review fixes (PR #7) --------------------------------------------------------------------
+
+
+def test_mixed_selection_labels_each_direction(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served", "model_my_to_sg": "profile"})))
+    assert status == 200 and payload["status"] == "mixed"
+    assert payload["directions"]["SG_TO_MY"]["status"] == "evaluated"
+    assert payload["directions"]["MY_TO_SG"]["status"] == "baseline"
+    payload, _, _ = _json(main.forecast(_request(query={"model": "served"})))
+    assert payload["status"] == "evaluated" and {r["status"] for r in payload["directions"].values()} == {"evaluated"}
+
+
+def test_expired_cache_entries_are_evicted_on_put(monkeypatch):
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(main, "_clock", lambda: clock["t"])
+    for i in range(144):  # one baseline curve per 10-minute bin for a day, each key read once
+        main._cache_put(("baseline-curve", i), {"i": i})
+        clock["t"] += 600
+    assert len(main._cache) == 1
+
+
+def test_browser_cache_never_outlives_the_first_target(monkeypatch):
+    bins = _bins()
+    # ingestion stops after 03:40: at 04:09:30 that origin's first target (04:10) is 30 s away
+    stopped = bins[bins["bin_ts"] <= pd.Timestamp("2026-10-03 03:40", tz="UTC")]
+    now = {"t": dt.datetime(2026, 10, 3, 4, 9, 30, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, stopped, now)
+    payload, status, headers = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200 and payload["directions"]["SG_TO_MY"]["points"][0]["forecast_for"] == "2026-10-03T04:10:00Z"
+    assert headers["Cache-Control"] == "private, max-age=30"
+    _, _, headers = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert headers["Cache-Control"] == "private, max-age=30"  # origin 03:40 + 30 min
+    now["t"] = dt.datetime(2026, 10, 3, 3, 52, tzinfo=UTC)  # fresh origin 03:40: 18 min to target
+    main._cache.clear()
+    _, _, headers = _json(main.forecast(_request(query={"model": "persistence"})))
+    assert headers["Cache-Control"] == "private, max-age=300"
+    _, _, headers = _json(main.forecast(_request(query={"list": "models"})))
+    assert headers["Cache-Control"] == "private, max-age=300"

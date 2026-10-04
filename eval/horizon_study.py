@@ -118,9 +118,19 @@ def add_profile(frame: pd.DataFrame, prof: cf.FourierProfile, h: int) -> pd.Data
     return f
 
 
+MIN_HORIZON, MAX_HORIZON = 10, 1440
+
+
+def check_horizon(h: int) -> int:
+    """10 to 1440 minutes in steps of 10. Beyond 24 h "same time yesterday" (target - 1 d) would lie after
+    the origin, i.e. future information, so the baselines are only defined up to 24 h."""
+    if not isinstance(h, (int, np.integer)) or h % 10 or not MIN_HORIZON <= h <= MAX_HORIZON:
+        raise ValueError(f"horizon must be a multiple of 10 from {MIN_HORIZON} to {MAX_HORIZON} minutes, got {h!r}")
+    return int(h)
+
+
 def run_horizon(feats: pd.DataFrame, h: int, n_bootstrap: int = 999) -> Tuple[Dict, pd.DataFrame]:
-    if h % 10:
-        raise ValueError("horizon must be a multiple of 10 minutes")
+    h = check_horizon(h)
     shifts = _lookup(feats, [h, h - 1440, h - 10080])
     frame = feats.assign(y_h=shifts[h], naive_d1=shifts[h - 1440], naive_d7=shifts[h - 10080])
     data = frame[frame["y_h"].notna() & (frame["after_gap"] == 0)]
@@ -247,6 +257,8 @@ def plot_example_days(oofs: Dict[int, pd.DataFrame], path: Path) -> List[Path]:
     import plots
 
     horizons = [h for h in EXAMPLE_HORIZONS if h in oofs]
+    if not horizons:  # e.g. --horizons 120: nothing to draw, not an error
+        return []
     fig, axes = plt_subplots(len(horizons), 2, figsize=(15, 3.4 * len(horizons)), squeeze=False)
     series = []
     for i, h in enumerate(horizons):
@@ -354,6 +366,10 @@ def main(argv=None) -> None:
     p.add_argument("--n-bootstrap", type=int, default=999)
     p.add_argument("--publish", action="store_true", help="copy charts to docs/images/horizon-study/ and write forecastapi/horizon_study.json")
     args = p.parse_args(argv)
+    try:
+        args.horizons = [check_horizon(h) for h in args.horizons]  # fail before the slow work
+    except ValueError as err:
+        p.error(str(err))
     feats = load()
     rows, oofs = [], {}
     for h in args.horizons:

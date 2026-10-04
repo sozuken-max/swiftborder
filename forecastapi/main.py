@@ -639,7 +639,25 @@ def _cache_get(key):
 
 
 def _cache_put(key, payload):
-    _cache[key] = (_clock() + CACHE_TTL_SECONDS, payload)
+    now = _clock()
+    for stale in [k for k, (expires_at, _) in _cache.items() if now >= expires_at]:
+        _cache.pop(stale, None)  # keys that are never read again (e.g. per-bin baseline curves) still go
+    _cache[key] = (now + CACHE_TTL_SECONDS, payload)
+
+
+def _browser_max_age(payload, now):
+    """Seconds a browser may reuse a forecast or curve: never past its first target or origin expiry."""
+    limits = [CACHE_TTL_SECONDS]
+    for block in payload.get("directions", {}).values():
+        first = block["points"][0]["forecast_for"] if "points" in block else block["forecast_for"]
+        for end in (_parse_ts(first), _parse_ts(block["origin_ts"]) + TARGET_SHIFT):
+            limits.append((end - now).total_seconds())
+    return max(0, int(min(limits)))
+
+
+def _json_headers(max_age=CACHE_TTL_SECONDS):
+    cache = "private, max-age=%d" % max_age if max_age > 0 else "no-store"
+    return {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": cache}
 
 
 def _parse_horizon(raw, spec):
@@ -720,14 +738,18 @@ def _assemble(model_id, version_id, horizon, directions, result):
     if set(by_direction) != set(directions):
         raise NoRecentForecast("missing direction")
     ordered = {direction: by_direction[direction] for direction in directions}
+    for payload in ordered.values():
+        # each direction says what it is: a per-direction override can mix, e.g. evaluated and baseline
+        payload["status"] = status_for(payload.get("model") or model_id, horizon)
     used = {payload.get("model") for payload in ordered.values()} - {None}
-    statuses = {status_for(m, horizon) for m in used} or {status_for(model_id, horizon)}
+    statuses = {payload["status"] for payload in ordered.values()}
     out = {
         "model": model_id,
         "version": version_id,
         "horizon_min": horizon,
-        # evaluated (30-minute report harness) / exploratory (horizon study) / baseline (profile)
-        "status": "exploratory" if "exploratory" in statuses else ("baseline" if statuses == {"baseline"} else "evaluated"),
+        # evaluated (30-minute report harness) / exploratory (horizon study) / baseline (profile);
+        # "mixed" when the directions differ: read directions.<d>.status then
+        "status": statuses.pop() if len(statuses) == 1 else "mixed",
         "generated_at": _iso(_now()),
         "source": source,
         "label": "maps_duration_in_traffic_min",
@@ -761,7 +783,7 @@ def forecast(request):
     if not isinstance(body, dict):
         body = {}
 
-    headers = {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": "private, max-age=300"}
+    headers = _json_headers()  # catalog, study and baseline curve: no forecast target to expire
     list_raw = _param(body, args, "list")
     if list_raw is not None and str(list_raw).strip() != "":
         what = str(list_raw).strip()
@@ -822,7 +844,7 @@ def forecast(request):
             if payload is None:
                 return _error("No recent forecast for the requested direction", 503)
             _cache_put(key, fresh)
-        return (json.dumps(payload), 200, headers)
+        return (json.dumps(payload), 200, _json_headers(_browser_max_age(payload, _now())))
 
     model_raw = _param(body, args, "model")
     model_id = "served" if model_raw is None or str(model_raw).strip() == "" else str(model_raw).strip()
@@ -891,5 +913,4 @@ def forecast(request):
             return _error("No recent forecast for the requested direction", 503)
         _cache_put(cache_key, fresh)
 
-    headers = {**_cors_headers(), "Content-Type": "application/json", "Cache-Control": "private, max-age=300"}
-    return (json.dumps(payload), 200, headers)
+    return (json.dumps(payload), 200, _json_headers(_browser_max_age(payload, _now())))

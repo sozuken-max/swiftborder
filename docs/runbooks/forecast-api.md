@@ -97,6 +97,8 @@ The source is [docs/horizon-study.md](../horizon-study.md): an exploratory study
   - `evaluated`: a 30-minute model of the report harness;
   - `exploratory`: any horizon other than 30, or `xgb[maps+prof]`;
   - `baseline`: `model=profile`.
+  - `mixed`: the directions differ, e.g. `model=served&model_my_to_sg=profile`. Each direction also carries its own `status`, so read `directions.<d>.status`.
+- **Browser caching:** forecast and curve responses send `Cache-Control: private, max-age=N`. `N` is at most 300 and never past the first target or the origin's 30-minute expiry, so a browser cannot reuse an expired forecast. It is `no-store` once that time is under a second.
 - **`served` at an exploratory horizon:** `xgb[maps]` up to 60 min, `xgb[maps+prof]` from 90 min (`EXPLORATORY_SELECTION`, version `horizon-study-2026-10-04`). At 30 min it stays `SERVED_SELECTION`.
 - **Timing:** `target_offset_min` is `[h, h+10]` and `lead_min` is about `h − 10` to `h − 20` with current ingestion. The origin rules do not change with the horizon: the newest closed bin, at most 30 minutes old. A 24-hour request therefore still answers 503 when ingestion is stale.
 - **`baseline`** (in every forecast response): the calendar profile at the same target bin, per direction. It carries `"status": "baseline"` and the label *"Baseline: typical for this day and time (calendar profile), not a forecast"*. It is a per-direction Fourier (K = 8) × weekend ridge, refitted each SGT day on every closed bin before 00:00 SGT, so it ignores current traffic.
