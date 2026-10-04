@@ -1,0 +1,560 @@
+{
+ "status": "exploratory",
+ "note": "Exploratory study on the 13-30 Sep 2026 daily folds; not a report run and not confirmed on Run B. The label is Google Maps duration_in_traffic, not a measured crossing time. The profile is a calendar baseline for comparison, not a forecast.",
+ "window_sgt": [
+  "2026-09-13",
+  "2026-09-30"
+ ],
+ "cache_sha256": "13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07",
+ "code_commit": "e72114016de1d5b1d26385913d4529dd42a564e9",
+ "generated_at": "2026-10-04T01:14:13Z",
+ "candidates": [
+  "persistence",
+  "same time yesterday",
+  "same time last week",
+  "profile",
+  "xgb[maps]",
+  "xgb[maps+prof]"
+ ],
+ "horizons": [
+  {
+   "horizon_min": 30,
+   "rows": 5184,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 2.64,
+    "same time yesterday": 6.169,
+    "same time last week": 5.189,
+    "profile": 5.192,
+    "xgb[maps]": 2.275,
+    "xgb[maps+prof]": 2.271
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 2.777,
+     "same time yesterday": 6.257,
+     "same time last week": 5.048,
+     "profile": 4.972,
+     "xgb[maps]": 2.399,
+     "xgb[maps+prof]": 2.411
+    },
+    "MY_TO_SG": {
+     "persistence": 2.504,
+     "same time yesterday": 6.08,
+     "same time last week": 5.33,
+     "profile": 5.412,
+     "xgb[maps]": 2.15,
+     "xgb[maps+prof]": 2.132
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -2.918,
+     "ci_min": [
+      -3.68,
+      -2.258
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -2.921,
+     "ci_min": [
+      -3.58,
+      -2.338
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 60,
+   "rows": 5180,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 4.294,
+    "same time yesterday": 6.166,
+    "same time last week": 5.188,
+    "profile": 5.19,
+    "xgb[maps]": 3.203,
+    "xgb[maps+prof]": 3.213
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 4.5,
+     "same time yesterday": 6.265,
+     "same time last week": 5.048,
+     "profile": 4.978,
+     "xgb[maps]": 3.298,
+     "xgb[maps+prof]": 3.248
+    },
+    "MY_TO_SG": {
+     "persistence": 4.087,
+     "same time yesterday": 6.067,
+     "same time last week": 5.328,
+     "profile": 5.403,
+     "xgb[maps]": 3.109,
+     "xgb[maps+prof]": 3.179
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -1.987,
+     "ci_min": [
+      -2.658,
+      -1.446
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -1.977,
+     "ci_min": [
+      -2.401,
+      -1.579
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 90,
+   "rows": 5174,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 5.681,
+    "same time yesterday": 6.164,
+    "same time last week": 5.188,
+    "profile": 5.188,
+    "xgb[maps]": 3.9,
+    "xgb[maps+prof]": 3.656
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 5.939,
+     "same time yesterday": 6.271,
+     "same time last week": 5.048,
+     "profile": 4.983,
+     "xgb[maps]": 3.895,
+     "xgb[maps+prof]": 3.602
+    },
+    "MY_TO_SG": {
+     "persistence": 5.423,
+     "same time yesterday": 6.057,
+     "same time last week": 5.328,
+     "profile": 5.392,
+     "xgb[maps]": 3.905,
+     "xgb[maps+prof]": 3.709
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -1.288,
+     "ci_min": [
+      -1.786,
+      -0.889
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -1.532,
+     "ci_min": [
+      -1.893,
+      -1.182
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 120,
+   "rows": 5168,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 6.863,
+    "same time yesterday": 6.164,
+    "same time last week": 5.189,
+    "profile": 5.189,
+    "xgb[maps]": 4.27,
+    "xgb[maps+prof]": 3.963
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 7.141,
+     "same time yesterday": 6.278,
+     "same time last week": 5.049,
+     "profile": 4.991,
+     "xgb[maps]": 4.106,
+     "xgb[maps+prof]": 3.813
+    },
+    "MY_TO_SG": {
+     "persistence": 6.584,
+     "same time yesterday": 6.05,
+     "same time last week": 5.328,
+     "profile": 5.387,
+     "xgb[maps]": 4.433,
+     "xgb[maps+prof]": 4.113
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.919,
+     "ci_min": [
+      -1.313,
+      -0.576
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -1.226,
+     "ci_min": [
+      -1.556,
+      -0.922
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 180,
+   "rows": 5156,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 8.568,
+    "same time yesterday": 6.174,
+    "same time last week": 5.198,
+    "profile": 5.201,
+    "xgb[maps]": 4.799,
+    "xgb[maps+prof]": 4.306
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 8.972,
+     "same time yesterday": 6.291,
+     "same time last week": 5.06,
+     "profile": 5.005,
+     "xgb[maps]": 4.603,
+     "xgb[maps+prof]": 4.147
+    },
+    "MY_TO_SG": {
+     "persistence": 8.165,
+     "same time yesterday": 6.057,
+     "same time last week": 5.336,
+     "profile": 5.396,
+     "xgb[maps]": 4.995,
+     "xgb[maps+prof]": 4.464
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.402,
+     "ci_min": [
+      -0.705,
+      -0.099
+     ],
+     "decision": "challenger"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.895,
+     "ci_min": [
+      -1.204,
+      -0.589
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 240,
+   "rows": 5144,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 9.878,
+    "same time yesterday": 6.184,
+    "same time last week": 5.209,
+    "profile": 5.211,
+    "xgb[maps]": 5.206,
+    "xgb[maps+prof]": 4.489
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 10.558,
+     "same time yesterday": 6.301,
+     "same time last week": 5.071,
+     "profile": 5.015,
+     "xgb[maps]": 5.119,
+     "xgb[maps+prof]": 4.287
+    },
+    "MY_TO_SG": {
+     "persistence": 9.199,
+     "same time yesterday": 6.067,
+     "same time last week": 5.347,
+     "profile": 5.407,
+     "xgb[maps]": 5.292,
+     "xgb[maps+prof]": 4.691
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.005,
+     "ci_min": [
+      -0.412,
+      0.422
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.722,
+     "ci_min": [
+      -1.018,
+      -0.407
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 360,
+   "rows": 5120,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.1,
+    "same time yesterday": 6.195,
+    "same time last week": 5.229,
+    "profile": 5.223,
+    "xgb[maps]": 5.349,
+    "xgb[maps+prof]": 4.891
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.706,
+     "same time yesterday": 6.3,
+     "same time last week": 5.088,
+     "profile": 5.018,
+     "xgb[maps]": 5.081,
+     "xgb[maps+prof]": 4.61
+    },
+    "MY_TO_SG": {
+     "persistence": 10.494,
+     "same time yesterday": 6.091,
+     "same time last week": 5.37,
+     "profile": 5.428,
+     "xgb[maps]": 5.616,
+     "xgb[maps+prof]": 5.173
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.125,
+     "ci_min": [
+      -0.263,
+      0.507
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.332,
+     "ci_min": [
+      -0.704,
+      0.002
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 480,
+   "rows": 5096,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.074,
+    "same time yesterday": 6.165,
+    "same time last week": 5.218,
+    "profile": 5.198,
+    "xgb[maps]": 5.192,
+    "xgb[maps+prof]": 4.861
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 11.733,
+     "same time yesterday": 6.231,
+     "same time last week": 5.046,
+     "profile": 4.948,
+     "xgb[maps]": 4.873,
+     "xgb[maps+prof]": 4.453
+    },
+    "MY_TO_SG": {
+     "persistence": 10.415,
+     "same time yesterday": 6.099,
+     "same time last week": 5.391,
+     "profile": 5.448,
+     "xgb[maps]": 5.51,
+     "xgb[maps+prof]": 5.269
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.006,
+     "ci_min": [
+      -0.387,
+      0.389
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.337,
+     "ci_min": [
+      -0.671,
+      -0.013
+     ],
+     "decision": "challenger"
+    }
+   }
+  },
+  {
+   "horizon_min": 720,
+   "rows": 5048,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.222,
+    "same time yesterday": 6.085,
+    "same time last week": 5.135,
+    "profile": 5.119,
+    "xgb[maps]": 5.438,
+    "xgb[maps+prof]": 4.9
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.87,
+     "same time yesterday": 6.076,
+     "same time last week": 4.86,
+     "profile": 4.782,
+     "xgb[maps]": 4.956,
+     "xgb[maps+prof]": 4.371
+    },
+    "MY_TO_SG": {
+     "persistence": 9.573,
+     "same time yesterday": 6.094,
+     "same time last week": 5.41,
+     "profile": 5.456,
+     "xgb[maps]": 5.92,
+     "xgb[maps+prof]": 5.43
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.32,
+     "ci_min": [
+      -0.207,
+      0.822
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.218,
+     "ci_min": [
+      -0.623,
+      0.159
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1080,
+   "rows": 4976,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 11.103,
+    "same time yesterday": 5.941,
+    "same time last week": 5.073,
+    "profile": 5.053,
+    "xgb[maps]": 5.156,
+    "xgb[maps+prof]": 4.561
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 12.32,
+     "same time yesterday": 5.881,
+     "same time last week": 4.767,
+     "profile": 4.609,
+     "xgb[maps]": 4.84,
+     "xgb[maps+prof]": 4.293
+    },
+    "MY_TO_SG": {
+     "persistence": 9.887,
+     "same time yesterday": 6.001,
+     "same time last week": 5.379,
+     "profile": 5.496,
+     "xgb[maps]": 5.471,
+     "xgb[maps+prof]": 4.829
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": 0.103,
+     "ci_min": [
+      -0.542,
+      0.595
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.491,
+     "ci_min": [
+      -1.073,
+      0.019
+     ],
+     "decision": "not significant"
+    }
+   }
+  },
+  {
+   "horizon_min": 1440,
+   "rows": 4904,
+   "test_days": 18,
+   "mae_min": {
+    "persistence": 5.832,
+    "same time yesterday": 5.832,
+    "same time last week": 4.942,
+    "profile": 5.001,
+    "xgb[maps]": 4.664,
+    "xgb[maps+prof]": 4.574
+   },
+   "mae_min_by_direction": {
+    "SG_TO_MY": {
+     "persistence": 5.876,
+     "same time yesterday": 5.876,
+     "same time last week": 4.744,
+     "profile": 4.626,
+     "xgb[maps]": 4.496,
+     "xgb[maps+prof]": 4.281
+    },
+    "MY_TO_SG": {
+     "persistence": 5.789,
+     "same time yesterday": 5.789,
+     "same time last week": 5.139,
+     "profile": 5.375,
+     "xgb[maps]": 4.832,
+     "xgb[maps+prof]": 4.866
+    }
+   },
+   "vs_profile": {
+    "xgb[maps]": {
+     "diff_min": -0.337,
+     "ci_min": [
+      -0.855,
+      0.157
+     ],
+     "decision": "not significant"
+    },
+    "xgb[maps+prof]": {
+     "diff_min": -0.427,
+     "ci_min": [
+      -0.848,
+      0.054
+     ],
+     "decision": "not significant"
+    }
+   }
+  }
+ ]
+}
