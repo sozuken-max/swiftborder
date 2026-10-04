@@ -47,6 +47,22 @@ Credentials with write access to the two datasets.
 - Optional `DATAGOV_API_KEY` in the environment is sent as `x-api-key` for higher rate limits.
   Never commit it.
 
+## Layer B forecasting modules
+
+Two self-contained modules forecast the Google Maps travel time 10 to 60 minutes ahead per
+direction, with the Layer A camera counts as optional inputs. Both read
+`traffic_prediction.v_bins_10min`, share the `layer_a_counts` table and write their own forecast
+and registry tables in `traffic_prediction`. Neither is deployed yet.
+
+| Module | Model |
+| --- | --- |
+| [`layer_b_timesfm.py`](layer_b_timesfm.py) | TimesFM 2.5 through BigQuery `AI.FORECAST`, with a ridge calibration of its residual |
+| [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py) | Fuzzy C-Means regimes feeding a seed ensemble of MLPs (scikit-learn to train, numpy to serve) |
+
+Each module's docstring covers its decision rules, the protected confirmation window
+(1–19 Oct 2026), the commands and the Cloud Run Job deployment. The FCM + MLP results on
+6–30 Sep are in [layer-b-fcm-mlp-results.md](layer-b-fcm-mlp-results.md).
+
 ## Setup and tests
 
 ```bash

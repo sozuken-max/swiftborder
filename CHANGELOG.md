@@ -4,6 +4,12 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-04
 
+- Add two Layer B modules with offline tests in `Causeway/tests/`:
+  - [Causeway/layer_b_timesfm.py](Causeway/layer_b_timesfm.py): TimesFM 2.5 through BigQuery `AI.FORECAST`, a ridge calibration of its residual and Layer A fusion.
+  - [Causeway/layer_b_fcm_mlp.py](Causeway/layer_b_fcm_mlp.py): Fuzzy C-Means regimes feeding an MLP seed ensemble; results on 6–30 Sep in [Causeway/layer-b-fcm-mlp-results.md](Causeway/layer-b-fcm-mlp-results.md).
+  - `Causeway/requirements.txt` adds the team pins `numpy==2.4.6` and `scikit-learn==1.9.1`, so the Causeway CI suite runs the new tests.
+  - Neither module is deployed and no GCP settings changed. A deploy needs a `Causeway/Procfile` (see the module docstrings).
+
 - `eval/horizon_study.py` and [docs/horizon-study.md](docs/horizon-study.md): an exploratory study of horizons from 30 min to 24 h on the report cache and the 13–30 Sep folds.
   - Candidates: persistence, same time yesterday, same time last week, a calendar-profile baseline, `xgb[maps]` and `xgb[maps+prof]`.
   - Result (30-minute grid): `xgb[maps+prof]` beats the profile and "same time last week" at every step to 5.5 h, or to 3 h / 1.5 h under Holm over all 336 comparisons. After that there is no consistent winner (about 5 min MAE).
