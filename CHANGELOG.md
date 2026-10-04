@@ -7,7 +7,12 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 - `eval/horizon_study.py` and [docs/horizon-study.md](docs/horizon-study.md): an exploratory study of horizons from 30 min to 24 h on the report cache and the 13–30 Sep folds.
   - Candidates: persistence, same time yesterday, same time last week, a calendar-profile baseline, `xgb[maps]` and `xgb[maps+prof]`.
   - Result: forecasts from current traffic beat the profile up to about 3–4 h. From 6 h to 24 h nothing beats the profile or "same time last week" (about 5 min MAE).
-  - Not a report run, and not served. Findings item 12.
+  - Not a report run. Findings item 12.
+  - The study writes three charts by default (MAE by horizon, skill over the profile with joint CIs, example days), each with a CSV. `--publish` copies them to `docs/images/horizon-study/` and writes `forecastapi/horizon_study.json`.
+  - `forecast-api` exposes the study, labelled. `horizon_min` takes 60 to 1440 for `served`, `persistence`, `xgb[maps]`, the new `xgb[maps+prof]` and the `profile` baseline. Exploratory responses carry `status: exploratory` and the study MAE.
+  - Every forecast response carries the profile as `baseline` ("not a forecast"). `?baseline=profile&hours=N` returns its curve, and `?list=horizon-study` returns the study summary.
+  - The 30-minute `served` selection is unchanged.
+  - `eval/tests/test_forecastapi_models.py` asserts the service equals the study at 2 h and 24 h.
 
 - Address [docs/final-report-readiness.md](docs/final-report-readiness.md); the per-finding status is in its Response table.
   - `forecast-api` availability contract:

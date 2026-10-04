@@ -44,7 +44,7 @@ def _rows(directions=("SG_TO_MY", "MY_TO_SG")):
 def _install(monkeypatch):
     calls = []
 
-    def fake(model_id, requested):
+    def fake(model_id, requested, horizon=30):
         calls.append((model_id, tuple(requested)))
         return _rows(requested)
 
@@ -114,8 +114,11 @@ def test_catalog_states_and_served_selection(monkeypatch):
     by_id = {row["id"]: row for row in payload["models"]}
     assert by_id["served"]["deploy_state"] == "production"
     assert by_id["served"]["selection"] == main.SERVED_SELECTION
-    for mid in list(lm.LOCAL_MODELS) + ["persistence"]:
+    for mid in [m for m in lm.LOCAL_MODELS if m not in main.EXPLORATORY_MODELS] + ["persistence"]:
         assert by_id[mid]["deploy_state"] == "local" and by_id[mid]["callable"] is True
+    assert by_id["xgb[maps+prof]"]["deploy_state"] == "exploratory" and by_id["xgb[maps+prof]"]["callable"] is True
+    assert by_id["profile"]["deploy_state"] == "baseline" and by_id["profile"]["horizons_min"] == list(lm.HORIZONS)
+    assert by_id["lin_bq[frozen]"]["horizons_min"] == [30]
     assert "lin_h30" not in by_id and "xgb_h30" not in by_id  # BigQuery ML is no longer called
     assert by_id["ensemble[maps]"]["callable"] is False
     assert by_id["lstm"]["deploy_state"] == "artifact"
@@ -154,7 +157,9 @@ def test_cache_does_not_query_twice_inside_ttl(monkeypatch):
 def test_bad_direction_and_horizon_are_400(monkeypatch):
     calls = _install(monkeypatch)
     assert _json(main.forecast(_request(query={"model": "served", "direction": "north"})))[1] == 400
-    payload, status, _ = _json(main.forecast(_request(query={"model": "served", "horizon_min": "1440"})))
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served", "horizon_min": "45"})))
+    assert status == 400 and payload["error"].startswith("horizon_min must be 30 or 60")
+    payload, status, _ = _json(main.forecast(_request(query={"model": "lin_bq[frozen]", "horizon_min": "60"})))
     assert status == 400 and payload["error"] == "horizon_min must be 30"
     assert calls == []
 
@@ -162,7 +167,7 @@ def test_bad_direction_and_horizon_are_400(monkeypatch):
 def test_missing_direction_is_503_and_not_cached(monkeypatch):
     calls = []
 
-    def empty(model_id, directions):
+    def empty(model_id, directions, horizon=30):
         calls.append(model_id)
         return {"source": "fixture", "rows": []}
 
@@ -174,7 +179,7 @@ def test_missing_direction_is_503_and_not_cached(monkeypatch):
 
 
 def test_query_failure_is_502_without_detail(monkeypatch):
-    def boom(model_id, directions):
+    def boom(model_id, directions, horizon=30):
         raise RuntimeError("SELECT secret FROM `swiftborder.traffic_prediction.v_training_set`")
 
     monkeypatch.setattr(main, "query_forecast", boom)
@@ -338,7 +343,7 @@ def test_training_rows_follow_the_harness_folds():
 def _install_selection(monkeypatch):
     calls = []
 
-    def fake(chosen):
+    def fake(chosen, horizon=30):
         calls.append(dict(chosen))
         return {
             "source": "fixture",
@@ -405,3 +410,96 @@ def test_live_path_with_override(monkeypatch):
     assert status == 200 and payload["source"] == "local model"
     assert payload["directions"]["SG_TO_MY"]["model"] == "ridge[maps]"
     assert set(payload["model_meta"]) == {"ridge[maps]", "persistence"}
+
+
+# --- exploratory horizons and the profile baseline (docs/horizon-study.md) -------------------
+
+
+def test_exploratory_horizon_uses_the_study_selection_and_says_so(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "120"})))
+    assert status == 200 and payload["status"] == "exploratory" and payload["horizon_min"] == 120
+    assert payload["version"] == main.EXPLORATORY_SELECTION_ID and payload["target_offset_min"] == [120, 130]
+    for d in main.DIRECTIONS:
+        row = payload["directions"][d]
+        assert row["model"] == "xgb[maps+prof]"
+        assert row["origin_ts"] == "2026-10-03T03:40:00Z" and row["forecast_for"] == "2026-10-03T05:40:00Z"
+        assert row["lead_min"] == 100.0
+    base = payload["baseline"]
+    assert base["model"] == "profile" and base["status"] == "baseline" and "not a forecast" in base["label"]
+    assert set(base["directions"]) == set(main.DIRECTIONS)
+    if main.STUDY:
+        assert {"xgb[maps+prof]", "profile", "persistence"} <= set(payload["study"]["mae_min"])
+        assert payload["study"]["status"] == "exploratory"
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "60"})))
+    assert status == 200 and payload["directions"]["SG_TO_MY"]["model"] == "xgb[maps]"
+
+
+def test_thirty_minutes_stays_evaluated_and_carries_the_baseline(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={})))
+    assert status == 200 and payload["status"] == "evaluated" and payload["target_offset_min"] == [30, 40]
+    assert payload["directions"]["SG_TO_MY"]["model"] == main.SERVED_SELECTION["SG_TO_MY"]
+    assert payload["baseline"]["status"] == "baseline"
+
+
+def test_profile_model_returns_the_baseline_value(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"model": "profile", "horizon_min": "240"})))
+    assert status == 200 and payload["status"] == "baseline"
+    for d in main.DIRECTIONS:
+        assert payload["directions"][d]["forecast_min"] == payload["baseline"]["directions"][d]["forecast_min"]
+
+
+def test_long_horizon_still_needs_a_fresh_origin(monkeypatch):
+    bins = _bins()
+    bins = bins[bins["bin_ts"] < pd.Timestamp("2026-10-03 02:00", tz="UTC")]
+    now = {"t": dt.datetime(2026, 10, 3, 2, 25, tzinfo=UTC)}  # newest origin 01:50 is 35 min old
+    _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "1440"})))
+    assert status == 503
+
+
+def test_override_without_that_horizon_is_400(monkeypatch):
+    _install_selection(monkeypatch)
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "120", "model_sg_to_my": "lin_bq[frozen]"})))
+    assert status == 400 and payload["error"] == "model in model_sg_to_my has no 120-minute horizon"
+
+
+def test_baseline_curve(monkeypatch):
+    bins = _bins()
+    now = {"t": dt.datetime(2026, 10, 3, 4, 3, tzinfo=UTC)}
+    reads = _fake_bigquery(monkeypatch, bins, now)
+    payload, status, _ = _json(main.forecast(_request(query={"baseline": "profile", "hours": "6"})))
+    assert status == 200 and payload["status"] == "baseline" and "not a forecast" in payload["label"]
+    for d in main.DIRECTIONS:
+        pts = payload["directions"][d]
+        assert len(pts) == 36 and pts[0]["bin_start"] == "2026-10-03T04:10:00Z" and pts[-1]["bin_start"] == "2026-10-03T10:00:00Z"
+    assert reads["latest"] == []  # the curve needs no latest bins
+    assert _json(main.forecast(_request(query={"baseline": "profile", "hours": "25"})))[1] == 400
+    assert _json(main.forecast(_request(query={"baseline": "trend"})))[1] == 400
+
+
+def test_horizon_study_listing():
+    payload, status, _ = _json(main.forecast(_request(query={"list": "horizon-study"})))
+    if main.STUDY is None:
+        assert status == 503
+        return
+    assert status == 200 and payload["status"] == "exploratory"
+    assert [h["horizon_min"] for h in payload["horizons"]] == list(lm.HORIZONS)
+
+
+def test_training_rows_per_horizon():
+    view = lm.prepare(lm.features_from_bins(_bins()))
+    day = pd.Timestamp("2026-10-02 16:00", tz="UTC")
+    for h in (60, 240, 1440):
+        rows = lm.training_rows(view, "daily", day, h)
+        assert (rows["bin_ts"] + pd.Timedelta(minutes=h + 10) <= day).all() and rows[lm.label_column(h)].notna().all()
+    with pytest.raises(ValueError):
+        lm.training_rows(view, "frozen", day, 60)

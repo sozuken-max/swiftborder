@@ -41,7 +41,7 @@ The joined, fuzzy and ensemble components were re-run on the same cached data as
 
 The final numbers come from the frozen Runs A and B ([roadmap.md](roadmap.md)), which use this rule.
 
-12. **Exploratory: a forecast from current traffic beats a calendar baseline only up to about 4 hours.** Same 13–30 Sep folds, 30 min to 24 h, details in [horizon-study.md](horizon-study.md). Up to 3 h, XGBoost beats a time-of-day × weekend profile, and up to 4 h when the profile is added as an input. From about 6 h to 24 h no model beats the profile or "same time last week", whose MAE stays near 5 min. Long-horizon gains over persistence (5–6 min at 6–18 h) reflect persistence decaying, not forecasting skill. This finding is not in the report run and needs Run B before any claim.
+12. **Exploratory: a forecast from current traffic beats a calendar baseline only up to about 4 hours.** Same 13–30 Sep folds, 30 min to 24 h, details in [horizon-study.md](horizon-study.md). Up to 3 h, XGBoost beats a time-of-day × weekend profile, and up to 4 h when the profile is added as an input. From about 6 h to 24 h no model beats the profile or "same time last week", whose MAE stays near 5 min. Long-horizon gains over persistence (5–6 min at 6–18 h) reflect persistence decaying, not forecasting skill. This finding is not in the report run and needs Run B before any claim. It is shown on purpose: `forecast-api` serves these horizons and the profile baseline, labelled `exploratory` and `baseline` ([runbook](runbooks/forecast-api.md#exploratory-horizons-and-the-profile-baseline)). The charts are in [horizon-study.md](horizon-study.md).
 
 ## Known risk: public `swiftbackend` (documented, not changed)
 

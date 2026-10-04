@@ -43,7 +43,9 @@ What it is not:
 | `model_my_to_sg` | none | a callable id for `MY_TO_SG` only; overrides `model` there |
 | `version` | current | must equal the current version, otherwise 400; not allowed with a per-direction override |
 | `direction` | `both` | `SG_TO_MY`, `MY_TO_SG`, `both` |
-| `horizon_min` | 30 | 30 only |
+| `horizon_min` | 30 | 30 for every model. 60, 90, 120, 180, 240, 360, 480, 720, 1080 and 1440 (exploratory) for `served`, `persistence`, `xgb[maps]`, `xgb[maps+prof]` and `profile` |
+| `baseline` | none | `profile` returns the baseline curve instead of a forecast (with `hours`, 1–24, default 24) |
+| `list` | none | `models` (catalog) or `horizon-study` (the exploratory study summary) |
 
 **Manual selection.**
 - `?model=xgb[maps]` uses one model for both directions.
@@ -85,11 +87,41 @@ What it is not:
 
 **Timing fields.** `forecast_for` / `forecast_window_end` bound the target bin; the forecast is its mean Maps duration. `origin_closed_at` is when the newest observation bin closed. `observation_age_min` and `lead_min` are measured when the response is sent, including from the cache. The example is a local run against live BigQuery at 2026-10-03 17:00:17 UTC: the 16:50 bin had not cleared its grace minute, so the origin was 16:40.
 
+## Exploratory horizons and the profile baseline
+
+The source is [docs/horizon-study.md](../horizon-study.md): an exploratory study on 13–30 Sep, not confirmed on Run B. The figures are exposed on purpose, labelled.
+
+- **`status`** (top level):
+  - `evaluated`: a 30-minute model of the report harness;
+  - `exploratory`: any horizon other than 30, or `xgb[maps+prof]`;
+  - `baseline`: `model=profile`.
+- **`served` at an exploratory horizon:** `xgb[maps]` up to 60 min, `xgb[maps+prof]` from 90 min (`EXPLORATORY_SELECTION`, version `horizon-study-2026-10-04`). At 30 min it stays `SERVED_SELECTION`.
+- **Timing:** `target_offset_min` is `[h, h+10]` and `lead_min` is about `h − 10` to `h − 20` with current ingestion. The origin rules do not change with the horizon: the newest closed bin, at most 30 minutes old. A 24-hour request therefore still answers 503 when ingestion is stale.
+- **`baseline`** (in every forecast response): the calendar profile at the same target bin, per direction. It carries `"status": "baseline"` and the label *"Baseline: typical for this day and time (calendar profile), not a forecast"*. It is a per-direction Fourier (K = 8) × weekend ridge, refitted each SGT day on every closed bin before 00:00 SGT, so it ignores current traffic.
+- **`study`** (when the summary is bundled): the study MAE at this horizon for the model used, the profile and persistence, with `vs_profile` differences and decisions.
+- **`?baseline=profile&hours=N`:** the profile for the next `N` hours in 10-minute bins (`bin_start`, `forecast_min`) per direction. It needs no latest-bin read.
+- **`?list=horizon-study`:** `forecastapi/horizon_study.json`, written by `cd eval; python horizon_study.py --publish`. Re-run and commit it after the study changes; the service only reads it.
+
+Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:50 UTC):
+
+| Request | Model | SG → JB | JB → SG | Profile baseline (SG → JB / JB → SG) | Study MAE (model / profile / persistence) |
+| --- | --- | --- | --- | --- | --- |
+| `horizon_min=120` | `xgb[maps+prof]` | 34.4 | 22.1 | 42.0 / 24.3 | 3.96 / 5.19 / 6.86 |
+| `horizon_min=240` | `xgb[maps+prof]` | 26.4 | 31.9 | 32.1 / 30.8 | 4.49 / 5.21 / 9.88 |
+| `horizon_min=1440` | `xgb[maps+prof]` | 24.8 | 25.2 | 28.4 / 26.2 | 4.57 / 5.00 / 5.83 |
+
+**For the page (`app.js`, outside git):**
+- Request each horizon you show (`?horizon_min=120`, ...) and plot `forecast_min` at `forecast_for`.
+- Plot `?baseline=profile&hours=24` as a separately styled line labelled with `label`.
+- Show `status` on exploratory values, and use `lead_min` rather than a fixed "30 minutes ahead".
+- Past about 4 h, the study found the forecast no better than the baseline. Say so next to those values.
+- Each new horizon costs one daily fit per instance on its first request (about 4–5 s locally).
+
 ## Performance
 
 A local run against live BigQuery on 2026-10-03 took:
-- **Cold start:** about 13 s for the first `served` request (training read plus fits).
-- **Each later request:** about 3 s, mostly the latest-row read; a repeat inside 5 minutes is served from the cache.
+- **Cold start:** about 13 s for the first `served` request (training read plus fits). On 2026-10-04, after the exploratory horizons and the profile were added, it was about 22 s.
+- **Each later request:** about 3 s, mostly the latest-row read; a repeat inside 5 minutes is served from the cache. The first request at a new exploratory horizon took 4–6 s (one more fit).
 
 The fitted daily models are reused until 00:00 SGT. Memory is 1 GiB.
 

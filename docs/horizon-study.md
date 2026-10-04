@@ -2,7 +2,9 @@
 
 **Status:** exploratory, recorded 2026-10-04. These are not report results. The study reuses the 13–30 Sep window that already informed the 30-minute design, so any horizon or arm chosen from it must be confirmed on the October-only Run B ([roadmap.md](roadmap.md)) before it is claimed. The label is Google Maps' `duration_in_traffic`, not a measured crossing time.
 
-**Reproduce:** `cd eval; python horizon_study.py` (several minutes on a laptop CPU; output in `eval/runs/horizon-study/`, gitignored). Data: the report cache `eval/data/causeway_gdata.csv` (sha256 `13a11998…`, the same file as `eval/runs/report/`, 5 Sep 17:53 to 30 Sep 16:30 UTC). XGBoost seed and bootstrap seed are fixed, so a re-run gives the same numbers.
+**Reproduce:** `cd eval; python horizon_study.py` (several minutes on a laptop CPU). It writes results and the three charts below to `eval/runs/horizon-study/` (gitignored), each chart with a CSV of the plotted series. `python horizon_study.py --publish` also copies the charts to `docs/images/horizon-study/` and writes `forecastapi/horizon_study.json`, the summary `forecast-api` serves.
+
+**Exposed on purpose.** These figures are shown in the API and the frontend, labelled exploratory: the project wants them visible. See [What is served](#what-is-served). Data: the report cache `eval/data/causeway_gdata.csv` (sha256 `13a11998…`, the same file as `eval/runs/report/`, 5 Sep 17:53 to 30 Sep 16:30 UTC). XGBoost seed and bootstrap seed are fixed, so a re-run gives the same numbers.
 
 ## Design
 
@@ -37,7 +39,13 @@ Rows scored fall from 5,184 (30 min) to 4,904 (24 h), because a longer label lea
 
 The pooled MAE of "same time last week" matches the profile to two decimals at most horizons. This is a coincidence of the average: the two predictions differ row by row (correlation 0.53 on 20 Sep).
 
+![MAE by horizon, both directions and each direction](images/horizon-study/mae-by-horizon.png)
+
 ## Key comparisons (difference in MAE, joint calendar-day 95% CI)
+
+![Skill over the profile baseline with joint day-bootstrap CIs](images/horizon-study/skill-vs-profile.png)
+
+In the skill chart, filled markers are significant. Below 0 means better than the baseline. Persistence leaves the top of the chart between 3 h and 18 h.
 
 Negative favours the first-named. Decision: **better**/**worse** = significant; **n.s.** = no difference detected.
 
@@ -56,6 +64,15 @@ Negative favours the first-named. Decision: **better**/**worse** = significant; 
 
 The full table, including "same time last week", per-direction MAE and day-clustered p-values, is in `eval/runs/horizon-study/results.json`.
 
+## Example days
+
+![Actual Maps duration against forecasts at 1 h, 4 h and 24 h ahead, 24-26 Sep](images/horizon-study/example-days.png)
+
+The chart shows origins on 24–26 Sep (Thursday to Saturday), plotted at their target time:
+- **1 h ahead:** the model tracks the peaks.
+- **4 h ahead:** the model and the profile both follow the daily shape, and the model catches some of the level.
+- **24 h ahead:** both mostly give the typical daily shape, and individual peaks are often missed or misplaced.
+
 ## Findings
 
 1. **Current traffic carries information for about 3–4 hours.** `xgb[maps]` beats the calendar profile up to 3 h (−0.40 at 3 h) and matches it from 4 h on. With the profile as an input, `xgb[maps+prof]` beats the profile up to 4 h (−0.72). Beyond that its edge is marginal (8 h) or not detected (6, 12, 18, 24 h).
@@ -72,9 +89,17 @@ The full table, including "same time last week", per-direction MAE and day-clust
 - **Model search:** one model family, the harness settings, and no tuning per horizon. A better model may extend finding 1 somewhat. It cannot add information that current traffic does not carry.
 - **Multiplicity:** there are 66 comparisons without a family correction. The marginal 8-hour and 6-hour results should not be read either way.
 
-## What this means for serving and the report
+## What is served
 
-- **Horizons worth serving as forecasts:** 30 min to about 4 h, with `xgb[maps]` up to 1 h and `xgb[maps+prof]` from 2 h (pending Run B). Ridge is not competitive beyond 30 min (5.9 min at 2 h in the first pass).
-- **Beyond 4 h:** serve the profile and label it explicitly, for example *"Baseline: typical for this day and time (not a forecast)"*. It is a comparison baseline at every horizon, kept separate from the forecast in the response and on the chart.
+`forecast-api` exposes the study, labelled. Details are in the [runbook](runbooks/forecast-api.md#exploratory-horizons-and-the-profile-baseline).
+- **`horizon_min`:** 30 (evaluated), or 60, 90, 120, 180, 240, 360, 480, 720, 1080 or 1440 (exploratory). At an exploratory horizon `served` is the study's lower-MAE model: `xgb[maps]` up to 1 h, `xgb[maps+prof]` from 1.5 h. Every such response says `"status": "exploratory"`.
+- **The profile baseline:** every forecast response carries it as `baseline`, labelled *"Baseline: typical for this day and time (calendar profile), not a forecast"*. `model=profile` returns it alone. `?baseline=profile&hours=24` returns its 10-minute curve.
+- **The study's own numbers:** each response carries the study MAE at that horizon (`study`), for the model used, the profile and persistence. `?list=horizon-study` returns the whole summary.
+- **Recommendation for the page:** past about 4 h, show the forecast next to the baseline. The study found no difference between them there, and the page should say so instead of implying long-range skill.
+
+The service fits the same models as the study, once per SGT day. `eval/tests/test_forecastapi_models.py` asserts this at 2 h and 24 h: the same labels and profile, and the same `xgb[maps+prof]` predictions to 1e-6.
+
+## What this means for the report
+
 - **Report wording:** "Forecasts using current traffic beat a calendar baseline up to about 4 hours ahead. Beyond that, no model on 25 days of data did better than the typical pattern for the day and time." Do not report long-horizon gains over persistence as forecasting skill.
-- **Before 19 Oct (team decision):** if any of this is to be claimed, add the horizons, the profile baseline and the `xgb[maps+prof]` arm to the frozen-run claims and the ADR 0004 serving rule. Implementation is not started.
+- **Before 19 Oct (team decision):** to claim any of this, add the horizons, the profile baseline and the `xgb[maps+prof]` arm to the frozen-run claims and the ADR 0004 serving rule. Until then it is shown as exploratory, not claimed.
