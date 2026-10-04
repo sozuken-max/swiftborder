@@ -22,11 +22,17 @@ Manual selection: ``model`` (default ``served``) picks one id for every requeste
 ``model_sg_to_my`` / ``model_my_to_sg`` override it for one direction. A request with an override
 answers ``model: custom`` and names the model used in each direction.
 BigQuery ML (``lin_h30``, ``xgb_h30``, ``v_forecast_recent``) is no longer called.
+
+Each direction object, and each point of a forecast curve, carries ``model``: the id that produced
+that value. The top-level ``model`` stays the id the caller asked for (``served``, a concrete id, or
+``custom``). A single-model value omits ``components``. A blend includes ``components``, a list of
+``{model, weight}`` whose weights sum to 1.
 """
 
 import datetime
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -377,7 +383,7 @@ def query_selection(chosen, horizon=30):
                 "forecast_min": value,
                 "forecast_for": _iso(origin + shift),
                 "origin_ts": _iso(origin),
-                "model": mid,
+                **_model_fields(mid),
             }
         )
     return {
@@ -447,7 +453,7 @@ def forecast_curve(directions, hours):
                 "forecast_window_end": _iso(target + BIN),
                 "forecast_min": round(value, 1),
                 "baseline_min": None if base is None else round(base, 1),
-                "model": mid,
+                **_model_fields(mid),
                 "model_meta_key": meta_key,
                 "status": status_for(mid, h),
             }
@@ -734,7 +740,52 @@ def _parse_directions(raw):
     return None
 
 
-def _direction_payload(row):
+def _model_fields(model_id, components=None):
+    """``model`` plus ``components`` when the value is a blend of two or more models.
+
+    A single-model value omits ``components``. Weights are taken from ``components`` as given;
+    they are not filled in or rescaled.
+    """
+    if not isinstance(model_id, str) or not model_id:
+        raise ValueError("model")
+    fields = {"model": model_id}
+    blend = _blend_components(components, model_id)
+    if blend is not None:
+        fields["components"] = blend
+    return fields
+
+
+def _blend_components(raw, point_model):
+    """The blend list, or None when this point is a single model."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) == 0:
+        raise ValueError("components")
+    parsed = []
+    total = 0.0
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("components")
+        mid = item.get("model")
+        weight = item.get("weight")
+        if not isinstance(mid, str) or not mid or isinstance(weight, bool) or not isinstance(weight, (int, float)):
+            raise ValueError("components")
+        weight = float(weight)
+        if not math.isfinite(weight) or weight < 0:
+            raise ValueError("components")
+        parsed.append({"model": mid, "weight": weight})
+        total += weight
+    if len(parsed) == 1:
+        only = parsed[0]
+        if only["model"] != point_model or abs(only["weight"] - 1.0) > 1e-6:
+            raise ValueError("components")
+        return None
+    if abs(total - 1.0) > 1e-6:
+        raise ValueError("components")
+    return parsed
+
+
+def _direction_payload(row, requested_model, horizon):
     direction = row.get("direction")
     if direction not in DIRECTIONS:
         raise ValueError("unexpected direction")
@@ -751,15 +802,21 @@ def _direction_payload(row):
         raise ValueError("timestamp")
     target = _parse_ts(forecast_for)
     origin = _parse_ts(origin_ts)
+    point_model = row.get("model")
+    if not point_model:
+        # ``custom`` mixes caller-chosen ids, so the row has to name the producer.
+        # ``served`` resolves to the selection for this direction and horizon.
+        if requested_model == "custom":
+            raise ValueError("model")
+        point_model = resolve(requested_model, direction, horizon)
     payload = {
         "forecast_min": round(float(forecast_min), 1),
         "forecast_for": _iso(target),
         "forecast_window_end": _iso(target + BIN),
         "origin_ts": _iso(origin),
         "origin_closed_at": _iso(origin + BIN),
+        **_model_fields(str(point_model), row.get("components")),
     }
-    if row.get("model"):
-        payload["model"] = str(row["model"])
     return direction, payload
 
 
@@ -772,7 +829,7 @@ def _assemble(model_id, version_id, horizon, directions, result):
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("row")
-        direction, payload = _direction_payload(row)
+        direction, payload = _direction_payload(row, model_id, horizon)
         if direction not in directions or direction in by_direction:
             raise ValueError("direction set")
         by_direction[direction] = payload
