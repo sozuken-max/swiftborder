@@ -83,6 +83,7 @@ COMPARISONS = (
     ("xgb", "naive_d7"),
     ("xgb_prof", "xgb"),
     ("xgb_prof", "prof_h"),
+    ("xgb_prof", "naive_d7"),
 )
 LABEL = {v: k for k, v in CANDIDATES.items()}
 
