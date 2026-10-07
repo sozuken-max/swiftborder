@@ -101,6 +101,17 @@ CONGESTION_MAX = "Back to Back"
 # Named-workflow endpoint used by the Roboflow inference SDK.
 WORKFLOW_URL = f"{ROBOFLOW_API_URL}/{ROBOFLOW_WORKSPACE}/workflows/{ROBOFLOW_WORKFLOW_ID}"
 
+# Workflow versions a caller may pick with ``model=`` (e.g. the page's side-by-side panel).
+# A fixed allowlist: the request can never name an arbitrary workflow on the billed key.
+WORKFLOW_VERSIONS = {
+    "v4": "vehicle-detection-proejct-vvehicle-detection-proejct-4-yolo26s-t1-logic",
+    "v6": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+}
+
+
+def _workflow_url(workflow_id=None):
+    return f"{ROBOFLOW_API_URL}/{ROBOFLOW_WORKSPACE}/workflows/{workflow_id or ROBOFLOW_WORKFLOW_ID}"
+
 # Headers browsers may read cross-origin. Without this the X-* headers are
 # invisible to fetch()/XHR, which is why they are exposed explicitly.
 EXPOSED_HEADERS = ",".join(
@@ -113,6 +124,7 @@ EXPOSED_HEADERS = ",".join(
         "X-Congestion-MY-SG",
         "X-Source-Image",
         "X-Frame-Datetime",
+        "X-Workflow-Id",
     )
 )
 
@@ -166,7 +178,7 @@ def _image_size(image_bytes):
         raise InvalidImage(str(exc)) from exc
 
 
-def _run_workflow(image_bytes):
+def _run_workflow(image_bytes, workflow_id=None):
     """Post the frame to the Roboflow workflow and return the outputs list."""
     payload = {
         "api_key": ROBOFLOW_API_KEY,
@@ -180,7 +192,7 @@ def _run_workflow(image_bytes):
         },
     }
     resp = requests.post(
-        WORKFLOW_URL,
+        _workflow_url(workflow_id),
         json=payload,
         headers={"Content-Type": "application/json"},
         timeout=60,
@@ -414,7 +426,7 @@ class MissingApiKey(RuntimeError):
     """ROBOFLOW_API_KEY is not configured."""
 
 
-def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None):
+def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None, workflow_id=None):
     """Run detection and direction attribution on one frame (no HTTP request object).
 
     Returns a dict: ``kept`` (predictions at or above ``min_confidence``, each tagged with
@@ -423,6 +435,7 @@ def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None):
 
     Raises InvalidImage for undecodable bytes (checked before any billed inference call),
     MissingApiKey when no key is configured, and requests/ValueError errors from the workflow.
+    ``workflow_id`` defaults to ``ROBOFLOW_WORKFLOW_ID``.
     Used by ``detect()`` and by the offline camera backfill in ``eval/``.
     """
     if min_confidence is None:
@@ -430,7 +443,7 @@ def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None):
     image_size = _image_size(image_bytes)
     if not ROBOFLOW_API_KEY:
         raise MissingApiKey("ROBOFLOW_API_KEY is not set")
-    predictions = _extract_predictions(_run_workflow(image_bytes))
+    predictions = _extract_predictions(_run_workflow(image_bytes, workflow_id))
     kept = [p for p in predictions if p["confidence"] >= min_confidence]
     points = _dividing_line(camera_id, image_size)
     summary = _summarize_directions(kept, points, image_size)
@@ -480,6 +493,13 @@ def detect(request):
     date_time = _param(body, args, "date_time")
     output_format = str(_param(body, args, "format") or "image").lower()
     min_confidence = _parse_confidence(_param(body, args, "confidence"))
+    model = _param(body, args, "model")
+    if model is None or model == "":
+        workflow_id = ROBOFLOW_WORKFLOW_ID
+    elif isinstance(model, str) and model.lower() in WORKFLOW_VERSIONS:
+        workflow_id = WORKFLOW_VERSIONS[model.lower()]
+    else:
+        return _error(f"model must be one of: {', '.join(sorted(WORKFLOW_VERSIONS))}", 400)
 
     # If no timestamp is supplied, use the current Singapore-local time.
     if date_time is None or date_time == "":
@@ -514,7 +534,7 @@ def detect(request):
 
     # 3. Run the Roboflow workflow and attribute directions
     try:
-        result = detect_frame(image_bytes, camera_id, min_confidence)
+        result = detect_frame(image_bytes, camera_id, min_confidence, workflow_id)
     except requests.RequestException as exc:
         logger.warning("inference request failed: %s", exc)
         return _error("Inference request failed", 502)
@@ -530,6 +550,7 @@ def detect(request):
             "date_time": date_time,
             "source_image": image_url,
             "min_confidence": min_confidence,
+            "workflow_id": workflow_id,
             "vehicle_count": len(kept),
             "predictions": kept,
             "directions": summary,
@@ -556,6 +577,7 @@ def detect(request):
         "X-Vehicle-Count": str(len(kept)),
         "X-Source-Image": image_url,
         "X-Frame-Datetime": date_time,
+        "X-Workflow-Id": workflow_id,
         "Cache-Control": "no-store",
     }
     return (out.getvalue(), 200, headers)

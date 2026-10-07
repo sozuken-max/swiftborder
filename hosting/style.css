@@ -2454,3 +2454,115 @@ h4 {
     background: rgba(0, 242, 254, 0.1);
     color: var(--primary);
 }
+
+/* ── AI detection: two models side by side ─────────────────────────────── */
+.ai-compare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.ai-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.ai-pane-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.ai-pane-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: var(--text-white);
+}
+
+.ai-pane-note {
+    margin-left: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.ai-pane-count {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.ai-pane .ai-detection-body {
+    margin-bottom: 0;
+}
+
+/* Direction counts under each detection image */
+.ai-dir-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+
+.ai-dir-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+    padding: 0.7rem 0.9rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--text-muted);
+    border-radius: 10px;
+}
+
+.ai-dir-card.sg {
+    border-left-color: #00f2fe;
+}
+
+.ai-dir-card.jb {
+    border-left-color: #ff9f1c;
+}
+
+.ai-dir-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.ai-dir-count {
+    font-family: var(--font-heading);
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--text-white);
+}
+
+.ai-dir-unit {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.ai-dir-card .status-indicator-badge {
+    font-size: 0.68rem;
+    padding: 0.25rem 0.6rem;
+}
+
+.ai-dir-note {
+    grid-column: 1 / -1;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+    .ai-compare {
+        grid-template-columns: 1fr;
+    }
+}

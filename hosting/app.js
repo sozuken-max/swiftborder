@@ -114,26 +114,34 @@ function readDetectionSummary(headers) {
     return { supported, uncalibrated, dirs, total, unknown, attributed, frameTime: headers.get('X-Frame-Datetime') };
 }
 
-// The panel's markup may not carry a container yet, so create one on first use.
-function ensureDirectionsBox() {
-    let box = document.getElementById('ai-detection-directions');
-    if (box) return box;
+// Side-by-side comparison: the same LTA frame (pinned by date_time) scored by two
+// Roboflow workflow versions. `model` is a backend allowlist (camdetect WORKFLOW_VERSIONS).
+// Each pane is one billed Roboflow call.
+const AI_MODELS = [
+    { key: 'v6', label: 'Model v6', note: 'current' },
+    { key: 'v4', label: 'Model v4', note: 'previous' }
+];
 
-    const panel = document.getElementById('ai-detection-panel');
-    if (!panel) return null;
-
-    box = document.createElement('div');
-    box.id = 'ai-detection-directions';
-    box.className = 'ai-dir-grid';
-
-    const img = document.getElementById('ai-detection-img');
-    if (img && img.parentNode === panel) panel.insertBefore(box, img.nextSibling);
-    else panel.appendChild(box);
-    return box;
+function ensureModelPanes() {
+    const wrap = document.getElementById('ai-compare');
+    if (!wrap || wrap.dataset.ready) return wrap;
+    wrap.innerHTML = AI_MODELS.map(m => `
+        <div class="ai-pane" data-model="${m.key}">
+            <div class="ai-pane-head">
+                <span class="ai-pane-title">${m.label} <span class="ai-pane-note">${m.note}</span></span>
+                <span class="ai-pane-count" id="ai-count-${m.key}"></span>
+            </div>
+            <div class="ai-detection-body">
+                <p class="ai-detection-status" id="ai-status-${m.key}">Fetching AI detection result…</p>
+                <img id="ai-img-${m.key}" class="ai-detection-img" alt="${m.label} detections at the checkpoint" style="display:none;" />
+            </div>
+            <div class="ai-dir-grid" id="ai-dirs-${m.key}"></div>
+        </div>`).join('');
+    wrap.dataset.ready = '1';
+    return wrap;
 }
 
-function renderDetectionSummary(summary) {
-    const box = ensureDirectionsBox();
+function renderDetectionSummary(box, summary) {
     if (!box) return;
 
     if (!summary.supported) {
@@ -167,24 +175,21 @@ function renderDetectionSummary(summary) {
     box.innerHTML = cards + unknownNote;
 }
 
-function clearDetectionSummary() {
-    const box = document.getElementById('ai-detection-directions');
-    if (box) box.innerHTML = '';
+// Singapore wall-clock "YYYY-MM-DDTHH:MM:SS", the backend's date_time format.
+function sgtNowParam() {
+    return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Singapore', hour12: false }).replace(' ', 'T');
 }
 
-async function fetchBackendMessage() {
-    const bar = document.getElementById('backend-message');
-    if (bar) bar.style.display = 'none';
-
-    const panel = document.getElementById('ai-detection-panel');
-    const imgEl = document.getElementById('ai-detection-img');
-    const statusEl = document.getElementById('ai-detection-status');
-    const timestampEl = document.getElementById('ai-detection-timestamp');
-    if (!panel || !imgEl) return;
+async function fetchModelDetection(model, dateTime) {
+    const imgEl = document.getElementById(`ai-img-${model.key}`);
+    const statusEl = document.getElementById(`ai-status-${model.key}`);
+    const dirsEl = document.getElementById(`ai-dirs-${model.key}`);
+    const countEl = document.getElementById(`ai-count-${model.key}`);
 
     if (statusEl) statusEl.textContent = 'Fetching AI detection result…';
-    imgEl.style.display = 'none';
-    clearDetectionSummary();
+    if (imgEl) imgEl.style.display = 'none';
+    if (dirsEl) dirsEl.innerHTML = '';
+    if (countEl) countEl.textContent = '';
 
     try {
         // format=directional draws the dividing line and colours the boxes by
@@ -192,6 +197,8 @@ async function fetchBackendMessage() {
         const url = new URL(BACKEND_URL);
         url.searchParams.set('format', 'directional');
         url.searchParams.set('camera_id', AI_DETECTION_CAMERA);
+        url.searchParams.set('model', model.key);
+        url.searchParams.set('date_time', dateTime);
 
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -211,20 +218,31 @@ async function fetchBackendMessage() {
         imgEl.dataset.objectUrl = objectUrl;
         imgEl.src = objectUrl;
 
-        renderDetectionSummary(summary);
-
-        // Prefer the frame's own capture time over the client clock.
-        const stamp = summary.frameTime
-            ? `${summary.frameTime.slice(11, 19)} SGT`
-            : `${new Date().toLocaleTimeString('en-GB', { hour12: false })} SGT`;
-        if (timestampEl) {
-            const totalTxt = summary.total == null ? '' : ` · ${summary.total} vehicles`;
-            timestampEl.textContent = `CAM ${AI_DETECTION_CAMERA} · Frame: ${stamp}${totalTxt}`;
-        }
+        renderDetectionSummary(dirsEl, summary);
+        if (countEl && summary.total != null) countEl.textContent = `${summary.total} vehicles`;
+        return summary;
     } catch (err) {
         if (statusEl) statusEl.textContent = `AI detection unavailable: ${err.message}`;
-        clearDetectionSummary();
-        console.error('Backend image fetch error:', err);
+        console.error(`Backend image fetch error (${model.key}):`, err);
+        throw err;
+    }
+}
+
+async function fetchBackendMessage() {
+    const bar = document.getElementById('backend-message');
+    if (bar) bar.style.display = 'none';
+    if (!ensureModelPanes()) return;
+
+    const timestampEl = document.getElementById('ai-detection-timestamp');
+    const dateTime = sgtNowParam(); // one timestamp, so both models score the same frame
+    const results = await Promise.allSettled(AI_MODELS.map(m => fetchModelDetection(m, dateTime)));
+
+    // Prefer the frame's own capture time over the client clock.
+    const ok = results.find(r => r.status === 'fulfilled');
+    if (timestampEl) {
+        const frameTime = ok?.value?.frameTime;
+        const stamp = frameTime ? `${frameTime.slice(11, 19)} SGT` : `${dateTime.slice(11, 19)} SGT`;
+        timestampEl.textContent = ok ? `CAM ${AI_DETECTION_CAMERA} · Frame: ${stamp} · same frame for both models` : '';
     }
 }
 
