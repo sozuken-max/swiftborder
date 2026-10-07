@@ -20,6 +20,7 @@ is missing, `null` or an empty string (so `confidence: 0` is honoured, and
 | `date_time` | now, Asia/Singapore | frame timestamp, `YYYY-MM-DDTHH:MM:SS` |
 | `confidence` | `0.1` | minimum detection confidence |
 | `format` | `image` | `image`, `directional` or `json` |
+| `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (allowlist `WORKFLOW_VERSIONS`); anything else is 400 before any upstream call |
 
 ## Directions
 
@@ -77,6 +78,7 @@ X-Congestion-SG-MY       congestion label
 X-Congestion-MY-SG       congestion label
 X-Source-Image           upstream frame URL
 X-Frame-Datetime         timestamp used
+X-Workflow-Id            Roboflow workflow that scored the frame
 ```
 
 `format=json`:
@@ -87,6 +89,7 @@ X-Frame-Datetime         timestamp used
   "date_time": "2025-12-01T07:36:21",
   "source_image": "https://images.data.gov.sg/...",
   "min_confidence": 0.1,
+  "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
   "vehicle_count": 10,
   "predictions": [{ "x": 300, "y": 1000, "width": 70, "height": 50,
                     "class": "car", "confidence": 0.9, "direction": "MY-SG" }],
@@ -104,7 +107,7 @@ X-Frame-Datetime         timestamp used
 
 | Status | When |
 | --- | --- |
-| 400 | `date_time` is not a real `YYYY-MM-DDTHH:MM:SS` string (checked before any upstream call) |
+| 400 | `date_time` is not a real `YYYY-MM-DDTHH:MM:SS` string, or `model` is not in the allowlist (both checked before any upstream call) |
 | 404 | data.gov.sg has no frame for that camera and time |
 | 500 | `ROBOFLOW_API_KEY` is not configured (no upstream call is made) |
 | 502 | data.gov.sg, the frame download, or Roboflow failed, or the frame is not an image |

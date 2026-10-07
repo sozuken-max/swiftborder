@@ -136,13 +136,10 @@
             <div class="dashboard-card ai-detection-card" id="ai-detection-panel">
                 <div class="card-header">
                     <h3>🤖 AI Vehicle Detection</h3>
-                    <div class="cam-live-badge"><span class="rec-dot-inline">●</span> AI Model — Live Result</div>
+                    <div class="cam-live-badge"><span class="rec-dot-inline">●</span> AI Models — v6 vs v4</div>
                 </div>
-                <div class="ai-detection-body">
-                    <p class="ai-detection-status" id="ai-detection-status">Fetching AI detection result…</p>
-                    <img id="ai-detection-img" class="ai-detection-img" alt="AI detected vehicles at checkpoint"
-                        style="display:none;" />
-                </div>
+                <!-- Two panes (Model v6 / Model v4) injected by ensureModelPanes() -->
+                <div class="ai-compare" id="ai-compare"></div>
                 <div class="cam-grid-footer">
                     <span id="ai-detection-timestamp"></span>
                     <button class="refresh-btn" id="refresh-ai-detection">🔄 Refresh Detection</button>

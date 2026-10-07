@@ -265,3 +265,36 @@ def test_env_float_is_safe(monkeypatch):
 def test_congestion_extent_is_reported():
     assert main._congestion_extent([100, 600], 1000) == pytest.approx(0.5)
     assert main._congestion_extent([100], 1000) == 0.0
+
+
+def _post_urls(state):
+    return [url for method, url, _ in state["calls"] if method == "POST"]
+
+
+def test_default_model_uses_configured_workflow(upstream):
+    body, status, headers = main.detect(_request(query={"format": "directional"}))
+    assert status == 200
+    assert _post_urls(upstream) == [main._workflow_url(main.ROBOFLOW_WORKFLOW_ID)]
+    assert headers["X-Workflow-Id"] == main.ROBOFLOW_WORKFLOW_ID
+
+
+@pytest.mark.parametrize("model", ["v4", "V6"])
+def test_model_param_picks_an_allowlisted_workflow(upstream, model):
+    payload, status, _ = _json(main.detect(_request(query={"format": "json", "model": model})))
+    expected = main.WORKFLOW_VERSIONS[model.lower()]
+    assert status == 200
+    assert payload["workflow_id"] == expected
+    assert _post_urls(upstream) == [main._workflow_url(expected)]
+
+
+@pytest.mark.parametrize("model", ["v5", "some-other-workflow", 6])
+def test_unknown_model_is_400_before_any_upstream_call(upstream, model):
+    payload, status, _ = _json(main.detect(_request(method="POST", body={"model": model})))
+    assert status == 400
+    assert "model must be one of" in payload["error"]
+    assert upstream["calls"] == []
+
+
+def test_workflow_id_header_is_exposed():
+    _, _, headers = main.detect(_request("OPTIONS"))
+    assert "X-Workflow-Id" in headers["Access-Control-Expose-Headers"]
