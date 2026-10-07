@@ -45,19 +45,24 @@ carriageway, i.e. queue depth. They are not flow counts: data.gov.sg refreshes
 each camera only every minute or so, far too sparse to track a vehicle across
 frames, so "how many crossed" is not derivable from a single frame.
 
-`extent` (JSON only) is the **vertical spread** of a direction's box centres,
-`(max y - min y) / frame height`; it is 0 with fewer than two detections.
-`congestion` bands that spread: `Free Flow` (<0.25), `Quarter Way` (<0.5),
-`Half Way` (<0.75), `Back to Back` (otherwise). A direction with more than
-70 detections (`CONGESTION_COUNT_MAX`) is `Back to Back` whatever its spread:
-a dense queue bunched in the far half of the frame otherwise read `Half Way`.
+`congestion` bands the direction's **count** (`CONGESTION_BANDS`): `Free Flow`
+(<20), `Quarter Way` (20-39), `Half Way` (40-70), `Back to Back` (>70). The
+same cuts apply to both directions.
+
+`extent` (JSON only) is the vertical spread of a direction's box centres,
+`(max y - min y) / frame height`; it is 0 with fewer than two detections. It
+used to set the label and no longer does: on 14 v6 frames of CAM 2701 (6-7 Oct
+2026) MY-SG spread was 0.61-0.68 at anything from 17 to 93 vehicles, because a
+few cars at each end of the carriageway already span it. The old top band
+(0.75) was above what the carriageway can reach, so `Back to Back` never fired.
 
 Limits of this proxy, stated so reports do not over-read it:
 
-- It measures spread, not how far the queue reaches: one distant vehicle gives 0.
-- It uses box centres, while direction uses foot points.
-- The SG-MY carriageway lies above a diagonal line, so its maximum possible
-  spread is well under 1.0; bands are not comparable between directions.
+- The count cuts were set by eye on those 14 frames, not fitted to crossing time.
+- Every SG-MY count in that sample was 12 or less, so the SG-MY cuts are
+  untested on a congested frame. SG-MY is the far carriageway (smaller boxes),
+  so it may need lower cuts.
+- Counts depend on the detector: the same frame gave 82 MY-SG on v6 and 31 on v4.
 - It is occupancy in one frame, not crossing time.
 
 ## Responses
