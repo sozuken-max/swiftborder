@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-07
+
+- `camdetect` default `ROBOFLOW_WORKFLOW_ID` moves from `...-4-yolo26s-t1-logic` to `vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic` (workflow version 6, as deployed in Roboflow; the workflow itself was not changed). A `ROBOFLOW_WORKFLOW_ID` env var on `swiftbackend`, if set, still wins over this default. The workflow's output shape was not checked against `_extract_predictions` here (the Roboflow tools were not available in this session). No new score is claimed. Merging this changes `camdetect/main.py`, so the `swiftbackend` trigger redeploys.
+
 ## 2026-10-05
 
 - `timesfm`, `timesfm_calibrated` and `fcm_mlp` were rescored on the section 2 window (both directions, 13-30 Sep, 5,184 rows). The earlier 25 Sep fit and 26-30 Sep scores are not that comparison. Daily-refit 30-minute MAE: persistence 2.640, `xgb[maps]` 2.276, `timesfm` 2.340, `timesfm_calibrated` 2.310, `fcm_mlp` 2.230. Eighteen calendar days. None is a challenger versus `xgb[maps]` by the 0.5 min bar, so the served mix is unchanged and the forecast API does not call them. `timesfm_layer_a` and `fcm_mlp_layer_a` were not scored. No Cloud Run deploy. `lin_h30`, `xgb_h30`, `model_registry`, and `v_forecast_recent` were not changed.
