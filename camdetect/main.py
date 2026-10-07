@@ -429,8 +429,8 @@ def _draw_directional(image, predictions, points, summary):
         draw.rectangle(box, outline=color, width=1)
 
     segments = [
-        (DIR_SG_MY, f"SG \u2192 MY: {summary['sg_my']['count']} ({summary['sg_my']['congestion']})"),
-        (DIR_MY_SG, f"MY \u2192 SG: {summary['my_sg']['count']} ({summary['my_sg']['congestion']})"),
+        (DIR_SG_MY, f"SG to MY: {summary['sg_my']['count']} ({summary['sg_my']['congestion']})"),
+        (DIR_MY_SG, f"MY to SG: {summary['my_sg']['count']} ({summary['my_sg']['congestion']})"),
     ]
     if unknown:
         segments.append((DIR_UNKNOWN, f"Unattributed: {unknown}"))
