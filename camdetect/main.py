@@ -390,36 +390,51 @@ def _draw_boxes(image, predictions):
     _draw_banner(draw, image, f"Vehicles: {len(predictions)}")
 
 
+def _draw_direction_banner(draw, image, segments):
+    """Top-left banner of side-by-side blocks, each filled with its direction's box colour.
+
+    ``segments`` is a list of (direction, text). The fill doubles as the colour key, so the
+    boxes need no per-box labels.
+    """
+    font = _load_font(max(18, image.width // 60))
+    x = 0
+    for direction, text in segments:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        w, h = bbox[2] - bbox[0] + 16, bbox[3] - bbox[1] + 12
+        draw.rectangle([x, 0, x + w, h], fill=DIR_COLORS[direction])
+        draw.text((x + 8, 6), text, fill=(255, 255, 255), font=font)
+        x += w
+
+
 def _draw_directional(image, predictions, points, summary):
-    """Same frame, but boxes coloured by direction and the divider drawn in."""
+    """Same frame: boxes outlined 1 px in the direction colour, the divider drawn in, and a banner.
+
+    Boxes carry no per-box labels (in heavy traffic they hid the vehicles). The banner's blocks
+    are filled with the same colours, so it is both the count and the colour key.
+    """
     draw = ImageDraw.Draw(image)
-    line_width = max(2, image.width // 500)
-    font = _load_font(max(14, image.width // 90))
 
     if points:
         draw.line(points, fill=(255, 255, 255), width=max(3, image.width // 384))
 
+    unknown = 0
     for pred in predictions:
         direction = pred.get("direction", DIR_UNKNOWN)
+        if direction not in (DIR_SG_MY, DIR_MY_SG):
+            unknown += 1
         color = DIR_COLORS.get(direction, DIR_COLORS[DIR_UNKNOWN])
         box = _box(pred)
         if box is None:
             continue
-        x1, y1, x2, y2 = box
-        draw.rectangle([x1, y1, x2, y2], outline=color, width=line_width)
+        draw.rectangle(box, outline=color, width=1)
 
-        label = f"{direction} {pred.get('confidence', 0):.2f}"
-        box = draw.textbbox((0, 0), label, font=font)
-        tw, th = box[2] - box[0], box[3] - box[1]
-        ly = max(0, y1 - th - 4)
-        draw.rectangle([x1, ly, x1 + tw + 6, ly + th + 4], fill=color)
-        draw.text((x1 + 3, ly + 2), label, fill=(255, 255, 255), font=font)
-
-    banner = (
-        f"{DIR_SG_MY}: {summary['sg_my']['count']} ({summary['sg_my']['congestion']})"
-        f"  |  {DIR_MY_SG}: {summary['my_sg']['count']} ({summary['my_sg']['congestion']})"
-    )
-    _draw_banner(draw, image, banner)
+    segments = [
+        (DIR_SG_MY, f"SG \u2192 MY: {summary['sg_my']['count']} ({summary['sg_my']['congestion']})"),
+        (DIR_MY_SG, f"MY \u2192 SG: {summary['my_sg']['count']} ({summary['my_sg']['congestion']})"),
+    ]
+    if unknown:
+        segments.append((DIR_UNKNOWN, f"Unattributed: {unknown}"))
+    _draw_direction_banner(draw, image, segments)
 
 
 class MissingApiKey(RuntimeError):

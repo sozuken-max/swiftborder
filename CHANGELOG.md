@@ -4,6 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-07
 
+- `camdetect` `format=directional` draws 1 px boxes with no per-box labels (in heavy traffic the labels hid the vehicles). The top-left banner is now one block per direction filled with that direction's box colour, so it doubles as the colour key. Counts, headers and JSON are unchanged.
 - `camdetect` accepts `model=v4|v6` (fixed allowlist `WORKFLOW_VERSIONS`; any other value is 400 before an upstream call) and returns `X-Workflow-Id`. The default is still `ROBOFLOW_WORKFLOW_ID`. The page's AI Vehicle Detection panel calls both versions in parallel on the same frame (one shared `date_time`), so each page load or refresh makes two billed Roboflow calls instead of one. No score is claimed for either version.
 - `camdetect` default `ROBOFLOW_WORKFLOW_ID` moves from `...-4-yolo26s-t1-logic` to `vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic` (workflow version 6, as deployed in Roboflow; the workflow itself was not changed). A `ROBOFLOW_WORKFLOW_ID` env var on `swiftbackend`, if set, still wins over this default. The workflow's output shape was not checked against `_extract_predictions` here (the Roboflow tools were not available in this session). No new score is claimed. Merging this changes `camdetect/main.py`, so the `swiftbackend` trigger redeploys.
 

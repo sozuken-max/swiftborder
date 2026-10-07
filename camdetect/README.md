@@ -63,9 +63,12 @@ Limits of this proxy, stated so reports do not over-read it:
 `format=image` (default) — unchanged: JPEG with green boxes and a
 `Vehicles: N` banner.
 
-`format=directional` — same frame with the dividing line drawn in white, boxes
-coloured by direction (SG-MY red, MY-SG blue, Unknown grey), and a banner
-carrying both counts and congestion levels.
+`format=directional` — same frame with the dividing line drawn in white, 1 px
+boxes coloured by direction (SG-MY red, MY-SG blue, Unknown grey) with no
+per-box labels, and a top-left banner whose blocks are filled with the same
+colours and carry each direction's count and congestion level (plus an
+"Unattributed" block when any detection has no direction). The banner is the
+colour key.
 
 Both image formats carry these headers:
 

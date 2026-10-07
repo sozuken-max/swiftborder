@@ -298,3 +298,34 @@ def test_unknown_model_is_400_before_any_upstream_call(upstream, model):
 def test_workflow_id_header_is_exposed():
     _, _, headers = main.detect(_request("OPTIONS"))
     assert "X-Workflow-Id" in headers["Access-Control-Expose-Headers"]
+
+
+def _summary_stub():
+    return {"sg_my": {"count": 1, "congestion": "Free Flow"}, "my_sg": {"count": 0, "congestion": "Free Flow"}}
+
+
+def test_directional_boxes_are_one_pixel_and_unlabelled():
+    image = Image.new("RGB", (1920, 1080), (40, 40, 40))
+    pred = {"x": 1000, "y": 500, "width": 200, "height": 100, "confidence": 0.9, "direction": main.DIR_SG_MY}
+    main._draw_directional(image, [pred], None, _summary_stub())
+    x1, y1, x2, y2 = main._box(pred)
+    red = main.DIR_COLORS[main.DIR_SG_MY]
+    assert image.getpixel((x1 + 50, y1)) == red          # top edge drawn
+    assert image.getpixel((x1 + 50, y1 + 1)) == (40, 40, 40)  # 1 px only
+    assert image.getpixel((x1 + 50, y1 - 5)) == (40, 40, 40)  # no filled label above the box
+
+
+def test_directional_banner_is_the_colour_key():
+    def banner_colours(preds):
+        image = Image.new("RGB", (1920, 1080), (40, 40, 40))
+        main._draw_directional(image, preds, None, _summary_stub())
+        strip = image.crop((0, 0, 1920, 20))  # top rows: inside the banner, above any box
+        return {c for _, c in strip.getcolors(maxcolors=100000)}
+
+    known = {"x": 100, "y": 500, "width": 50, "height": 50, "confidence": 0.9, "direction": main.DIR_MY_SG}
+    colours = banner_colours([known])
+    assert main.DIR_COLORS[main.DIR_SG_MY] in colours and main.DIR_COLORS[main.DIR_MY_SG] in colours
+    assert main.DIR_COLORS[main.DIR_UNKNOWN] not in colours
+
+    unknown = {**known, "x": 300, "direction": main.DIR_UNKNOWN}
+    assert main.DIR_COLORS[main.DIR_UNKNOWN] in banner_colours([known, unknown])
