@@ -22,7 +22,7 @@ ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "")
 ROBOFLOW_WORKSPACE = os.environ.get("ROBOFLOW_WORKSPACE", "chads-workspace-t3qcz")
 ROBOFLOW_WORKFLOW_ID = os.environ.get(
     "ROBOFLOW_WORKFLOW_ID",
-    "vehicle-detection-proejct-vvehicle-detection-proejct-4-yolo26s-t1-logic",
+    "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
 )
 TRAFFIC_IMAGES_API = "https://api.data.gov.sg/v1/transport/traffic-images"
 DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "2701")
