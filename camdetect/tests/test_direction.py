@@ -48,6 +48,13 @@ def test_congestion_bands_and_empty_queue():
     assert main._congestion_level([0, 750], height) == "Back to Back"
 
 
+def test_congestion_count_overrides_a_small_spread():
+    height = 1000
+    assert main._congestion_level([0, 500], height, count=70) == "Half Way"
+    assert main._congestion_level([0, 500], height, count=71) == "Back to Back"
+    assert main._congestion_level([0, 100], height, count=82) == "Back to Back"
+
+
 def test_summarize_directions_counts_sum_to_detections():
     predictions = [
         _box(0, 10),

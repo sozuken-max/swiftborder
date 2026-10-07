@@ -48,7 +48,9 @@ frames, so "how many crossed" is not derivable from a single frame.
 `extent` (JSON only) is the **vertical spread** of a direction's box centres,
 `(max y - min y) / frame height`; it is 0 with fewer than two detections.
 `congestion` bands that spread: `Free Flow` (<0.25), `Quarter Way` (<0.5),
-`Half Way` (<0.75), `Back to Back` (otherwise).
+`Half Way` (<0.75), `Back to Back` (otherwise). A direction with more than
+70 detections (`CONGESTION_COUNT_MAX`) is `Back to Back` whatever its spread:
+a dense queue bunched in the far half of the frame otherwise read `Half Way`.
 
 Limits of this proxy, stated so reports do not over-read it:
 
