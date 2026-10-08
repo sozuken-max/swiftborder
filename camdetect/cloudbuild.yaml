@@ -1,12 +1,12 @@
-# CI/CD for Cloud Run service swiftbackend (camdetect): test, build, deploy. Not forecast-api.
+# CI/CD for Cloud Run service swiftbackend (camdetect): test, docker build + push, deploy. Not forecast-api.
 # Trigger 76bbca35 runs this on a push to ^main$ once its configuration points at this file
 # (until then the trigger's inline config still runs). No keys: the Roboflow key and other env vars
 # stay on the service, and `services update --image` leaves them untouched.
-# Images are pinned by digest so a rebuild of the same commit uses the same toolchain and the build
-# does not re-download a moved `latest`. python:3.11-slim resolved 2026-10-08 from mirror.gcr.io; pack,
-# builder google-22 and cloud-sdk:slim are the digests forecastapi/cloudbuild.yaml uses (2026-10-03).
-# Refresh the digests deliberately.
-# In bash below, $$ escapes a shell variable from Cloud Build substitution.
+# The image comes from camdetect/Dockerfile, on the same python:3.11-slim the Test step pulls, so the
+# build reuses that download. Buildpacks were dropped: build d949348e spent most of a minute pulling
+# builder google-22 and its lifecycle image (cold on the build machine) for about 8 s of real work.
+# python:3.11-slim (here and in the Dockerfile) resolved 2026-10-08 from mirror.gcr.io; cloud-sdk:slim
+# is the digest forecastapi/cloudbuild.yaml uses (2026-10-03). Refresh the digests deliberately.
 
 steps:
   - id: Test
@@ -20,24 +20,20 @@ steps:
         pip install -q --disable-pip-version-check --root-user-action=ignore -r camdetect/requirements-dev.txt
         cd camdetect && python -m pytest -q -p no:cacheprovider
 
-  - id: Buildpack
-    name: gcr.io/k8s-skaffold/pack@sha256:221c0c0d9a90f46f108bb888a1da9e99c82ff631e8b1c63b0223ea951752bd53
-    entrypoint: pack
+  - id: Build
+    # Not pinned by digest on purpose: Cloud Build machines already hold the current docker builder
+    # ("Already have image"), and a pinned older digest would be downloaded on every build.
+    name: gcr.io/cloud-builders/docker
     args:
       - build
+      - --tag=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - camdetect
+
+  - id: Push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
       - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      # google-22 (Ubuntu 22.04) still ships Python 3.11, the version the Test step runs. builder:latest
-      # is google-24 and, with no version set, installed Python 3.14.6 (build e78b62ff, 2026-10-08).
-      - --builder=gcr.io/buildpacks/builder:google-22@sha256:8201b9de682ba74cd5552128b81940e233d3afaec27412d14dd8a8d2dc572368
-      - --network=cloudbuild
-      # --publish writes the image straight to Artifact Registry, so no docker pull/push steps follow.
-      - --publish
-      - --path=camdetect
-      - --env=GOOGLE_FUNCTION_TARGET
-      - --env=GOOGLE_PYTHON_VERSION
-    env:
-      - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
-      - GOOGLE_PYTHON_VERSION=3.11.x
 
   - id: Deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
