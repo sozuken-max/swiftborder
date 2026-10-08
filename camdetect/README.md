@@ -184,9 +184,14 @@ ignored and every detection falls back to `Unknown`.
 
 ## Cloud Build
 
-There is no `cloudbuild.yaml` in this repo. Deploy uses an inline Cloud Build
-trigger in project `swiftborder` (config is not stored in git). Repo changes to
-that trigger are recorded in [CHANGELOG.md](../CHANGELOG.md).
+[cloudbuild.yaml](cloudbuild.yaml) is the build for this service: `Test`
+(`python:3.11-slim`), `Buildpack` (builder `google-22`, Python 3.11, published
+straight to Artifact Registry), `Deploy` (`gcloud run services update --image`).
+Images are pinned by digest. The trigger runs it only once its configuration
+points at this file; until then it runs its own inline config, which uses
+`builder:latest` (Python 3.14 since that builder moved to Ubuntu 24.04) and a
+redundant docker pull/push. Repo changes to the trigger are recorded in
+[CHANGELOG.md](../CHANGELOG.md).
 
 | | |
 | --- | --- |

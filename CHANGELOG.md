@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-08
+
+- `camdetect/cloudbuild.yaml`: the `swiftbackend` build in git. Build e78b62ff (inline trigger config) installed **Python 3.14.6** in the service image because `builder:latest` is now Ubuntu 24.04 and no version is set, while the `Test` step runs 3.11. The file pins builder `google-22` with `GOOGLE_PYTHON_VERSION=3.11.x`, tests in `mirror.gcr.io` `python:3.11-slim`, publishes from the buildpack step (no docker pull/push steps), and pins every image by digest (as `forecastapi/cloudbuild.yaml` does). No GCP change: trigger `76bbca35` still runs its inline config until it is pointed at this file. `includedFiles` matches `camdetect/cloudbuild.yaml`, so merging starts one build with the old inline config.
+
 ## 2026-10-07
 
 - `camdetect` congestion label now bands each direction's count instead of its vertical spread: `Free Flow` <20, `Quarter Way` 20-39, `Half Way` 40-70, `Back to Back` >70. On 14 v6 frames of CAM 2701 (6-7 Oct) MY-SG spread was 0.61-0.68 at anything from 17 to 93 vehicles, and the old `Back to Back` cut (0.75) was out of reach, so an 82-vehicle queue read `Half Way`. The cuts were set by eye, not fitted; SG-MY never exceeded 12 in the sample, so its cuts are untested on congestion. Counts and `extent` are unchanged in the response. `congestion_ordinal` written by Layer A after the `swiftbackend` redeploy means count bands, not spread bands, so older rows are not comparable. Merging redeploys `swiftbackend`.

@@ -1,0 +1,76 @@
+# CI/CD for Cloud Run service swiftbackend (camdetect): test, build, deploy. Not forecast-api.
+# Trigger 76bbca35 runs this on a push to ^main$ once its configuration points at this file
+# (until then the trigger's inline config still runs). No keys: the Roboflow key and other env vars
+# stay on the service, and `services update --image` leaves them untouched.
+# Images are pinned by digest so a rebuild of the same commit uses the same toolchain and the build
+# does not re-download a moved `latest`. python:3.11-slim resolved 2026-10-08 from mirror.gcr.io; pack,
+# builder google-22 and cloud-sdk:slim are the digests forecastapi/cloudbuild.yaml uses (2026-10-03).
+# Refresh the digests deliberately.
+# In bash below, $$ escapes a shell variable from Cloud Build substitution.
+
+steps:
+  - id: Test
+    # mirror.gcr.io is Google's Docker Hub mirror; -slim is a fraction of the full python image.
+    name: mirror.gcr.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install -q --disable-pip-version-check --root-user-action=ignore -r camdetect/requirements-dev.txt
+        cd camdetect && python -m pytest -q -p no:cacheprovider
+
+  - id: Buildpack
+    name: gcr.io/k8s-skaffold/pack@sha256:221c0c0d9a90f46f108bb888a1da9e99c82ff631e8b1c63b0223ea951752bd53
+    entrypoint: pack
+    args:
+      - build
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      # google-22 (Ubuntu 22.04) still ships Python 3.11, the version the Test step runs. builder:latest
+      # is google-24 and, with no version set, installed Python 3.14.6 (build e78b62ff, 2026-10-08).
+      - --builder=gcr.io/buildpacks/builder:google-22@sha256:8201b9de682ba74cd5552128b81940e233d3afaec27412d14dd8a8d2dc572368
+      - --network=cloudbuild
+      # --publish writes the image straight to Artifact Registry, so no docker pull/push steps follow.
+      - --publish
+      - --path=camdetect
+      - --env=GOOGLE_FUNCTION_TARGET
+      - --env=GOOGLE_PYTHON_VERSION
+    env:
+      - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
+      - GOOGLE_PYTHON_VERSION=3.11.x
+
+  - id: Deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - $_SERVICE_NAME
+      - --project=$_AR_PROJECT_ID
+      - --region=$_DEPLOY_REGION
+      - --platform=managed
+      - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      # --update-labels adds or overwrites these keys and keeps any other label on the service.
+      - --update-labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
+      - --quiet
+
+substitutions:
+  _AR_HOSTNAME: europe-west1-docker.pkg.dev
+  _AR_PROJECT_ID: swiftborder
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _DEPLOY_REGION: europe-west1
+  _FUNCTION_TARGET: detect
+  _SERVICE_NAME: swiftbackend
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # The trigger may still define substitutions this file does not use.
+  substitutionOption: ALLOW_LOOSE
+
+timeout: 1200s
+
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - swiftbackend
