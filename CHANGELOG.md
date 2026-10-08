@@ -4,6 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-08
 
+- `swiftbackend` builds from `camdetect/Dockerfile` (`python:3.11-slim`, the Test step's image, then `functions-framework --target=detect`) instead of buildpacks. Build d949348e, the first run of `camdetect/cloudbuild.yaml` after trigger `76bbca35` was switched to it in the Console, spent most of its 60+ s Buildpack step pulling builder `google-22` and lifecycle `0.21.18`, neither cached on the build machine, for about 8 s of build work. Python stays 3.11. Merging starts a build.
 - `camdetect/cloudbuild.yaml`: the `swiftbackend` build in git. Build e78b62ff (inline trigger config) installed **Python 3.14.6** in the service image because `builder:latest` is now Ubuntu 24.04 and no version is set, while the `Test` step runs 3.11. The file pins builder `google-22` with `GOOGLE_PYTHON_VERSION=3.11.x`, tests in `mirror.gcr.io` `python:3.11-slim`, publishes from the buildpack step (no docker pull/push steps), and pins every image by digest (as `forecastapi/cloudbuild.yaml` does). No GCP change: trigger `76bbca35` still runs its inline config until it is pointed at this file. `includedFiles` matches `camdetect/cloudbuild.yaml`, so merging starts one build with the old inline config.
 
 ## 2026-10-07

@@ -185,12 +185,11 @@ ignored and every detection falls back to `Unknown`.
 ## Cloud Build
 
 [cloudbuild.yaml](cloudbuild.yaml) is the build for this service: `Test`
-(`python:3.11-slim`), `Buildpack` (builder `google-22`, Python 3.11, published
-straight to Artifact Registry), `Deploy` (`gcloud run services update --image`).
-Images are pinned by digest. The trigger runs it only once its configuration
-points at this file; until then it runs its own inline config, which uses
-`builder:latest` (Python 3.14 since that builder moved to Ubuntu 24.04) and a
-redundant docker pull/push. Repo changes to the trigger are recorded in
+(`python:3.11-slim`), `Build` and `Push` ([Dockerfile](Dockerfile) on that same
+`python:3.11-slim`, so the base is already on the build machine), `Deploy`
+(`gcloud run services update --image`). The container runs
+`functions-framework --target=detect` on `$PORT`. Trigger `76bbca35` points at
+this file (switched in the Console on 2026-10-08). Repo changes to the trigger are recorded in
 [CHANGELOG.md](../CHANGELOG.md).
 
 | | |
@@ -198,10 +197,10 @@ redundant docker pull/push. Repo changes to the trigger are recorded in
 | Trigger | `76bbca35-c1b4-4836-9f34-d7adda53ea17` |
 | Name | `rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc` |
 | Event | push to `^main$` on `sozuken-max/swiftborder` |
-| Deploy | Cloud Run `swiftbackend`, `europe-west1`, function target `detect`, buildpacks, path `camdetect` |
+| Deploy | Cloud Run `swiftbackend`, `europe-west1`, function target `detect`, Dockerfile, path `camdetect` |
 
 Step `Test` runs `pip install -r camdetect/requirements-dev.txt` and
-`python -m pytest` in `camdetect/` before the buildpack step. A failing test
+`python -m pytest` in `camdetect/` before the image build. A failing test
 stops the deploy.
 
 `includedFiles` starts a build only when these change:

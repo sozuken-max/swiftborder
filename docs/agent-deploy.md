@@ -13,7 +13,7 @@ Read [AGENTS.md](../AGENTS.md) first. Do not invent services, env vars, or metri
 | Path | What it is | What it is not |
 | --- | --- | --- |
 | `camdetect/main.py` | HTTP function `detect`. Resolves an LTA frame, calls a Roboflow workflow, counts vehicles against a dividing line. | A BigQuery writer. It does not insert into `Cam2701` or `Cam2702`. |
-| `camdetect/requirements.txt` | Pinned `functions-framework`, `requests`, `Pillow` (+ `backports.zoneinfo` on Python 3.8). A push of this file or `main.py` to `main` redeploys `swiftbackend`. | No `Dockerfile` in git. The build is `camdetect/cloudbuild.yaml`. |
+| `camdetect/requirements.txt` | Pinned `functions-framework`, `requests`, `Pillow` (+ `backports.zoneinfo` on Python 3.8). A push of this file or `main.py` to `main` redeploys `swiftbackend`. | The build is `camdetect/cloudbuild.yaml` with `camdetect/Dockerfile`. |
 | `Causeway/*.py` | Day-by-day CSV history of NEA rainfall and the 2-hour forecast from data.gov.sg (complete days only), and `load_bigquery.py`, a manual append-only loader into `rainfall.rainfall` / `weatherforecast.weatherforecast`. | A scheduled pipeline. The original loader is not in git; nothing runs these on a schedule. |
 | `eval/` | Read-only harnesses: `layer_b.py` (30 min production models), `joined.py`, `layer_a.py`, offline XGB/LSTM, significance, report manifest. | A deploy path. Nothing writes to Cloud Run, BigQuery or `model_registry`. |
 | `.github/workflows/tests.yml` | Fast test suites on push and PR, including `forecastapi`. | A deploy path; it has no secrets and no service-account key. |
@@ -32,7 +32,7 @@ Re-query [inventory.md](inventory.md) before you edit a service.
 
 | Live resource | Region | In git? |
 | --- | --- | --- |
-| Cloud Run `swiftbackend` | `europe-west1` | Source is `camdetect/` on `main`. Deploy is an **inline** Cloud Build trigger (`76bbca35-c1b4-4836-9f34-d7adda53ea17`), push to `^main$`, **pytest** then buildpacks, function target `detect`. [camdetect/cloudbuild.yaml](../camdetect/cloudbuild.yaml) is checked in; the trigger uses it only after its configuration is switched from inline to that file. **Included files** are runtime paths only (`main.py`, `requirements.txt`, Dockerfile, yaml/json/toml under `camdetect/`). Tests, dev requirements, `README.md`, and the rest of the repo do not start this build. Details: [camdetect/README.md](../camdetect/README.md). |
+| Cloud Run `swiftbackend` | `europe-west1` | Source is `camdetect/` on `main`. Deploy is an **inline** Cloud Build trigger (`76bbca35-c1b4-4836-9f34-d7adda53ea17`), push to `^main$`, **pytest** then a docker build of [camdetect/Dockerfile](../camdetect/Dockerfile), function target `detect`. Config is [camdetect/cloudbuild.yaml](../camdetect/cloudbuild.yaml) (trigger switched from inline on 2026-10-08). **Included files** are runtime paths only (`main.py`, `requirements.txt`, Dockerfile, yaml/json/toml under `camdetect/`). Tests, dev requirements, `README.md`, and the rest of the repo do not start this build. Details: [camdetect/README.md](../camdetect/README.md). |
 | Cloud Run `gmap-woodlands-fetcher` | `asia-southeast1` | No |
 | Cloud Scheduler `Gmap-Woodlands` | `asia-southeast1` | No. It calls the fetcher every 5 minutes. |
 | Cloud Run job `traffic-backfill` | `asia-southeast1` | No |
@@ -105,7 +105,7 @@ For `swiftbackend`, the source is already `camdetect/`. Do not create a second c
 
 ### 4. Add a Cloud Build file that matches the running deploy
 
-Put `cloudbuild.yaml` next to that service, or one file at the repo root with a `dir` per step. The live `swiftbackend` inline build does this (confirm with `gcloud builds triggers describe`):
+Put `cloudbuild.yaml` next to that service, or one file at the repo root with a `dir` per step. The former `swiftbackend` inline build did this (now replaced by `camdetect/cloudbuild.yaml`):
 
 - Builder image `gcr.io/k8s-skaffold/pack`, buildpacks, `--path=camdetect`, env `GOOGLE_FUNCTION_TARGET=detect`
 - Image `europe-west1-docker.pkg.dev/swiftborder/cloud-run-source-deploy/swiftborder/swiftbackend:$COMMIT_SHA`
