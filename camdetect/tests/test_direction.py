@@ -38,14 +38,20 @@ def test_classify_direction_unknown_when_off_the_line_or_unreadable():
     assert main._classify_direction(_box(0, 10), []) == main.DIR_UNKNOWN
 
 
-def test_congestion_bands_and_empty_queue():
-    assert main._congestion_level([], 1080) == "Free Flow"
-    assert main._congestion_level([0], 0) == "Free Flow"
-    height = 1000
-    assert main._congestion_level([0, 200], height) == "Free Flow"
-    assert main._congestion_level([0, 250], height) == "Quarter Way"
-    assert main._congestion_level([0, 500], height) == "Half Way"
-    assert main._congestion_level([0, 750], height) == "Back to Back"
+def test_congestion_bands_by_count():
+    assert main._congestion_level(0) == "Free Flow"
+    assert main._congestion_level(19) == "Free Flow"
+    assert main._congestion_level(20) == "Quarter Way"
+    assert main._congestion_level(40) == "Half Way"
+    assert main._congestion_level(70) == "Half Way"
+    assert main._congestion_level(71) == "Back to Back"
+    assert main._congestion_level(82) == "Back to Back"
+
+
+def test_congestion_extent():
+    assert main._congestion_extent([], 1080) == 0.0
+    assert main._congestion_extent([0], 0) == 0.0
+    assert main._congestion_extent([0, 500], 1000) == 0.5
 
 
 def test_summarize_directions_counts_sum_to_detections():

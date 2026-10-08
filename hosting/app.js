@@ -76,8 +76,8 @@ const AI_DIRECTIONS = [
     { key: 'jb', label: 'JB → SG', cls: 'jb', countHeader: 'X-Vehicle-Count-MY-SG', congestionHeader: 'X-Congestion-MY-SG' }
 ];
 
-// Congestion here is queue depth — how far up the frame a direction's
-// detections reach — not throughput. A single frame cannot measure flow.
+// Congestion here is queue depth — banded from a direction's vehicle count in
+// the frame (camdetect CONGESTION_BANDS) — not throughput. A single frame cannot measure flow.
 const AI_CONGESTION_CLASS = {
     'Free Flow': 'normal',
     'Quarter Way': 'normal',

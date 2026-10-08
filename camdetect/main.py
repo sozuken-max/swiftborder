@@ -92,10 +92,12 @@ def _load_dividing_lines():
 
 DIVIDING_LINES = _load_dividing_lines()
 
-# Fraction of frame height spanned by a direction's detections, and the label
-# each band maps to. Ordered by ascending threshold; the last entry is the
-# fallback for anything above the final threshold.
-CONGESTION_BANDS = ((0.25, "Free Flow"), (0.5, "Quarter Way"), (0.75, "Half Way"))
+# Detections in a direction, and the label each band maps to. Ordered by
+# ascending threshold (count < threshold); the last entry is the fallback.
+# Count, not vertical spread: on CAM 2701 the MY-SG spread sits at 0.61-0.68
+# for anything from 17 to 93 vehicles, so it cannot tell light from jammed.
+# Cut by eye on 14 v6 frames (6-7 Oct 2026); not fitted to crossing time.
+CONGESTION_BANDS = ((20, "Free Flow"), (40, "Quarter Way"), (71, "Half Way"))
 CONGESTION_MAX = "Back to Back"
 
 # Named-workflow endpoint used by the Roboflow inference SDK.
@@ -292,11 +294,10 @@ def _congestion_extent(y_centres, image_height):
     return (max(y_centres) - min(y_centres)) / image_height
 
 
-def _congestion_level(y_centres, image_height):
-    """Queue depth label from the vertical spread of a direction's detections (see README)."""
-    extent = _congestion_extent(y_centres, image_height)
+def _congestion_level(count):
+    """Congestion label from a direction's detection count (see README)."""
     for threshold, label in CONGESTION_BANDS:
-        if extent < threshold:
+        if count < threshold:
             return label
     return CONGESTION_MAX
 
@@ -323,12 +324,12 @@ def _summarize_directions(predictions, points, image_size):
         "available": bool(points),
         "sg_my": {
             "count": counts[DIR_SG_MY],
-            "congestion": _congestion_level(centres[DIR_SG_MY], height),
+            "congestion": _congestion_level(counts[DIR_SG_MY]),
             "extent": round(_congestion_extent(centres[DIR_SG_MY], height), 4),
         },
         "my_sg": {
             "count": counts[DIR_MY_SG],
-            "congestion": _congestion_level(centres[DIR_MY_SG], height),
+            "congestion": _congestion_level(counts[DIR_MY_SG]),
             "extent": round(_congestion_extent(centres[DIR_MY_SG], height), 4),
         },
         "unknown": {"count": counts[DIR_UNKNOWN]},
