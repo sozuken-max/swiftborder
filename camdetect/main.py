@@ -64,8 +64,11 @@ DIR_COLORS = {
 # reference frame and are rescaled to whatever the camera actually returns, so a
 # resolution change upstream does not silently move the line. Points must be
 # ordered by ascending x. A vehicle's foot point (bottom-centre of its box)
-# above the line is SG-MY; on or below it is MY-SG. A foot point outside the
-# line's x-range is Unknown: still counted in vehicle_count, never attributed.
+# above the line is SG-MY; on or below it is MY-SG. An end point within
+# EDGE_SNAP of the top or bottom of the frame is taken to leave the frame there,
+# so the line runs on along that edge to the side of the frame (see
+# _dividing_line). A foot point still outside the line's x-range is Unknown:
+# counted in vehicle_count, never attributed.
 DEFAULT_DIVIDING_LINES = {
     "2701": {
         "reference_size": [1920, 1080],
@@ -91,6 +94,9 @@ def _load_dividing_lines():
 
 
 DIVIDING_LINES = _load_dividing_lines()
+
+# Fraction of frame height within which a line end counts as touching the top or bottom edge.
+EDGE_SNAP = 0.01
 
 # Detections in a direction, and the label each band maps to. Ordered by
 # ascending threshold (count < threshold); the last entry is the fallback.
@@ -257,7 +263,36 @@ def _dividing_line(camera_id, image_size):
     # Interpolation assumes ascending x; reject anything that is not.
     if any(b[0] < a[0] for a, b in zip(scaled, scaled[1:])):
         return None
-    return scaled
+    return _extend_along_edges(scaled, width, height)
+
+
+def _edge_y(y, height):
+    """The top or bottom edge y that y lies within EDGE_SNAP of, or None."""
+    tolerance = EDGE_SNAP * height
+    if y >= height - tolerance:
+        return float(height)
+    if y <= tolerance:
+        return 0.0
+    return None
+
+
+def _extend_along_edges(points, width, height):
+    """Run a line that exits through the top or bottom edge on along that edge to the frame side.
+
+    On CAM 2701 the line leaves through the bottom edge at x=176; without this, a
+    vehicle in the bottom-left corner (left of the first point, plainly on the
+    SG-MY side) fell off the line's x-span and went Unknown.
+    """
+    points = list(points)
+    first_y = _edge_y(points[0][1], height)
+    if first_y is not None and points[0][0] > 0:
+        points[0] = (points[0][0], first_y)
+        points.insert(0, (0.0, first_y))
+    last_y = _edge_y(points[-1][1], height)
+    if last_y is not None and points[-1][0] < width:
+        points[-1] = (points[-1][0], last_y)
+        points.append((float(width), last_y))
+    return points
 
 
 def _y_on_line(x, points):
@@ -272,8 +307,13 @@ def _y_on_line(x, points):
     return points[-1][1]
 
 
-def _classify_direction(pred, points):
-    """Compare a prediction's foot point against the dividing polyline."""
+def _classify_direction(pred, points, image_height=None):
+    """Compare a prediction's foot point against the dividing polyline.
+
+    With ``image_height``, a box cut off by the bottom of the frame has its foot
+    taken as just inside the frame, so it lands above a line that runs along
+    the bottom edge instead of on it.
+    """
     if not points:
         return DIR_UNKNOWN
     try:
@@ -281,6 +321,8 @@ def _classify_direction(pred, points):
         foot_y = float(pred["y"]) + float(pred["height"]) / 2
     except (KeyError, TypeError, ValueError):
         return DIR_UNKNOWN
+    if image_height:
+        foot_y = min(foot_y, image_height - 1)
     y_limit = _y_on_line(foot_x, points)
     if y_limit is None:
         return DIR_UNKNOWN
@@ -312,7 +354,7 @@ def _summarize_directions(predictions, points, image_size):
     centres = {DIR_SG_MY: [], DIR_MY_SG: [], DIR_UNKNOWN: []}
 
     for pred in predictions:
-        direction = _classify_direction(pred, points)
+        direction = _classify_direction(pred, points, height)
         pred["direction"] = direction
         counts[direction] += 1
         try:

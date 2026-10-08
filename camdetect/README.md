@@ -32,6 +32,12 @@ per-camera polyline separating the two carriageways:
 - **`Unknown`** — foot point outside the line's x-range, or no line configured
   for this camera. Still included in `vehicle_count`, never attributed.
 
+A line end within 1% of frame height of the top or bottom edge is snapped onto
+that edge, and the line runs on along it to the side of the frame. On 2701 the
+line leaves through the bottom edge at x=176, so the bottom-left corner is
+SG-MY rather than off the line. A box cut off by the bottom of the frame has its
+foot taken as just inside it, so it stays above a line on the bottom edge.
+
 `sg_my + my_sg + unknown` always equals `vehicle_count`.
 
 These labels are **not** the BigQuery congestion-view names. This service emits
@@ -109,7 +115,7 @@ X-Workflow-Id            Roboflow workflow that scored the frame
     "my_sg": { "count": 4, "congestion": "Half Way" },
     "unknown": { "count": 2 }
   },
-  "dividing_line": [[176, 1074], "..."]
+  "dividing_line": [[0, 1080], [176, 1080], "..."]
 }
 ```
 

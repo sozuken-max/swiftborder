@@ -74,9 +74,37 @@ def test_summarize_directions_counts_sum_to_detections():
 def test_dividing_line_scales_the_2701_reference_frame():
     points = main._dividing_line("2701", FRAME)
     assert points is not None
-    assert points[0] == (176.0, 1074.0)
+    # The first point sits 6 px off the bottom edge, so it snaps to the edge
+    # and the line runs on along the bottom to x=0.
+    assert points[:2] == [(0.0, 1080.0), (176.0, 1080.0)]
+    assert points[2] == (500.0, 1015.0)
     half = main._dividing_line("2701", (960, 540))
-    assert half[0] == (88.0, 537.0)
+    assert half[:2] == [(0.0, 540.0), (88.0, 540.0)]
+
+
+def test_dividing_line_extends_along_the_edge_it_exits_through():
+    lines = {
+        "a": {"reference_size": [100, 100], "points": [[20, 100], [80, 0]]},
+        "b": {"reference_size": [100, 100], "points": [[20, 50], [80, 40]]},
+    }
+    original = main.DIVIDING_LINES
+    main.DIVIDING_LINES = lines
+    try:
+        assert main._dividing_line("a", (100, 100)) == [(0.0, 100.0), (20.0, 100.0), (80.0, 0.0), (100.0, 0.0)]
+        # Ends in the middle of the frame are left alone: nothing to extend along.
+        assert main._dividing_line("b", (100, 100)) == [(20.0, 50.0), (80.0, 40.0)]
+    finally:
+        main.DIVIDING_LINES = original
+
+
+def test_bottom_left_corner_of_2701_is_sg_my():
+    points = main._dividing_line("2701", FRAME)
+    # Van left of where the line meets the bottom edge: was Unknown, is SG-MY.
+    assert main._classify_direction(_box(150, 1020, height=60), points, FRAME[1]) == main.DIR_SG_MY
+    # Box cut off by the bottom of the frame: foot on the edge still counts as above it.
+    assert main._classify_direction(_box(60, 1050, height=60), points, FRAME[1]) == main.DIR_SG_MY
+    # Just right of the corner the near carriageway is still MY-SG.
+    assert main._classify_direction(_box(300, 1050, height=60), points, FRAME[1]) == main.DIR_MY_SG
 
 
 def test_dividing_line_rejects_unknown_camera_and_unsorted_x():

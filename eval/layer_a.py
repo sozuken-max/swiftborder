@@ -262,7 +262,7 @@ def _direction_fn(camera: str):
 
     def fn(box: Box, size):
         points = camdetect._dividing_line(camera, size)
-        return camdetect._classify_direction(box.as_prediction(), points)
+        return camdetect._classify_direction(box.as_prediction(), points, size[1] if size else None)
 
     return fn
 

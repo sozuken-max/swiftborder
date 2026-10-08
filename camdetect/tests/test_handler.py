@@ -101,7 +101,7 @@ def test_json_mode_counts_and_directions(upstream):
     assert payload["directions"]["sg_my"]["count"] == 1
     assert payload["directions"]["my_sg"]["count"] == 1
     assert "extent" in payload["directions"]["sg_my"]
-    assert payload["dividing_line"][0] == [176.0, 1074.0]
+    assert payload["dividing_line"][:2] == [[0.0, 1080.0], [176.0, 1080.0]]
 
 
 def test_body_wins_over_query_and_zero_confidence_is_honoured(upstream):
