@@ -140,19 +140,13 @@ LOCAL_MAX_DET = 300
 LOCAL_MAX_CANDIDATES = 30000
 LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never suppresses across classes
 
-# Overlap suppression after NMS: drop a box when more than this fraction of the smaller box lies
-# inside a higher-confidence kept box, whatever the classes. Class-aware NMS at IoU 0.7 leaves
-# double counts: one vehicle boxed as both truck and bus (IoU 0.9+), a box nested in a bigger one,
-# and two similar-size boxes on one car shifted by a fraction of its width (IoU 0.5-0.7, so under
-# the NMS cut). Boxes of similar size (area ratio <= SIMILAR_SIZE_RATIO) use the lower
-# SIMILAR_SIZE_OVERLAP; a small box inside a much bigger one (a car in front of a truck) only goes
-# above max_overlap. Cuts set by eye on 7 CAM 2701/2702 frames (8-10 Oct): similar-size pairs over
-# 0.65 were nearly all one car boxed twice, 0.5-0.65 mixed in real neighbours. Not scored against
-# labels. On by default for model=local only, so v4/v6 counts stay comparable with earlier output;
-# the ``overlap`` request parameter sets it for any model (1 turns it off).
+# Overlap suppression after NMS: two boxes are one vehicle when each covers more than this fraction
+# of the other (intersection over the larger box's area), whatever the classes. Class-aware NMS at
+# IoU 0.7 leaves the same vehicle boxed as both truck and bus (IoU 0.9+). A small box inside a big
+# one (a car in front of a truck) is never dropped: only the small box is mostly covered.
+# On by default for model=local only, so v4/v6 counts stay comparable with earlier output; the
+# ``overlap`` request parameter sets it for any model (1 turns it off).
 LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.8)
-SIMILAR_SIZE_RATIO = 2.0
-SIMILAR_SIZE_OVERLAP = _env_float("SIMILAR_SIZE_OVERLAP", 0.65)
 
 MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, LOCAL_MODEL_KEY])
 
@@ -435,30 +429,21 @@ def _run_local(image_bytes, image_size):
     return _local_predictions(output[0], scale, pad, image_size)
 
 
-def _overlap_fraction(a, b):
-    """Intersection area over the smaller box's area (1.0 when one box contains the other)."""
+def _mutual_overlap(a, b):
+    """The smaller of the two coverages: intersection over the larger box's area.
+
+    Over 0.8 means each box has more than 80% of its area inside the other.
+    """
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
     inter = max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(0.0, min(ay2, by2) - max(ay1, by1))
-    smaller = min((ax2 - ax1) * (ay2 - ay1), (bx2 - bx1) * (by2 - by1))
-    return inter / smaller if smaller > 0 else 0.0
-
-
-def _is_duplicate(a, b, max_overlap):
-    """Whether boxes a and b look like one vehicle (see LOCAL_MAX_OVERLAP)."""
-    area_a = (a[2] - a[0]) * (a[3] - a[1])
-    area_b = (b[2] - b[0]) * (b[3] - b[1])
-    if min(area_a, area_b) <= 0:
-        return False
-    limit = max_overlap
-    if max(area_a, area_b) / min(area_a, area_b) <= SIMILAR_SIZE_RATIO:
-        limit = min(max_overlap, SIMILAR_SIZE_OVERLAP)
-    return _overlap_fraction(a, b) > limit
+    larger = max((ax2 - ax1) * (ay2 - ay1), (bx2 - bx1) * (by2 - by1))
+    return inter / larger if larger > 0 else 0.0
 
 
 def _suppress_overlaps(predictions, max_overlap):
-    """Greedy, class-agnostic: keep boxes by confidence, dropping any that duplicates a kept one
-    (``_is_duplicate``). Boxes without geometry are kept as is.
+    """Greedy, class-agnostic: keep boxes by confidence, dropping any whose mutual overlap with a
+    kept box is over ``max_overlap``. Boxes without geometry are kept as is.
     Returns (kept, dropped_count) with ``kept`` in the input order.
     """
     survivors = []
@@ -467,7 +452,7 @@ def _suppress_overlaps(predictions, max_overlap):
         box = _box(predictions[i])
         if box is None:
             continue
-        if any(_is_duplicate(box, other, max_overlap) for other in survivors):
+        if any(_mutual_overlap(box, other) > max_overlap for other in survivors):
             dropped.add(i)
         else:
             survivors.append(box)

@@ -21,7 +21,7 @@ is missing, `null` or an empty string (so `confidence: 0` is honoured, and
 | `date_time` | now, Asia/Singapore | frame timestamp, `YYYY-MM-DDTHH:MM:SS` |
 | `confidence` | `0.1` | minimum detection confidence |
 | `format` | `image` | `image`, `directional` or `json` |
-| `overlap` | `0.8` for `local`, off for `v4`/`v6` | overlap suppression cut in [0, 1] (similar-size boxes use the lower of it and 0.65); `1` turns it off; malformed values fall back to the model default (see below) |
+| `overlap` | `0.8` for `local`, off for `v4`/`v6` | mutual-overlap cut in [0, 1]: boxes are merged when each covers more than this share of the other; `1` turns it off; malformed values fall back to the model default (see below) |
 | `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (Roboflow, allowlist `WORKFLOW_VERSIONS`), or `local` (in-container model, below); case-insensitive; anything else is 400 before any upstream call |
 
 ## In-container model (`model=local`)
@@ -70,48 +70,34 @@ instance (`_local_inference_lock`). Give the service at least 1 GiB of memory,
 and expect concurrent `local` requests on one instance to queue.
 
 **Overlap suppression.** After NMS and the confidence filter, boxes are
-taken in confidence order, and a box is dropped as a double count of one
-already kept, whatever the classes, when the share of the *smaller* box that
-lies inside the other is over:
+taken in confidence order. Two boxes count as one vehicle when *each* has more
+than `max_overlap` (0.8) of its area inside the other, whatever the classes.
+That is the intersection over the *larger* box's area. Class-aware NMS never
+compares a truck box with a bus box, so the same vehicle boxed as both
+(IoU 0.9 and above) is otherwise counted twice. A small box inside a big one,
+such as a car in front of a truck, is never dropped, because only the small
+box is mostly covered.
 
-- **0.65** if the two boxes are of similar size (area ratio up to 2), or
-- **`max_overlap`** (0.8) if one is much bigger than the other.
+On by default for `local` (`LOCAL_MAX_OVERLAP`, 0.8). Off by default for
+`v4`/`v6`, so their counts stay comparable with earlier output. Pass
+`overlap=` to set it for any model, or `overlap=1` to turn it off. JSON reports
+`max_overlap` (null when off) and `overlap_suppressed`.
 
-Class-aware NMS at IoU 0.7 leaves three kinds of double count: the same
-vehicle boxed as both truck and bus (IoU 0.9 and above), two similar-size
-boxes on one car shifted by a fraction of its width (IoU 0.5-0.7, under the
-NMS cut), and a box nested in a bigger one. The size split keeps a car in front
-of a truck: its small box sits inside the truck's box, so it is only dropped
-above 0.8. A car more than 80% inside a truck or bus box is dropped. That
-trades the occasional hidden car for never counting a truck cab twice.
-
-The cuts were set by eye on 7 CAM 2701/2702 frames (8-10 Oct). Over 0.65,
-similar-size pairs were nearly all one car boxed twice. Between 0.5 and 0.65
-real neighbours in the queue start to appear, and below 0.5 they were
-neighbours. The pairs left above 0.65 are cars in front of trucks or buses,
-and trucks one behind another. This is an inspection, not a precision/recall
-score against labels.
-
-On by default for `local` (`LOCAL_MAX_OVERLAP` 0.8, `SIMILAR_SIZE_OVERLAP`
-0.65). Off by default for `v4`/`v6`, so their counts stay comparable with
-earlier output. Pass `overlap=` to set the big-box cut for any model (the
-similar-size cut is the lower of the two), or `overlap=1` to turn suppression
-off. JSON reports `max_overlap` (null when off) and `overlap_suppressed`.
-
-Effect on those frames, `local`, `confidence=0.1`:
+Effect on 7 CAM 2701/2702 frames (8-10 Oct), `local`, `confidence=0.1`:
 
 | Frame | Total | MY-SG | SG-MY |
 | --- | --- | --- | --- |
-| 2701 10 Oct 08:00 | 149 -> 113 | 111 -> 85 | 35 -> 25 |
-| 2701 10 Oct 12:30 | 121 -> 92 | 117 -> 89 | 3 -> 3 |
-| 2701 10 Oct 12:45 | 137 -> 103 | 129 -> 95 | 6 -> 6 |
-| 2701 9 Oct 18:30 | 167 -> 135 | 163 -> 132 | 3 -> 2 |
-| 2701 9 Oct 07:30 | 62 -> 50 | 45 -> 37 (Half Way -> Quarter Way) | 17 -> 13 |
-| 2701 8 Oct 21:00 | 96 -> 76 | 92 -> 72 | 4 -> 4 |
-| 2702 10 Oct 12:30 | 59 -> 49 | - | - |
+| 2701 10 Oct 08:00 | 149 -> 146 | 111 -> 109 | 35 -> 34 |
+| 2701 10 Oct 12:30 | 121 -> 117 | 117 -> 113 | 3 -> 3 |
+| 2701 10 Oct 12:45 | 137 -> 133 | 129 -> 125 | 6 -> 6 |
+| 2701 9 Oct 18:30 | 167 -> 160 | 163 -> 156 | 3 -> 3 |
+| 2701 9 Oct 07:30 | 62 -> 62 | 45 -> 45 | 17 -> 17 |
+| 2701 8 Oct 21:00 | 96 -> 91 | 92 -> 87 | 4 -> 4 |
+| 2702 10 Oct 12:30 | 59 -> 59 | - | - |
 
-The congestion bands were cut on v6 counts, so `local` counts (with or
-without suppression) are not on the same scale.
+Not scored against labels. Two same-size boxes on one car that are shifted so
+each is only 65-80% covered by the other still both count. The congestion
+bands were cut on v6 counts, so `local` counts are not on the same scale.
 
 A missing or unloadable model file returns **503** `Local model is not
 available`. No upstream inference call is made.
@@ -267,7 +253,6 @@ DIVIDING_LINES        JSON, overrides the built-in per-camera lines
 LOCAL_MODEL_PATH      default models/yolo26s_v6_boxfix.onnx next to main.py
 LOCAL_MODEL_ID        default local:yolo26s-v6-boxfix (reported as workflow_id)
 LOCAL_MAX_OVERLAP     default 0.8, overlap suppression for model=local (1 = off)
-SIMILAR_SIZE_OVERLAP  default 0.65, cut for boxes of similar size (area ratio <= 2)
 ```
 
 A malformed `DEFAULT_CONFIDENCE` or `DIVIDING_LINES` logs a warning and falls

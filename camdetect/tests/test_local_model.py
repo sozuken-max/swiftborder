@@ -160,42 +160,36 @@ def _pred(x, y, w, h, conf, cls="car"):
     return {"x": x, "y": y, "width": w, "height": h, "confidence": conf, "class": cls}
 
 
-def test_overlap_suppression_drops_nested_and_cross_class_duplicates():
+def test_overlap_suppression_drops_cross_class_duplicates_only():
     preds = [
         _pred(100, 100, 50, 40, 0.9, "truck"),
-        _pred(101, 100, 50, 40, 0.4, "bus"),  # same vehicle, other class (IoU ~0.96)
-        _pred(110, 105, 30, 25, 0.5),  # fully inside the truck box (IoU ~0.4)
+        _pred(101, 100, 50, 40, 0.4, "bus"),  # same vehicle, other class: each 98% inside the other
         _pred(140, 100, 50, 40, 0.6),  # beside it: 10/50 of its width overlaps -> kept
         _pred(400, 400, 50, 40, 0.2),
     ]
     kept, dropped = main._suppress_overlaps(preds, 0.8)
-    assert dropped == 2
+    assert dropped == 1
     assert [p["confidence"] for p in kept] == [0.9, 0.6, 0.2]  # input order kept
 
 
-def test_overlap_suppression_keeps_partly_occluded_vehicle():
-    # Car beside a truck's back end: 60% of the car box is covered, under the 0.8 cut.
-    kept, dropped = main._suppress_overlaps([_pred(100, 100, 100, 60, 0.9), _pred(160, 100, 50, 40, 0.5)], 0.8)
-    assert dropped == 0 and len(kept) == 2
-
-
-def test_car_in_front_of_truck_survives_above_the_similar_size_cut():
-    # Truck 200x100; car 60x40 at its bottom-right corner, 66% inside: over 0.65, but area ratio 8.3
-    # puts it under the 0.8 cut, so it stays.
+def test_small_box_inside_big_box_is_never_dropped():
+    # Car fully inside a truck's box: 100% of the car is covered, but only 12% of the truck.
     truck = _pred(100, 50, 200, 100, 0.8, "truck")
-    car = _pred(185, 85, 60, 40, 0.6)
+    car = _pred(120, 70, 60, 40, 0.6)
     kept, dropped = main._suppress_overlaps([truck, car], 0.8)
     assert dropped == 0 and len(kept) == 2
 
 
-def test_similar_size_shifted_boxes_are_one_car():
-    # Two 60x40 boxes on one car, shifted 12 px and 6 px: 68% of each covered (IoU ~0.52, under NMS 0.7).
-    first, second = _pred(100, 100, 60, 40, 0.7), _pred(112, 106, 60, 40, 0.2)
-    kept, dropped = main._suppress_overlaps([first, second], 0.8)
-    assert dropped == 1 and kept == [first]
+def test_both_boxes_must_be_covered_past_the_cut():
+    # 60x40 and 66x44 on one car: the smaller is fully inside, the larger 83% covered -> one vehicle.
+    big, small = _pred(100, 100, 66, 44, 0.7), _pred(100, 100, 60, 40, 0.3)
+    assert main._suppress_overlaps([big, small], 0.8) == ([big], 1)
+    # 60x40 inside 70x50: the larger is only 69% covered -> both kept.
+    big = _pred(100, 100, 70, 50, 0.7)
+    assert main._suppress_overlaps([big, small], 0.8) == ([big, small], 0)
 
 
-def test_similar_size_neighbours_in_a_queue_survive():
+def test_neighbours_in_a_queue_survive():
     # Two 60x40 cars, the second 30 px along and 10 px up: 37.5% overlap.
     kept, dropped = main._suppress_overlaps([_pred(100, 100, 60, 40, 0.7), _pred(130, 90, 60, 40, 0.6)], 0.8)
     assert dropped == 0 and len(kept) == 2
