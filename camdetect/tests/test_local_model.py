@@ -248,3 +248,32 @@ def test_default_cut_drops_a_shifted_echo_on_one_car():
     # Two cars in a queue, 30 px along and 10 px up (37.5% overlap), both stay at the default.
     kept, dropped = main._suppress_overlaps([box, _pred(130, 90, 60, 40, 0.6)], main.LOCAL_MAX_OVERLAP)
     assert dropped == 0 and len(kept) == 2
+
+
+class WeakEchoSession(FakeSession):
+    """One confident car and one faint box elsewhere (confidence 0.2)."""
+
+    def run(self, _outputs, feeds):
+        self.calls += 1
+        return [_raw((640, 368, 80, 160 / 3, 1, 0.9), (300, 200, 60, 40, 1, 0.2))[None]]
+
+
+def test_local_default_confidence_is_035_and_request_wins(upstream, monkeypatch):
+    monkeypatch.setattr(main, "_local_session", WeakEchoSession())
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local"})))
+    assert payload["min_confidence"] == main.LOCAL_DEFAULT_CONFIDENCE == 0.35
+    assert payload["vehicle_count"] == 1
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local", "confidence": "0.1"})))
+    assert payload["min_confidence"] == 0.1 and payload["vehicle_count"] == 2
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local", "confidence": "abc"})))
+    assert payload["min_confidence"] == 0.35
+
+
+def test_roboflow_default_confidence_unchanged(upstream):
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "v6"})))
+    assert payload["min_confidence"] == main.DEFAULT_CONFIDENCE
+
+
+def test_detect_frame_local_default_confidence(monkeypatch):
+    monkeypatch.setattr(main, "_local_session", WeakEchoSession())
+    assert len(main.detect_frame(_jpeg(), "2701", workflow_id=main.LOCAL_MODEL_ID)["kept"]) == 1

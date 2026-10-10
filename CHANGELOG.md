@@ -4,6 +4,8 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-10
 
+- `camdetect` `model=local` defaults to `confidence=0.35` (`LOCAL_DEFAULT_CONFIDENCE`) instead of 0.1. `v4`/`v6` keep 0.1, and a request `confidence` still overrides. Even with overlap suppression at 0.6, double boxes stayed live: a confident box plus a weak echo at confidence 0.1-0.3. At 0.35, 0-2 pairs over 40% overlap remain per CAM 2701 frame. Live 13:32 frame: 151 -> 112. Faint real vehicles go too; CAM 2702 fell 52 -> 21. Set by eye, not scored against labels. Merging redeploys `swiftbackend`.
+
 - `camdetect` `model=local` overlap suppression default goes from 0.8 to 0.6 (`LOCAL_MAX_OVERLAP`). Live, 0.8 left most double boxes: a confident box plus a weak echo shifted a little on one car, where each box covers 60-80% of the other. On five 2701 frames, 98 pairs sat at 0.6-0.8 and only 20 were above 0.8. By eye, pairs at 0.6-0.8 were one car boxed twice; below 0.6 a car beside a truck starts to appear. Live 13:25 frame: 105 -> 92 (was 103 at 0.8). A small box inside a big one is still never dropped. Not scored against labels. Merging redeploys `swiftbackend`.
 
 - `hosting/` AI Vehicle Detection panel compares Roboflow v6 with `model=local` (in-container YOLO26s) instead of v4. Both panes still score the same frame (one shared `date_time`). Each page load or refresh now makes one billed Roboflow call instead of two. Checked against the live `swiftbackend` in headless Chromium: both panes return 200 and render. Hosting deploy stays manual (no `firebase.json` in git, [ADR 0002](docs/adr/0002-firebase-hosting-source.md)), so the live page changes only after a `firebase deploy`.
