@@ -2,6 +2,17 @@
 
 Dated copy of GCP project `swiftborder`. When this file and the project disagree, the project wins; re-query and update this file. Older blocks below are history. They keep the revisions and sentences that were true at their own timestamps.
 
+## Update: 2026-10-10, approximately 16:20 SGT (read-only)
+
+- **BigQuery dataset `cam2701` table `local_counts`:**
+  - Fully-qualified table: `swiftborder.cam2701.local_counts` (location: `asia-southeast1`).
+  - Table description: `"Per-frame model=local vehicle counts by direction (camdetect/backfill_local_counts.py)."`
+  - Created and populated by `camdetect/backfill_local_counts.py --bq-table` (matching `sql/bigquery/cam2701/local_counts.sql`).
+  - Total row count: **4,052 frames**, clustered by `camera_id` (`2701`).
+  - Date coverage: **2026-09-06T00:05:46 SGT to 2026-10-04T23:55:48 SGT** (29 consecutive calendar days, ~135–144 frames per day). This provides simultaneous camera-derived directional counts overlapping the entire 13–30 Sep Maps duration series for the first time.
+  - Model & parameters: `model_id = 'local:yolo26s-v6-boxfix'`, `min_confidence = 0.2`, `max_overlap = 0.6`.
+  - Vehicle totals: `sg_my` = 40,657, `my_sg` = 156,603, `unknown` = 0 (full-width divider leaves zero unclassified vehicles).
+
 ## Update: 2026-10-10, approximately 10:50 SGT (read-only)
 
 - **Cloud Run:**
