@@ -37,7 +37,7 @@ Produced on 4 Oct 2026 by the `train` logic of [`layer_b_fcm_mlp.py`](layer_b_fc
 
 **Against the same network without FCM (ablation):** no significant difference at any step on the test days. On the validation days, MY→SG at 60 min was significantly worse with FCM (+0.097 [+0.037, +0.170]).
 
-**±15 minutes:** 98.9–100% of test forecasts fall within ±15 min of the actual travel time.
+**Share of forecasts within 15 minutes of the Maps estimate:** 98.9–100% of test forecasts, on 5 test days. This is the Google Maps duration series, not measured crossing time. It does **not** test the product's ≤ 15 min crossing-time MAE target, which still has no independent label (AGENTS.md).
 
 ## Fuzzy regimes (centres, fit and inner days)
 

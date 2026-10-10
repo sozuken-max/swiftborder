@@ -124,6 +124,12 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 
 **Status:** labels live in Roboflow; `traffic_images.labels` has 0 rows; `traffic_images.metadata` is populated and is not a label table. **No export has been scored.**
 
+**Which detector is live (2026-10-08).** `swiftbackend` defaults to Roboflow workflow **v6** (`vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic`, commit `d34cc1d`). The service has no `ROBOFLOW_WORKFLOW_ID` override. `?model=v4` still calls the earlier workflow, and the page's AI panel calls both.
+- **What to score:** v6 is the model to score first, against an export whose `test` split neither version trained on. Each score records the workflow id and the dataset version.
+- **Older detections:** the March–April detections in `cam2701` / `cam2702` came from an earlier model and do not record which, so they are not comparable with v6 output.
+- **Congestion labels are a heuristic:** the page's labels are count bands per direction (< 20 Free Flow, 20–39 Quarter Way, 40–70 Half Way, > 70 Back to Back; commit `644bc25`). They were set from 14 v6 frames and are not an evaluated classifier.
+- **Cost:** the side-by-side panel makes two billed Roboflow calls per view.
+
 <!-- mermaid:eval-layer-a -->
 ```mermaid
 flowchart LR
@@ -559,7 +565,7 @@ FCM family (Holm over these four):
 | `mlp` (no FCM) | `xgb[maps]` | -0.050 | [-0.151, +0.028] | not significant (Holm p = 0.59) |
 | Mean of `fcm_mlp` and `xgb[maps]` | `xgb[maps]` | -0.142 | [-0.211, -0.090] | challenger |
 
-Against persistence, `timesfm`, `timesfm_calibrated` and `fcm_mlp` have lower error on the Maps duration series. Against `xgb[maps]`, the TimesFM point estimates are slightly higher and not significant, and `fcm_mlp` is 0.047 min lower and not significant. The equal mix is a challenger versus `xgb[maps]` in this family (Holm p = 5.7e-06) by 0.142 min, which is under the 0.5 min bar in the Significance section. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `timesfm`, `timesfm_calibrated` and `fcm_mlp` stay off the forecast mix and are not callable.
+Against persistence, `timesfm`, `timesfm_calibrated` and `fcm_mlp` have lower error on the Maps duration series. Against `xgb[maps]`, the TimesFM point estimates are slightly higher and not significant, and `fcm_mlp` is 0.047 min lower and not significant. The equal mix is a challenger versus `xgb[maps]` in this family (Holm p = 5.7e-06) by 0.142 min, which is under the 0.5 min bar in the Significance section. **That result is exploratory.** The mix was formed after scoring on 13–30 Sep, the window that also chose the frozen-run arms. It is not among the frozen-run claims C1–C8, and it has its own Holm family of four instead of the run-wide check. It needs the October-only Run B before it is claimed; the proposed claim is C9 in [roadmap.md](roadmap.md). TimesFM is scored through BigQuery `AI.FORECAST`. That is an exception to the local-only evaluation (roadmap item 0), allowed because no BigQuery ML model is trained or compared and nothing is written. **Served selection is unchanged** (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`). `timesfm`, `timesfm_calibrated` and `fcm_mlp` stay off the forecast mix and are not callable.
 
 ---
 

@@ -2,6 +2,14 @@
 
 Dated copy of GCP project `swiftborder`. When this file and the project disagree, the project wins; re-query and update this file. Older blocks below are history. They keep the revisions and sentences that were true at their own timestamps.
 
+## Update: 2026-10-10, approximately 10:50 SGT (read-only)
+
+- **Cloud Run:**
+  - `forecast-api` serves revision `forecast-api-00012-zal`, commit `3bd5b6b`, from Cloud Build `c4143c3f`. `?curve=forecast` returns four points at 30–120 min, and `?list=cards` returns 200.
+  - `swiftbackend` serves `swiftbackend-00033-mh9`, commit `f9895ec`, image built from `camdetect/Dockerfile`. Its env var names are `ROBOFLOW_API_KEY` and `CACHE_BUCKET`, with no `ROBOFLOW_WORKFLOW_ID`, so the code default (workflow v6) is live. `camdetect/main.py` does not read `CACHE_BUCKET`. The invoker IAM check is disabled on both services.
+- **Triggers:** both now build from checked-in files: `forecast-api` from `forecastapi/cloudbuild.yaml`, and `76bbca35` from `camdetect/cloudbuild.yaml`. The camera trigger ran twice each for `63aa50b` and `f9895ec`, about 4 minutes apart; all those builds succeeded.
+- **Hosting:** the live `app.js` differs from `hosting/app.js` (62,054 vs 61,557 characters; the live copy still says "exploratory"). The page has not been redeployed from git.
+
 ## Latest verification: 2026-10-04, approximately 14:40-14:45 SGT
 
 Read-only. No cloud resources or settings were changed. Repo checkout for the doc pass: local `main` `7bd94e369ea1b1760881f2e90f71d4ea93f8da02`. This pass did not re-query `model_registry`, view SQL, `traffic_images` row counts, weather row counts, Hosting file bytes, bucket CORS, or service IAM policies. Those stay at the dates in the sections below.
