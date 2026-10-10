@@ -160,38 +160,43 @@ def _pred(x, y, w, h, conf, cls="car"):
     return {"x": x, "y": y, "width": w, "height": h, "confidence": conf, "class": cls}
 
 
-def test_overlap_suppression_drops_cross_class_duplicates_only():
+def test_cross_class_duplicate_keeps_the_more_confident_box():
     preds = [
         _pred(100, 100, 50, 40, 0.9, "truck"),
-        _pred(101, 100, 50, 40, 0.4, "bus"),  # same vehicle, other class: each 98% inside the other
-        _pred(140, 100, 50, 40, 0.6),  # beside it: 10/50 of its width overlaps -> kept
+        _pred(101, 100, 50, 40, 0.4, "bus"),  # same vehicle, other class, same size
+        _pred(140, 100, 50, 40, 0.6),  # beside it: 20% of it overlaps -> kept
         _pred(400, 400, 50, 40, 0.2),
     ]
-    kept, dropped = main._suppress_overlaps(preds, 0.8)
+    kept, dropped = main._suppress_overlaps(preds, 0.6)
     assert dropped == 1
     assert [p["confidence"] for p in kept] == [0.9, 0.6, 0.2]  # input order kept
 
 
-def test_small_box_inside_big_box_is_never_dropped():
-    # Car fully inside a truck's box: 100% of the car is covered, but only 12% of the truck.
-    truck = _pred(100, 50, 200, 100, 0.8, "truck")
-    car = _pred(120, 70, 60, 40, 0.6)
-    kept, dropped = main._suppress_overlaps([truck, car], 0.8)
-    assert dropped == 0 and len(kept) == 2
+def test_whole_car_box_beats_front_and_back_half_boxes():
+    # One car boxed whole (100x50) and as front and back halves (50x50, 50% of it each), the halves
+    # more confident than the whole: the whole-car box stays, both halves go.
+    whole = _pred(100, 100, 100, 50, 0.5)
+    front, back = _pred(75, 100, 50, 50, 0.8), _pred(125, 100, 50, 50, 0.7)
+    assert main._suppress_overlaps([front, whole, back], 0.6) == ([whole], 2)
 
 
-def test_both_boxes_must_be_covered_past_the_cut():
-    # 60x40 and 66x44 on one car: the smaller is fully inside, the larger 83% covered -> one vehicle.
-    big, small = _pred(100, 100, 66, 44, 0.7), _pred(100, 100, 60, 40, 0.3)
-    assert main._suppress_overlaps([big, small], 0.8) == ([big], 1)
-    # 60x40 inside 70x50: the larger is only 69% covered -> both kept.
-    big = _pred(100, 100, 70, 50, 0.7)
-    assert main._suppress_overlaps([big, small], 0.8) == ([big, small], 0)
+def test_car_in_front_of_truck_stays_at_3x_or_more():
+    truck = _pred(100, 50, 120, 100, 0.8, "truck")  # 12000 px
+    car = _pred(100, 70, 80, 50, 0.6)  # 4000 px: exactly 3x, fully inside -> kept
+    assert main._suppress_overlaps([truck, car], 0.6) == ([truck, car], 0)
+    car = _pred(100, 70, 82, 50, 0.6)  # 4100 px: 2.9x -> one vehicle, the smaller box goes
+    assert main._suppress_overlaps([truck, car], 0.6) == ([truck], 1)
+
+
+def test_only_the_smaller_box_needs_to_be_covered():
+    # 60x40 fully inside 70x50: the larger is only 69% covered, but the smaller is 100% -> one vehicle.
+    big, small = _pred(100, 100, 70, 50, 0.4), _pred(100, 100, 60, 40, 0.9)
+    assert main._suppress_overlaps([big, small], 0.6) == ([big], 1)
 
 
 def test_neighbours_in_a_queue_survive():
     # Two 60x40 cars, the second 30 px along and 10 px up: 37.5% overlap.
-    kept, dropped = main._suppress_overlaps([_pred(100, 100, 60, 40, 0.7), _pred(130, 90, 60, 40, 0.6)], 0.8)
+    kept, dropped = main._suppress_overlaps([_pred(100, 100, 60, 40, 0.7), _pred(130, 90, 60, 40, 0.6)], 0.6)
     assert dropped == 0 and len(kept) == 2
 
 
@@ -241,9 +246,8 @@ def test_parse_overlap(raw, expected):
 
 
 def test_default_cut_drops_a_shifted_echo_on_one_car():
-    # Confident box plus a weak echo shifted 12 px and 6 px: each covers 68% of the other (0.8 kept both).
+    # Confident box plus a weak echo of the same size shifted 12 px and 6 px: 68% overlap.
     box, echo = _pred(100, 100, 60, 40, 0.7), _pred(112, 106, 60, 40, 0.15)
-    assert main._mutual_overlap(main._box(box), main._box(echo)) == pytest.approx(0.8 * 0.85)
     assert main._suppress_overlaps([box, echo], main.LOCAL_MAX_OVERLAP) == ([box], 1)
     # Two cars in a queue, 30 px along and 10 px up (37.5% overlap), both stay at the default.
     kept, dropped = main._suppress_overlaps([box, _pred(130, 90, 60, 40, 0.6)], main.LOCAL_MAX_OVERLAP)
