@@ -1,0 +1,1 @@
+web: python3 ${LAYER_B_MODULE:-layer_b_fcm_mlp.py} ${LAYER_B_ARGS:-run-cycle}

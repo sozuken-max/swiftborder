@@ -49,19 +49,27 @@ Credentials with write access to the two datasets.
 
 ## Layer B forecasting modules
 
-Two self-contained modules forecast the Google Maps travel time 10 to 60 minutes ahead per
-direction, with the Layer A camera counts as optional inputs. Both read
-`traffic_prediction.v_bins_10min`, share the `layer_a_counts` table and write their own forecast
-and registry tables in `traffic_prediction`. Neither is deployed yet.
+Three modules forecast the Google Maps travel time per direction, with the Layer A camera counts
+as optional inputs. All read `traffic_prediction.v_bins_10min`, share the `layer_a_counts` table
+and write their own forecast and registry tables in `traffic_prediction`. None is deployed yet.
 
 | Module | Model |
 | --- | --- |
-| [`layer_b_timesfm.py`](layer_b_timesfm.py) | TimesFM 2.5 through BigQuery `AI.FORECAST`, with a ridge calibration of its residual |
-| [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py) | Fuzzy C-Means regimes feeding a seed ensemble of MLPs (scikit-learn to train, numpy to serve) |
+| [`layer_b_timesfm.py`](layer_b_timesfm.py) | TimesFM 2.5 through BigQuery `AI.FORECAST`, with a ridge calibration of its residual (10 to 60 min) |
+| [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py) | Fuzzy C-Means regimes feeding a seed ensemble of MLPs (scikit-learn to train, numpy to serve; 10 to 60 min) |
+| [`layer_b_fcm_xgb_mix.py`](layer_b_fcm_xgb_mix.py) | Equal mix of `fcm_mlp` and the harness `xgb[maps]`, both refitted daily (30 min); imports `layer_b_fcm_mlp.py` |
 
 Each module's docstring covers its decision rules, the protected confirmation window
 (1–19 Oct 2026), the commands and the Cloud Run Job deployment. The FCM + MLP results on
-6–30 Sep are in [layer-b-fcm-mlp-results.md](layer-b-fcm-mlp-results.md).
+6–30 Sep are in [layer-b-fcm-mlp-results.md](layer-b-fcm-mlp-results.md). The mix was scored on
+13–30 Sep in [evaluation.md §8](../docs/evaluation.md#8-timesfm-25-and-fcm--mlp-shared-13-30-sep-window-2026-10-05);
+`python layer_b_fcm_xgb_mix.py backtest --start 2026-09-13 --end 2026-09-30 --allow-protected-window`
+reruns that protocol on its 5,184 rows (without the flag, the six labels on 1 Oct are held back and
+5,178 rows are scored). The mix is not one of the frozen-run claims C1–C8; [roadmap.md](../docs/roadmap.md)
+proposes it as C9 for Run B, and until the team confirms that before 19 Oct an October score of it is
+exploratory. Its verification and open items are in [layer-b-mix-module.md](layer-b-mix-module.md).
+`Procfile` and `.python-version` (Python 3.11) are the buildpack start command and interpreter for
+all three modules' Cloud Run Jobs.
 
 ## Setup and tests
 

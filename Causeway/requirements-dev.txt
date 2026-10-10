@@ -1,3 +1,4 @@
 -r requirements.txt
 pytest==9.1.1
 pytest-cov==7.1.0
+pandas==3.0.6  # tests only: parity of the Maps features and xgb[maps] with forecastapi/local_models.py
