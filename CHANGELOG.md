@@ -4,6 +4,8 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-10
 
+- `camdetect/backfill_local_counts.py` retro-scores stored CAM 2701 frames from `gs://sg-lta-traffic-cameras/camera_id=2701/month=YYYY-MM/` with `detect_frame` and `model=local` (same model, confidence, dedupe and direction split as the live service). Default window 6 Sep to 4 Oct 2026 SGT. Writes per-frame `sg_my` / `my_sg` integer counts to `camdetect/backfill/` (that CSV is tracked by git). Resumable, no Roboflow call. Only `main.py` and requirements files start a `swiftbackend` deploy, so this does not redeploy.
+
 - `camdetect` CAM 2701 dividing line spans the full frame width. New end points `[0, 1106]` and `[1920, 313]` continue the first and last segments. Vehicles in the bottom-left corner (x < 176) were Unknown; the MY-SG carriageway leaves the frame right of x=176, so they are now SG-MY. Car slivers at the right edge (x > 1913) get a side too. On 9 saved CAM 2701 frames, Unknown went from 0-3 per frame to 0. Applies to every model. Merging redeploys `swiftbackend`.
 
 - `camdetect` default `confidence` goes from 0.35 to 0.2 for every model (`DEFAULT_CONFIDENCE`, `LOCAL_DEFAULT_CONFIDENCE`). 0.35 cleared weak echo boxes before the size-ratio dedupe for `local` existed. With dedupe on, 0.2 adds 3-12 `local` vehicles per CAM 2701 frame over 0.35, while dedupe removes 6-33 echoes per frame. CAM 2702 goes 21 -> 32. v6 counts change too (v6 has no dedupe by default). Set by eye, not scored against labels. Merging redeploys `swiftbackend`.

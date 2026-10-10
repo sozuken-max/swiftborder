@@ -142,6 +142,43 @@ the table above. `camdetect/models/**` is **not** in the trigger's
 `includedFiles`, so a model-only commit does not redeploy. Touch `main.py`
 in the same commit, or add the path to the trigger.
 
+## Retro-scoring stored frames (`model=local`)
+
+[`backfill_local_counts.py`](backfill_local_counts.py) scores the frames already stored in
+`gs://sg-lta-traffic-cameras/camera_id=2701/month=YYYY-MM/` with `detect_frame(...,
+workflow_id=LOCAL_MODEL_ID)`. That is the code behind the front end's "Local model" pane: same
+ONNX model, confidence, overlap dedupe and SG-MY / MY-SG dividing line. No Roboflow call, no cost.
+Default window: 6 Sep to 4 Oct 2026 inclusive, SGT dates (the `month=2026-09` and `month=2026-10`
+partitions are both listed).
+
+```bash
+pip install -r requirements.txt google-cloud-storage
+gcloud auth application-default login     # storage.objects.list/get on sg-lta-traffic-cameras
+python backfill_local_counts.py --dry-run # frames per day and parsed sample names; no inference
+python backfill_local_counts.py           # writes backfill/cam2701_local_counts_20260906_20261004.csv
+```
+
+Output, one row per frame, sorted by time:
+
+| Column | Meaning |
+| --- | --- |
+| `frame_datetime_sgt` | capture time from the object name (SGT, no offset) |
+| `sg_my`, `my_sg` | vehicles per direction (integers) |
+| `unknown`, `total` | unattributed, and all kept detections (`sg_my + my_sg + unknown`) |
+| `source` | the scored object |
+
+The capture time is read from the object name (`20260906_081530`, ISO with or without `Z` /
+`+08:00`, or Unix seconds), then from object metadata. A name with no offset is read as SGT;
+pass `--name-tz UTC` if the bucket names are UTC. Check the `--dry-run` sample first. Two objects
+with the same capture time are scored once. A frame that fails to download or decode is
+reported, left out of the CSV, and retried by the next run; frames already in the CSV are
+skipped, so an interrupted run resumes. `--local-dir` scores a local copy of the bucket tree
+instead of GCS.
+
+About 0.5 s per frame on 4 vCPU, so ~4,000 frames take about 35 minutes. On three live frames
+(9-10 Oct) the script's totals equal the `local` totals in the confidence table above (93, 103,
+121). These are occupancy counts per frame, like the live service, not labelled results.
+
 ## Directions
 
 Each detection's foot point (bottom-centre of its box) is compared against a
