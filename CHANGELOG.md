@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-10
+
+- `camdetect` accepts `model=local`: the YOLO26s from Colab run `v6_yolo26s_boxfix` (dataset v6, `freeze=10`), exported to ONNX at 736×1280 and run on onnxruntime inside `swiftbackend`. There is no Roboflow call or key and no credit cost. The response shape is unchanged; `workflow_id` / `X-Workflow-Id` read `local:yolo26s-v6-boxfix`. Decoding matches Ultralytics `.pt` predict (cv2-equivalent resize, one-to-many head plus class-aware NMS), with identical counts on two live CAM 2701/2702 frames. Its mAP50 0.833 is the Colab run's own ~15-image validation split, not a harness score. `requirements.txt` adds `onnxruntime==1.29.0` and `numpy==2.4.6`, and the Dockerfile copies `camdetect/models/` (38 MB). Measured locally: about 0.5 s per frame and about 380 MB peak RSS, so `swiftbackend` needs at least 1 GiB (not checked against the live service: no GCP credentials in this session). The page still shows only v6 and v4. Merging redeploys `swiftbackend`.
+
 ## 2026-10-08
 
 - `swiftbackend` builds from `camdetect/Dockerfile` (`python:3.11-slim`, the Test step's image, then `functions-framework --target=detect`) instead of buildpacks. Build d949348e, the first run of `camdetect/cloudbuild.yaml` after trigger `76bbca35` was switched to it in the Console, spent most of its 60+ s Buildpack step pulling builder `google-22` and lifecycle `0.21.18`, neither cached on the build machine, for about 8 s of build work. Python stays 3.11. Merging starts a build.
