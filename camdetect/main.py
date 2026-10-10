@@ -43,7 +43,9 @@ def _env_float(name, default):
     return value if math.isfinite(value) else default
 
 
-DEFAULT_CONFIDENCE = _env_float("DEFAULT_CONFIDENCE", 0.1)
+# 0.35 since 10 Oct 2026 (was 0.1): low-confidence boxes were mostly second boxes on a vehicle
+# that already had one. Applies to every model; model=local has its own LOCAL_DEFAULT_CONFIDENCE.
+DEFAULT_CONFIDENCE = _env_float("DEFAULT_CONFIDENCE", 0.35)
 DATE_TIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 BOX_COLOR = (0, 255, 0)
@@ -150,6 +152,11 @@ LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never s
 # On by default for model=local only, so v4/v6 counts stay comparable with earlier output; the
 # ``overlap`` request parameter sets it for any model (1 turns it off).
 LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.6)
+# Default minimum confidence for model=local (Roboflow models use DEFAULT_CONFIDENCE). At 0.1 the
+# leftover double boxes were a confident box plus a weak echo at ~0.1-0.3; at 0.35 with the 0.6
+# overlap cut, 0-2 pairs over 40% mutual overlap remained per CAM 2701 frame (9 frames, 8-10 Oct).
+# It also drops real but faint vehicles: CAM 2702 went 52 -> 21. A request ``confidence`` wins.
+LOCAL_DEFAULT_CONFIDENCE = _env_float("LOCAL_DEFAULT_CONFIDENCE", 0.35)
 
 MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, LOCAL_MODEL_KEY])
 
@@ -700,7 +707,7 @@ def detect_frame(
     Used by ``detect()`` and by the offline camera backfill in ``eval/``.
     """
     if min_confidence is None:
-        min_confidence = DEFAULT_CONFIDENCE
+        min_confidence = LOCAL_DEFAULT_CONFIDENCE if workflow_id == LOCAL_MODEL_ID else DEFAULT_CONFIDENCE
     image_size = _image_size(image_bytes)
     if workflow_id == LOCAL_MODEL_ID:
         predictions = _run_local(image_bytes, image_size)
@@ -736,14 +743,14 @@ def _param(body, args, name):
     return value
 
 
-def _parse_confidence(value):
+def _parse_confidence(value, default=DEFAULT_CONFIDENCE):
     if value is None or value == "":
-        return DEFAULT_CONFIDENCE
+        return default
     try:
         conf = float(value)
     except (TypeError, ValueError):
-        return DEFAULT_CONFIDENCE
-    return conf if math.isfinite(conf) else DEFAULT_CONFIDENCE
+        return default
+    return conf if math.isfinite(conf) else default
 
 
 def _parse_overlap(value):
@@ -783,7 +790,7 @@ def detect(request):
     camera_id = str(_param(body, args, "camera_id") or DEFAULT_CAMERA_ID)
     date_time = _param(body, args, "date_time")
     output_format = str(_param(body, args, "format") or "image").lower()
-    min_confidence = _parse_confidence(_param(body, args, "confidence"))
+    raw_confidence = _param(body, args, "confidence")
     max_overlap = _parse_overlap(_param(body, args, "overlap"))
     model = _param(body, args, "model")
     if model is None or model == "":
@@ -795,6 +802,9 @@ def detect(request):
     else:
         return _error(f"model must be one of: {', '.join(MODEL_CHOICES)}", 400)
     is_local = workflow_id == LOCAL_MODEL_ID
+    min_confidence = _parse_confidence(
+        raw_confidence, LOCAL_DEFAULT_CONFIDENCE if is_local else DEFAULT_CONFIDENCE
+    )
 
     # If no timestamp is supplied, use the current Singapore-local time.
     if date_time is None or date_time == "":

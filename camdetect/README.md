@@ -19,7 +19,7 @@ is missing, `null` or an empty string (so `confidence: 0` is honoured, and
 |---|---|---|
 | `camera_id` | `2701` | data.gov.sg camera id |
 | `date_time` | now, Asia/Singapore | frame timestamp, `YYYY-MM-DDTHH:MM:SS` |
-| `confidence` | `0.1` | minimum detection confidence |
+| `confidence` | `0.35` | minimum detection confidence (`DEFAULT_CONFIDENCE`; `LOCAL_DEFAULT_CONFIDENCE` for `local`) |
 | `format` | `image` | `image`, `directional` or `json` |
 | `overlap` | `0.6` for `local`, off for `v4`/`v6` | mutual-overlap cut in [0, 1]: boxes are merged when each covers more than this share of the other; `1` turns it off; malformed values fall back to the model default (see below) |
 | `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (Roboflow, allowlist `WORKFLOW_VERSIONS`), or `local` (in-container model, below); case-insensitive; anything else is 400 before any upstream call |
@@ -107,6 +107,29 @@ Total count on those frames, `local`, `confidence=0.1`, at each cut:
 
 Not scored against labels. The congestion bands were cut on v6 counts, so
 `local` counts are not on the same scale.
+
+**Confidence.** Every model defaults to `confidence=0.35` since 10 Oct 2026
+(was 0.1): `DEFAULT_CONFIDENCE` for `v4`/`v6`, `LOCAL_DEFAULT_CONFIDENCE` for
+`local`. A request `confidence` overrides either. v6 counts at 0.35 are not
+comparable with earlier v6 output at 0.1, and the congestion bands were cut on
+v6 counts at 0.1. With overlap suppression at 0.6, the double boxes left at 0.1 were a
+confident box plus a weak echo at confidence 0.1-0.3. At 0.35, 0-2 pairs over
+40% mutual overlap remained per CAM 2701 frame. The cost is real but faint
+vehicles, most of all on CAM 2702.
+
+Total count, `local`, overlap 0.6, at each confidence:
+
+| Frame | 0.10 | 0.25 | **0.35** | 0.45 |
+| --- | --- | --- | --- | --- |
+| 2701 10 Oct 13:32 (live) | 151 | 125 | **112** | 99 |
+| 2701 10 Oct 08:00 | 119 | 100 | **93** | 77 |
+| 2701 10 Oct 12:30 | 103 | 95 | **88** | 77 |
+| 2701 9 Oct 18:30 | 142 | 122 | **111** | 99 |
+| 2701 8 Oct 21:00 | 87 | 70 | **63** | 58 |
+| 2702 10 Oct 12:30 | 52 | 31 | **21** | 13 |
+
+Set by eye, not against labels: the threshold that minimises counting error
+needs hand-counted frames.
 
 A missing or unloadable model file returns **503** `Local model is not
 available`. No upstream inference call is made.
@@ -256,12 +279,13 @@ ROBOFLOW_API_URL      default https://serverless.roboflow.com
 ROBOFLOW_WORKSPACE    default chads-workspace-t3qcz
 ROBOFLOW_WORKFLOW_ID  workflow to invoke
 DEFAULT_CAMERA_ID     default 2701
-DEFAULT_CONFIDENCE    default 0.1
+DEFAULT_CONFIDENCE    default 0.35 (was 0.1 before 10 Oct 2026)
 ALLOWED_ORIGIN        CORS origin, default *
 DIVIDING_LINES        JSON, overrides the built-in per-camera lines
 LOCAL_MODEL_PATH      default models/yolo26s_v6_boxfix.onnx next to main.py
 LOCAL_MODEL_ID        default local:yolo26s-v6-boxfix (reported as workflow_id)
 LOCAL_MAX_OVERLAP     default 0.6, overlap suppression for model=local (1 = off)
+LOCAL_DEFAULT_CONFIDENCE  default 0.35, minimum confidence for model=local
 ```
 
 A malformed `DEFAULT_CONFIDENCE` or `DIVIDING_LINES` logs a warning and falls
