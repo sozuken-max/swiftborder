@@ -2,6 +2,7 @@
 
 import csv
 import datetime as dt
+import io
 
 import backfill_local_counts as bf
 import main
@@ -167,3 +168,85 @@ def test_main_with_bq_table_batches_rows_and_skips_scored_frames(tmp_path, monke
         ["2026-09-06T08:10:00", "2026-09-06T08:20:00"],
         ["2026-09-06T08:30:00", "2026-09-06T08:40:00"],
     ]
+
+
+class FakeBlob:
+    def __init__(self, name, store):
+        self.name, self.store, self.metadata = name, store, None
+
+    def upload_from_string(self, data, content_type=None):
+        self.store[self.name] = (data, content_type, self.metadata)
+
+
+class FakeBucket:
+    def __init__(self, name):
+        self.name, self.store = name, {}
+
+    def blob(self, name):
+        return FakeBlob(name, self.store)
+
+
+class FakeStorage:
+    def __init__(self):
+        self.buckets = {}
+
+    def bucket(self, name):
+        return self.buckets.setdefault(name, FakeBucket(name))
+
+    def list_blobs(self, bucket, prefix=""):
+        return [type("B", (), {"name": n})() for n in bucket.store if n.startswith(prefix)]
+
+
+def test_gcs_image_sink_writes_under_the_folder_and_reads_back_done():
+    client = FakeStorage()
+    sink = bf.GcsImageSink("gs://out-bucket/processed/local/", client=client)
+    assert str(sink) == "gs://out-bucket/processed/local/"
+    row = bf.make_row("2701", dt.datetime(2026, 9, 6, 8, 0), {"sg_my": 2, "my_sg": 5, "unknown": 0, "total": 7},
+                      "gs://src/camera_id=2701/month=2026-09/a.jpg", dt.datetime(2026, 10, 10, tzinfo=dt.timezone.utc))
+    row.update(object_name="camera_id=2701/month=2026-09/a.jpg", annotated_jpeg=b"jpeg")
+    sink.write([row])
+    data, content_type, metadata = client.bucket("out-bucket").store["processed/local/camera_id=2701/month=2026-09/a.jpg"]
+    assert (data, content_type) == (b"jpeg", "image/jpeg")
+    assert metadata["sg_my"] == "2" and metadata["my_sg"] == "5" and metadata["frame_datetime_sgt"] == "2026-09-06T08:00:00"
+    assert sink.done("2701") == {"camera_id=2701/month=2026-09/a.jpg"}
+    assert bf.GcsImageSink("gs://out-bucket", client=client).prefix == ""
+
+
+def test_render_directional_draws_on_a_copy_of_the_frame():
+    from PIL import Image
+
+    frame = io.BytesIO()
+    Image.new("RGB", (1920, 1080), (90, 90, 90)).save(frame, format="JPEG")
+    pred = {"x": 300.0, "y": 1000.0, "width": 70.0, "height": 50.0, "confidence": 0.9, "class": "car"}
+    points = main._dividing_line("2701", (1920, 1080))
+    summary = main._summarize_directions([pred], points, (1920, 1080))
+    out = bf.render_directional(frame.getvalue(), {"kept": [pred], "points": points, "summary": summary})
+    image = Image.open(io.BytesIO(out))
+    assert image.format == "JPEG" and image.size == (1920, 1080)
+    assert image.getpixel((5, 5)) != (90, 90, 90)  # banner drawn at the top left
+
+
+def test_main_gcs_out_uploads_images_skips_existing_and_broken_frames_do_not_fail(tmp_path, monkeypatch):
+    root = tmp_path / "bucket"
+    _tree(root, [f"camera_id=2701/month=2026-09/20260906_08{m}000.jpg" for m in range(3)])
+    client = FakeStorage()
+    client.bucket("out").store["vis/camera_id=2701/month=2026-09/20260906_080000.jpg"] = (b"old", None, {})
+    real_sink = bf.GcsImageSink
+    monkeypatch.setattr(bf, "GcsImageSink", lambda uri: real_sink(uri, client=client))
+
+    def fake_detect(image_bytes, camera_id, workflow_id=None, **_):
+        if image_bytes == b"broken":
+            raise main.InvalidImage("image file is truncated")
+        return {"kept": [{}], "points": None,
+                "summary": {"sg_my": {"count": 1}, "my_sg": {"count": 0}, "unknown": {"count": 0}}}
+
+    (root / "camera_id=2701/month=2026-09/20260906_082000.jpg").write_bytes(b"broken")
+    monkeypatch.setattr(main, "detect_frame", fake_detect)
+    monkeypatch.setattr(bf, "render_directional", lambda image_bytes, result: b"annotated")
+    args = ["--local-dir", str(root), "--gcs-out", "gs://out/vis", "--start", "2026-09-06", "--end", "2026-09-06"]
+    assert bf.main(args) == 0  # the broken frame is skipped, not a failure
+    store = client.bucket("out").store
+    assert store["vis/camera_id=2701/month=2026-09/20260906_080000.jpg"][0] == b"old"  # already there: kept
+    assert store["vis/camera_id=2701/month=2026-09/20260906_081000.jpg"][0] == b"annotated"
+    assert "vis/camera_id=2701/month=2026-09/20260906_082000.jpg" not in store
+
