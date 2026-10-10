@@ -174,8 +174,30 @@ def test_overlap_suppression_drops_nested_and_cross_class_duplicates():
 
 
 def test_overlap_suppression_keeps_partly_occluded_vehicle():
-    # Car behind a truck: 60% of the car box is covered, under the 0.8 cut.
+    # Car beside a truck's back end: 60% of the car box is covered, under the 0.8 cut.
     kept, dropped = main._suppress_overlaps([_pred(100, 100, 100, 60, 0.9), _pred(160, 100, 50, 40, 0.5)], 0.8)
+    assert dropped == 0 and len(kept) == 2
+
+
+def test_car_in_front_of_truck_survives_above_the_similar_size_cut():
+    # Truck 200x100; car 60x40 at its bottom-right corner, 66% inside: over 0.65, but area ratio 8.3
+    # puts it under the 0.8 cut, so it stays.
+    truck = _pred(100, 50, 200, 100, 0.8, "truck")
+    car = _pred(185, 85, 60, 40, 0.6)
+    kept, dropped = main._suppress_overlaps([truck, car], 0.8)
+    assert dropped == 0 and len(kept) == 2
+
+
+def test_similar_size_shifted_boxes_are_one_car():
+    # Two 60x40 boxes on one car, shifted 12 px and 6 px: 68% of each covered (IoU ~0.52, under NMS 0.7).
+    first, second = _pred(100, 100, 60, 40, 0.7), _pred(112, 106, 60, 40, 0.2)
+    kept, dropped = main._suppress_overlaps([first, second], 0.8)
+    assert dropped == 1 and kept == [first]
+
+
+def test_similar_size_neighbours_in_a_queue_survive():
+    # Two 60x40 cars, the second 30 px along and 10 px up: 37.5% overlap.
+    kept, dropped = main._suppress_overlaps([_pred(100, 100, 60, 40, 0.7), _pred(130, 90, 60, 40, 0.6)], 0.8)
     assert dropped == 0 and len(kept) == 2
 
 
