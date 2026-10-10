@@ -142,16 +142,16 @@ LOCAL_MAX_DET = 300
 LOCAL_MAX_CANDIDATES = 30000
 LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never suppresses across classes
 
-# Overlap suppression after NMS: two boxes are one vehicle when each covers more than this fraction
-# of the other (intersection over the larger box's area), whatever the classes. Class-aware NMS at
-# IoU 0.7 leaves the same vehicle boxed as both truck and bus (IoU 0.9+), and a confident box plus a
-# weak echo (confidence ~0.1-0.3) shifted a little on one car. A small box inside a big one (a car in
-# front of a truck) is never dropped: only the small box is mostly covered. 0.6 set by eye on 8
-# CAM 2701/2702 frames (8-10 Oct): pairs at 0.6-0.8 were one car boxed twice; below 0.6 a car beside
-# a truck, or a truck beside a bus, starts to appear. Not scored against labels.
-# On by default for model=local only, so v4/v6 counts stay comparable with earlier output; the
-# ``overlap`` request parameter sets it for any model (1 turns it off).
+# Overlap suppression after NMS, whatever the classes. Two boxes are one vehicle when more than
+# max_overlap of the *smaller* box lies inside the other, unless the bigger box is LOCAL_SIZE_RATIO
+# (3x) or more the smaller's area: that is a car in front of a truck or bus, and both stay. Boxes are
+# kept biggest first, so one car boxed whole plus front and back halves (each ~40-50% of the whole)
+# keeps the whole-car box. Also removes a confident box plus a slightly shifted echo, and one vehicle
+# boxed as both truck and bus. Cuts are the team's (10 Oct 2026); not scored against labels.
+# On by default for model=local only; the ``overlap`` request parameter sets it for any model
+# (1 turns it off).
 LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.6)
+LOCAL_SIZE_RATIO = _env_float("LOCAL_SIZE_RATIO", 3.0)
 # Default minimum confidence for model=local (Roboflow models use DEFAULT_CONFIDENCE). At 0.1 the
 # leftover double boxes were a confident box plus a weak echo at ~0.1-0.3; at 0.35 with the 0.6
 # overlap cut, 0-2 pairs over 40% mutual overlap remained per CAM 2701 frame (9 frames, 8-10 Oct).
@@ -439,33 +439,35 @@ def _run_local(image_bytes, image_size):
     return _local_predictions(output[0], scale, pad, image_size)
 
 
-def _mutual_overlap(a, b):
-    """The smaller of the two coverages: intersection over the larger box's area.
-
-    Over 0.8 means each box has more than 80% of its area inside the other.
-    """
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-    inter = max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(0.0, min(ay2, by2) - max(ay1, by1))
-    larger = max((ax2 - ax1) * (ay2 - ay1), (bx2 - bx1) * (by2 - by1))
-    return inter / larger if larger > 0 else 0.0
+def _is_duplicate(a, b, max_overlap):
+    """Whether xyxy boxes a and b are one vehicle (see LOCAL_MAX_OVERLAP)."""
+    area_a = (a[2] - a[0]) * (a[3] - a[1])
+    area_b = (b[2] - b[0]) * (b[3] - b[1])
+    smaller, larger = sorted((area_a, area_b))
+    if smaller <= 0 or larger >= LOCAL_SIZE_RATIO * smaller:
+        return False
+    inter = max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    return inter / smaller > max_overlap
 
 
 def _suppress_overlaps(predictions, max_overlap):
-    """Greedy, class-agnostic: keep boxes by confidence, dropping any whose mutual overlap with a
-    kept box is over ``max_overlap``. Boxes without geometry are kept as is.
+    """Greedy, class-agnostic: keep boxes biggest first (ties by confidence), dropping any that is a
+    duplicate (``_is_duplicate``) of one already kept. Boxes without geometry are kept as is.
     Returns (kept, dropped_count) with ``kept`` in the input order.
     """
+    boxes = {i: _box(p) for i, p in enumerate(predictions)}
+
+    def order(i):
+        box = boxes[i]
+        return (-(box[2] - box[0]) * (box[3] - box[1]), -predictions[i]["confidence"])
+
     survivors = []
     dropped = set()
-    for i in sorted(range(len(predictions)), key=lambda i: -predictions[i]["confidence"]):
-        box = _box(predictions[i])
-        if box is None:
-            continue
-        if any(_mutual_overlap(box, other) > max_overlap for other in survivors):
+    for i in sorted((i for i in boxes if boxes[i] is not None), key=order):
+        if any(_is_duplicate(boxes[i], other, max_overlap) for other in survivors):
             dropped.add(i)
         else:
-            survivors.append(box)
+            survivors.append(boxes[i])
     return [p for i, p in enumerate(predictions) if i not in dropped], len(dropped)
 
 

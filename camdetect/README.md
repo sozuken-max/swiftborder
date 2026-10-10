@@ -69,44 +69,46 @@ so Roboflow requests do not pay for it. Local inference is serialised per
 instance (`_local_inference_lock`). Give the service at least 1 GiB of memory,
 and expect concurrent `local` requests on one instance to queue.
 
-**Overlap suppression.** After NMS and the confidence filter, boxes are
-taken in confidence order. Two boxes count as one vehicle when *each* has more
-than `max_overlap` (0.6) of its area inside the other, whatever the classes.
-That is the intersection over the *larger* box's area. It removes two kinds of
-double count that class-aware NMS at IoU 0.7 leaves:
+**Overlap suppression.** After NMS and the confidence filter, two boxes are
+one vehicle, whatever their classes, when more than `max_overlap` (0.6) of the
+*smaller* box lies inside the other. The exception is a bigger box 3× or more
+the smaller box's area (`LOCAL_SIZE_RATIO`). That is a car in front of a truck
+or bus, so both stay.
 
-- the same vehicle boxed as both truck and bus (IoU 0.9 and above), and
-- a confident box plus a weak echo (confidence about 0.1-0.3) shifted a little
-  on the same car.
+Boxes are kept biggest first (ties by confidence), and a box that duplicates
+one already kept is dropped. This covers:
 
-A small box inside a big one, such as a car in front of a truck, is never
-dropped, because only the small box is mostly covered.
+- one car boxed whole plus front and back halves (each about 40-50% of the
+  whole): the whole-car box stays and both halves go, even if the halves are
+  more confident;
+- a confident box plus a slightly shifted echo of about the same size;
+- one vehicle boxed as both truck and bus (or truck and car).
 
-The 0.6 cut was set by eye on 8 CAM 2701/2702 frames (8-10 Oct). Pairs at
-0.6-0.8 were one car boxed twice. Below 0.6, a car beside a truck, or a truck
-beside a bus, starts to appear. The first live default (0.8) caught only the
-pairs above 0.8, about 20 of the 118 pairs above 0.6 on five 2701 frames.
+Keeping the biggest box first can keep a slightly looser box over a tighter
+one on the same car. The count is the same either way. On 10 frames, keeping the
+most confident box first instead gave counts within 0-2 of this, but left
+two boxes on a car whose half box was the most confident.
 
-On by default for `local` (`LOCAL_MAX_OVERLAP`, 0.6). Off by default for
-`v4`/`v6`, so their counts stay comparable with earlier output. Pass
-`overlap=` to set it for any model, or `overlap=1` to turn it off. JSON reports
-`max_overlap` (null when off) and `overlap_suppressed`.
+On by default for `local` (`LOCAL_MAX_OVERLAP` 0.6, `LOCAL_SIZE_RATIO` 3). Off by
+default for `v4`/`v6`. Pass `overlap=` to set the cut for any model, or
+`overlap=1` to turn it off. JSON reports `max_overlap` (null when off) and
+`overlap_suppressed`.
 
-Total count on those frames, `local`, `confidence=0.1`, at each cut:
+Effect on those frames, `local`, `confidence=0.35`:
 
-| Frame | off | 0.8 | 0.7 | **0.6** | 0.5 |
-| --- | --- | --- | --- | --- | --- |
-| 2701 10 Oct 08:00 | 149 | 146 | 135 | **119** | 113 |
-| 2701 10 Oct 12:30 | 121 | 117 | 115 | **103** | 100 |
-| 2701 10 Oct 12:45 | 137 | 133 | 127 | **118** | 111 |
-| 2701 10 Oct 13:25 | 105 | 103 | 95 | **92** | 89 |
-| 2701 9 Oct 18:30 | 167 | 160 | 151 | **142** | 138 |
-| 2701 9 Oct 07:30 | 62 | 62 | 61 | **58** | 54 |
-| 2701 8 Oct 21:00 | 96 | 91 | 89 | **87** | 81 |
-| 2702 10 Oct 12:30 | 59 | 59 | 57 | **52** | 50 |
+| Frame | Off | On (removed) |
+| --- | --- | --- |
+| 2701 10 Oct 13:42 (live) | 87 | 84 (3) |
+| 2701 10 Oct 13:32 | 116 | 111 (5) |
+| 2701 10 Oct 12:30 | 91 | 83 (8) |
+| 2701 10 Oct 08:00 | 97 | 91 (6) |
+| 2701 9 Oct 18:30 | 115 | 110 (5) |
+| 2701 9 Oct 07:30 | 46 | 41 (5) |
+| 2702 10 Oct 12:30 | 21 | 21 (0) |
 
-Not scored against labels. The congestion bands were cut on v6 counts, so
-`local` counts are not on the same scale.
+The three removals on the 13:42 frame were checked by eye: two dark cars with
+two boxes each, and one lorry boxed as both truck and car. The cuts are the
+team's choice, not scored against labels.
 
 **Confidence.** Every model defaults to `confidence=0.35` since 10 Oct 2026
 (was 0.1): `DEFAULT_CONFIDENCE` for `v4`/`v6`, `LOCAL_DEFAULT_CONFIDENCE` for
@@ -285,6 +287,7 @@ DIVIDING_LINES        JSON, overrides the built-in per-camera lines
 LOCAL_MODEL_PATH      default models/yolo26s_v6_boxfix.onnx next to main.py
 LOCAL_MODEL_ID        default local:yolo26s-v6-boxfix (reported as workflow_id)
 LOCAL_MAX_OVERLAP     default 0.6, overlap suppression for model=local (1 = off)
+LOCAL_SIZE_RATIO      default 3, a box this many times bigger never removes the smaller one
 LOCAL_DEFAULT_CONFIDENCE  default 0.35, minimum confidence for model=local
 ```
 

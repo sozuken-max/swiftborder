@@ -4,6 +4,8 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-10
 
+- `camdetect` `model=local` dedupe rule, as specified by the team. Two boxes are one vehicle when more than 60% of the *smaller* box lies inside the other, whatever the classes, unless the bigger box is 3x or more the smaller's area (a car in front of a truck: both stay; `LOCAL_SIZE_RATIO`). Boxes are kept biggest first, so a car boxed whole plus front and back halves keeps the whole-car box. This replaces the mutual-overlap rule (each box 60% inside the other), which left those half boxes. It still removes shifted echoes and truck/bus double boxes. Live 13:42 frame: 87 -> 84; the 3 removed were checked by eye as duplicates. Not scored against labels. Merging redeploys `swiftbackend`.
+
 - Follow-up to the model updates. No code or GCP changes.
   - The FCM + MLP "within 15 minutes" line now says it is the Maps series, not the crossing-time target.
   - The `fcm_mlp` + `xgb[maps]` mean is labelled exploratory and proposed as claim C9 for Run B.
