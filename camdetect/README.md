@@ -21,7 +21,7 @@ is missing, `null` or an empty string (so `confidence: 0` is honoured, and
 | `date_time` | now, Asia/Singapore | frame timestamp, `YYYY-MM-DDTHH:MM:SS` |
 | `confidence` | `0.1` | minimum detection confidence |
 | `format` | `image` | `image`, `directional` or `json` |
-| `overlap` | `0.8` for `local`, off for `v4`/`v6` | mutual-overlap cut in [0, 1]: boxes are merged when each covers more than this share of the other; `1` turns it off; malformed values fall back to the model default (see below) |
+| `overlap` | `0.6` for `local`, off for `v4`/`v6` | mutual-overlap cut in [0, 1]: boxes are merged when each covers more than this share of the other; `1` turns it off; malformed values fall back to the model default (see below) |
 | `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (Roboflow, allowlist `WORKFLOW_VERSIONS`), or `local` (in-container model, below); case-insensitive; anything else is 400 before any upstream call |
 
 ## In-container model (`model=local`)
@@ -71,33 +71,42 @@ and expect concurrent `local` requests on one instance to queue.
 
 **Overlap suppression.** After NMS and the confidence filter, boxes are
 taken in confidence order. Two boxes count as one vehicle when *each* has more
-than `max_overlap` (0.8) of its area inside the other, whatever the classes.
-That is the intersection over the *larger* box's area. Class-aware NMS never
-compares a truck box with a bus box, so the same vehicle boxed as both
-(IoU 0.9 and above) is otherwise counted twice. A small box inside a big one,
-such as a car in front of a truck, is never dropped, because only the small
-box is mostly covered.
+than `max_overlap` (0.6) of its area inside the other, whatever the classes.
+That is the intersection over the *larger* box's area. It removes two kinds of
+double count that class-aware NMS at IoU 0.7 leaves:
 
-On by default for `local` (`LOCAL_MAX_OVERLAP`, 0.8). Off by default for
+- the same vehicle boxed as both truck and bus (IoU 0.9 and above), and
+- a confident box plus a weak echo (confidence about 0.1-0.3) shifted a little
+  on the same car.
+
+A small box inside a big one, such as a car in front of a truck, is never
+dropped, because only the small box is mostly covered.
+
+The 0.6 cut was set by eye on 8 CAM 2701/2702 frames (8-10 Oct). Pairs at
+0.6-0.8 were one car boxed twice. Below 0.6, a car beside a truck, or a truck
+beside a bus, starts to appear. The first live default (0.8) caught only the
+pairs above 0.8, about 20 of the 118 pairs above 0.6 on five 2701 frames.
+
+On by default for `local` (`LOCAL_MAX_OVERLAP`, 0.6). Off by default for
 `v4`/`v6`, so their counts stay comparable with earlier output. Pass
 `overlap=` to set it for any model, or `overlap=1` to turn it off. JSON reports
 `max_overlap` (null when off) and `overlap_suppressed`.
 
-Effect on 7 CAM 2701/2702 frames (8-10 Oct), `local`, `confidence=0.1`:
+Total count on those frames, `local`, `confidence=0.1`, at each cut:
 
-| Frame | Total | MY-SG | SG-MY |
-| --- | --- | --- | --- |
-| 2701 10 Oct 08:00 | 149 -> 146 | 111 -> 109 | 35 -> 34 |
-| 2701 10 Oct 12:30 | 121 -> 117 | 117 -> 113 | 3 -> 3 |
-| 2701 10 Oct 12:45 | 137 -> 133 | 129 -> 125 | 6 -> 6 |
-| 2701 9 Oct 18:30 | 167 -> 160 | 163 -> 156 | 3 -> 3 |
-| 2701 9 Oct 07:30 | 62 -> 62 | 45 -> 45 | 17 -> 17 |
-| 2701 8 Oct 21:00 | 96 -> 91 | 92 -> 87 | 4 -> 4 |
-| 2702 10 Oct 12:30 | 59 -> 59 | - | - |
+| Frame | off | 0.8 | 0.7 | **0.6** | 0.5 |
+| --- | --- | --- | --- | --- | --- |
+| 2701 10 Oct 08:00 | 149 | 146 | 135 | **119** | 113 |
+| 2701 10 Oct 12:30 | 121 | 117 | 115 | **103** | 100 |
+| 2701 10 Oct 12:45 | 137 | 133 | 127 | **118** | 111 |
+| 2701 10 Oct 13:25 | 105 | 103 | 95 | **92** | 89 |
+| 2701 9 Oct 18:30 | 167 | 160 | 151 | **142** | 138 |
+| 2701 9 Oct 07:30 | 62 | 62 | 61 | **58** | 54 |
+| 2701 8 Oct 21:00 | 96 | 91 | 89 | **87** | 81 |
+| 2702 10 Oct 12:30 | 59 | 59 | 57 | **52** | 50 |
 
-Not scored against labels. Two same-size boxes on one car that are shifted so
-each is only 65-80% covered by the other still both count. The congestion
-bands were cut on v6 counts, so `local` counts are not on the same scale.
+Not scored against labels. The congestion bands were cut on v6 counts, so
+`local` counts are not on the same scale.
 
 A missing or unloadable model file returns **503** `Local model is not
 available`. No upstream inference call is made.
@@ -252,7 +261,7 @@ ALLOWED_ORIGIN        CORS origin, default *
 DIVIDING_LINES        JSON, overrides the built-in per-camera lines
 LOCAL_MODEL_PATH      default models/yolo26s_v6_boxfix.onnx next to main.py
 LOCAL_MODEL_ID        default local:yolo26s-v6-boxfix (reported as workflow_id)
-LOCAL_MAX_OVERLAP     default 0.8, overlap suppression for model=local (1 = off)
+LOCAL_MAX_OVERLAP     default 0.6, overlap suppression for model=local (1 = off)
 ```
 
 A malformed `DEFAULT_CONFIDENCE` or `DIVIDING_LINES` logs a warning and falls
