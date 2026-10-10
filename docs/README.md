@@ -11,6 +11,7 @@ They are drafted as final-report sections (Practice Module: tools and design, pe
 | Performance: methods, reasoning, result tables | [evaluation.md](evaluation.md) |
 | Findings and what may be claimed | [findings.md](findings.md) |
 | What remains, and the order to do it | [roadmap.md](roadmap.md) |
+| Next steps after the TimesFM / FCM, horizon and Roboflow v6 updates (10 Oct) | [plan-next-steps.md](plan-next-steps.md) |
 | Evaluation data cutoff (19 Oct 2026 23:59 SGT) | [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03) |
 | LSTM, GRU and Transformer forecasters: design, results, when to revisit | [deep-learning-assessment.md](deep-learning-assessment.md) |
 | Horizon study, 30 min to 24 h, with a calendar-profile baseline (exploratory) | [horizon-study.md](horizon-study.md) |
