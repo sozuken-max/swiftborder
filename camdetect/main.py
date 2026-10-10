@@ -130,6 +130,13 @@ def _workflow_url(workflow_id=None):
 # Runs on the service's own CPU: no Roboflow key, no per-image credit.
 LOCAL_MODEL_KEY = "local"
 LOCAL_MODEL_ID = os.environ.get("LOCAL_MODEL_ID", "local:yolo26s-v6-boxfix")
+# ``model=local-conf``: the same weights and settings, but overlap suppression keeps the most
+# confident box first (area breaks ties) instead of the biggest. A separate id so the two dedupe
+# orders can be compared on the same frame; ``model=local`` is unchanged.
+LOCAL_CONF_MODEL_KEY = "local-conf"
+LOCAL_CONF_MODEL_ID = LOCAL_MODEL_ID + "+conf-first"
+# model id -> overlap-suppression order
+LOCAL_DEDUPE_ORDER = {LOCAL_MODEL_ID: "size", LOCAL_CONF_MODEL_ID: "confidence"}
 LOCAL_MODEL_PATH = os.environ.get(
     "LOCAL_MODEL_PATH",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "yolo26s_v6_boxfix.onnx"),
@@ -163,7 +170,8 @@ LOCAL_SIZE_RATIO = _env_float("LOCAL_SIZE_RATIO", 3.0)
 # A request ``confidence`` wins.
 LOCAL_DEFAULT_CONFIDENCE = _env_float("LOCAL_DEFAULT_CONFIDENCE", 0.2)
 
-MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, LOCAL_MODEL_KEY])
+LOCAL_MODEL_KEYS = {LOCAL_MODEL_KEY: LOCAL_MODEL_ID, LOCAL_CONF_MODEL_KEY: LOCAL_CONF_MODEL_ID}
+MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, *LOCAL_MODEL_KEYS])
 
 # Headers browsers may read cross-origin. Without this the X-* headers are
 # invisible to fetch()/XHR, which is why they are exposed explicitly.
@@ -455,16 +463,25 @@ def _is_duplicate(a, b, max_overlap):
     return inter / smaller > max_overlap
 
 
-def _suppress_overlaps(predictions, max_overlap):
-    """Greedy, class-agnostic: keep boxes biggest first (ties by confidence), dropping any that is a
-    duplicate (``_is_duplicate``) of one already kept. Boxes without geometry are kept as is.
+def _suppress_overlaps(predictions, max_overlap, order_by="size"):
+    """Greedy, class-agnostic: keep boxes in ``order_by`` order, dropping any that is a duplicate
+    (``_is_duplicate``) of one already kept. Boxes without geometry are kept as is.
+
+    ``size`` (``model=local``): biggest first, ties by confidence. ``confidence``
+    (``model=local-conf``): most confident first, ties by size, so a low-confidence box spanning
+    two confident cars cannot remove them.
     Returns (kept, dropped_count) with ``kept`` in the input order.
     """
     boxes = {i: _box(p) for i, p in enumerate(predictions)}
 
+    if order_by not in ("size", "confidence"):
+        raise ValueError(order_by)
+
     def order(i):
         box = boxes[i]
-        return (-(box[2] - box[0]) * (box[3] - box[1]), -predictions[i]["confidence"])
+        area = (box[2] - box[0]) * (box[3] - box[1])
+        conf = predictions[i]["confidence"]
+        return (-area, -conf) if order_by == "size" else (-conf, -area)
 
     survivors = []
     dropped = set()
@@ -714,9 +731,9 @@ def detect_frame(
     Used by ``detect()`` and by the offline camera backfill in ``eval/``.
     """
     if min_confidence is None:
-        min_confidence = LOCAL_DEFAULT_CONFIDENCE if workflow_id == LOCAL_MODEL_ID else DEFAULT_CONFIDENCE
+        min_confidence = LOCAL_DEFAULT_CONFIDENCE if workflow_id in LOCAL_DEDUPE_ORDER else DEFAULT_CONFIDENCE
     image_size = _image_size(image_bytes)
-    if workflow_id == LOCAL_MODEL_ID:
+    if workflow_id in LOCAL_DEDUPE_ORDER:
         predictions = _run_local(image_bytes, image_size)
     elif not ROBOFLOW_API_KEY:
         raise MissingApiKey("ROBOFLOW_API_KEY is not set")
@@ -724,12 +741,12 @@ def detect_frame(
         predictions = _extract_predictions(_run_workflow(image_bytes, workflow_id))
     kept = [p for p in predictions if p["confidence"] >= min_confidence]
     if max_overlap is None:
-        max_overlap = LOCAL_MAX_OVERLAP if workflow_id == LOCAL_MODEL_ID else None
+        max_overlap = LOCAL_MAX_OVERLAP if workflow_id in LOCAL_DEDUPE_ORDER else None
     if max_overlap is not None and max_overlap >= 1:
         max_overlap = None
     suppressed = 0
     if max_overlap is not None:
-        kept, suppressed = _suppress_overlaps(kept, max_overlap)
+        kept, suppressed = _suppress_overlaps(kept, max_overlap, LOCAL_DEDUPE_ORDER.get(workflow_id, "size"))
     points = _dividing_line(camera_id, image_size)
     summary = _summarize_directions(kept, points, image_size)
     return {
@@ -739,6 +756,7 @@ def detect_frame(
         "points": points,
         "max_overlap": max_overlap,
         "overlap_suppressed": suppressed,
+        "dedupe_order": LOCAL_DEDUPE_ORDER.get(workflow_id, "size") if max_overlap is not None else None,
     }
 
 
@@ -804,11 +822,11 @@ def detect(request):
         workflow_id = ROBOFLOW_WORKFLOW_ID
     elif isinstance(model, str) and model.lower() in WORKFLOW_VERSIONS:
         workflow_id = WORKFLOW_VERSIONS[model.lower()]
-    elif isinstance(model, str) and model.lower() == LOCAL_MODEL_KEY:
-        workflow_id = LOCAL_MODEL_ID
+    elif isinstance(model, str) and model.lower() in LOCAL_MODEL_KEYS:
+        workflow_id = LOCAL_MODEL_KEYS[model.lower()]
     else:
         return _error(f"model must be one of: {', '.join(MODEL_CHOICES)}", 400)
-    is_local = workflow_id == LOCAL_MODEL_ID
+    is_local = workflow_id in LOCAL_DEDUPE_ORDER
     min_confidence = _parse_confidence(
         raw_confidence, LOCAL_DEFAULT_CONFIDENCE if is_local else DEFAULT_CONFIDENCE
     )
@@ -870,6 +888,7 @@ def detect(request):
             "min_confidence": min_confidence,
             "max_overlap": result["max_overlap"],
             "overlap_suppressed": result["overlap_suppressed"],
+            "dedupe_order": result["dedupe_order"],
             "workflow_id": workflow_id,
             "vehicle_count": len(kept),
             "predictions": kept,

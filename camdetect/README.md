@@ -89,6 +89,25 @@ one on the same car. The count is the same either way. On 10 frames, keeping the
 most confident box first instead gave counts within 0-2 of this, but left
 two boxes on a car whose half box was the most confident.
 
+**`model=local-conf`.** This is the same weights, confidence floor (0.2), overlap rule and size
+exception as `model=local`. The only difference is the order: the most confident box is kept
+first, and area breaks ties. It exists so the two orders can be compared on the same frame. The
+JSON says which order ran (`dedupe_order`), and `workflow_id` / `X-Workflow-Id` read
+`local:yolo26s-v6-boxfix+conf-first`.
+
+The orders fail in opposite ways:
+
+| Case | `local` (biggest first) | `local-conf` (most confident first) |
+| --- | --- | --- |
+| A weaker box (above the 0.2 floor) spanning two confident adjacent cars | keeps the spanning box; 2 cars become 1 | keeps both cars, drops the spanning box |
+| One car boxed whole plus front and back halves, halves more confident | keeps the whole car (1) | keeps both halves (2) |
+| Whole-car box the most confident | 1 | 1 |
+
+On 16 live frames (CAM 2701 and 2702, 10 Oct 04:58-14:58 SGT), `local-conf` counted 0-4 more
+vehicles per frame and never fewer. Busy CAM 2701 frames differed most: 133 vs 136, 98 vs 102.
+Which order is closer to the truth needs labelled frames (`eval/layer_a.py`). Neither order is
+scored yet.
+
 On by default for `local` (`LOCAL_MAX_OVERLAP` 0.6, `LOCAL_SIZE_RATIO` 3). Off by
 default for `v4`/`v6`. Pass `overlap=` to set the cut for any model, or
 `overlap=1` to turn it off. JSON reports `max_overlap` (null when off) and

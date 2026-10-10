@@ -281,3 +281,48 @@ def test_roboflow_default_confidence_is_020(upstream):
 def test_detect_frame_local_default_confidence(monkeypatch):
     monkeypatch.setattr(main, "_local_session", WeakEchoSession())
     assert len(main.detect_frame(_jpeg(), "2701", workflow_id=main.LOCAL_MODEL_ID)["kept"]) == 1
+
+
+# --- model=local-conf: same weights, confidence-first overlap suppression --------------------------
+
+
+def test_spanning_box_removes_two_cars_under_size_order_but_not_confidence_order():
+    # Two adjacent confident cars plus one weaker box spanning both (above the 0.2 floor).
+    cars = [_pred(50, 30, 100, 60, 0.9), _pred(150, 30, 100, 60, 0.9)]
+    span = _pred(100, 30, 200, 60, 0.25)
+    kept, dropped = main._suppress_overlaps(cars + [span], 0.6)  # model=local
+    assert kept == [span] and dropped == 2
+    kept, dropped = main._suppress_overlaps(cars + [span], 0.6, "confidence")  # model=local-conf
+    assert kept == cars and dropped == 1
+
+
+def test_confidence_order_keeps_the_confident_half_boxes():
+    # The documented trade-off: when the half boxes are more confident than the whole-car box,
+    # confidence order keeps both halves (two vehicles), where size order keeps the whole car (one).
+    whole = _pred(100, 100, 100, 50, 0.5)
+    front, back = _pred(75, 100, 50, 50, 0.8), _pred(125, 100, 50, 50, 0.7)
+    assert main._suppress_overlaps([front, whole, back], 0.6, "confidence") == ([front, back], 1)
+    whole = _pred(100, 100, 100, 50, 0.9)  # whole-car box most confident: both orders agree
+    assert main._suppress_overlaps([front, whole, back], 0.6, "confidence") == ([whole], 2)
+
+
+def test_confidence_order_keeps_the_other_rules():
+    truck, car = _pred(100, 50, 120, 100, 0.5, "truck"), _pred(100, 70, 80, 50, 0.9)  # exactly 3x
+    assert main._suppress_overlaps([truck, car], 0.6, "confidence") == ([truck, car], 0)
+    with pytest.raises(ValueError):
+        main._suppress_overlaps([truck], 0.6, "area")
+
+
+def test_handler_local_conf_is_its_own_model(upstream, fake_session, monkeypatch):
+    monkeypatch.setattr(main, "ROBOFLOW_API_KEY", "")
+    payload, status, _ = _json(main.detect(_request(query={"format": "json", "model": "local-conf"})))
+    assert status == 200 and payload["workflow_id"] == main.LOCAL_CONF_MODEL_ID
+    assert payload["dedupe_order"] == "confidence" and payload["max_overlap"] == main.LOCAL_MAX_OVERLAP
+    assert payload["min_confidence"] == main.LOCAL_DEFAULT_CONFIDENCE
+    assert _post_urls(upstream) == []
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local"})))
+    assert payload["workflow_id"] == main.LOCAL_MODEL_ID and payload["dedupe_order"] == "size"
+    _, _, headers = main.detect(_request(query={"model": "local-conf"}))
+    assert headers["X-Workflow-Id"] == main.LOCAL_CONF_MODEL_ID
+    payload, status, _ = _json(main.detect(_request(query={"model": "v5"})))
+    assert status == 400 and "local-conf" in payload["error"]
