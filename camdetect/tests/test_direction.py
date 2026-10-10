@@ -74,9 +74,26 @@ def test_summarize_directions_counts_sum_to_detections():
 def test_dividing_line_scales_the_2701_reference_frame():
     points = main._dividing_line("2701", FRAME)
     assert points is not None
-    assert points[0] == (176.0, 1074.0)
+    assert points[0] == (0.0, 1106.0)
+    assert points[1] == (176.0, 1074.0)
     half = main._dividing_line("2701", (960, 540))
-    assert half[0] == (88.0, 537.0)
+    assert half[1] == (88.0, 537.0)
+
+
+def test_2701_line_spans_the_full_frame_width():
+    points = main._dividing_line("2701", FRAME)
+    assert points[0][0] == 0 and points[-1][0] == FRAME[0]
+    # Car slivers at the right edge on the 10 Oct 08:00 and 12:45 frames, Unknown before.
+    assert main._classify_direction({"x": 1914, "y": 274.5, "width": 12, "height": 19}, points) == main.DIR_SG_MY
+    assert main._classify_direction({"x": 1916, "y": 319.5, "width": 7, "height": 17}, points) == main.DIR_MY_SG
+
+
+def test_2701_bottom_left_corner_is_sg_my():
+    # Two cars left of x=176 on the 10 Oct 14:07 frame, Unknown before the line reached x=0.
+    points = main._dividing_line("2701", FRAME)
+    for x, y, h in ((76.2, 1046.5, 34.8), (20.7, 1036.6, 34.5)):
+        pred = {"x": x, "y": y, "width": 40, "height": h}
+        assert main._classify_direction(pred, points) == main.DIR_SG_MY
 
 
 def test_dividing_line_rejects_unknown_camera_and_unsorted_x():
