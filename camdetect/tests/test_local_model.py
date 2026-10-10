@@ -255,27 +255,27 @@ def test_default_cut_drops_a_shifted_echo_on_one_car():
 
 
 class WeakEchoSession(FakeSession):
-    """One confident car and one faint box elsewhere (confidence 0.2)."""
+    """One confident car and one faint box elsewhere (confidence 0.15)."""
 
     def run(self, _outputs, feeds):
         self.calls += 1
-        return [_raw((640, 368, 80, 160 / 3, 1, 0.9), (300, 200, 60, 40, 1, 0.2))[None]]
+        return [_raw((640, 368, 80, 160 / 3, 1, 0.9), (300, 200, 60, 40, 1, 0.15))[None]]
 
 
-def test_local_default_confidence_is_035_and_request_wins(upstream, monkeypatch):
+def test_local_default_confidence_is_020_and_request_wins(upstream, monkeypatch):
     monkeypatch.setattr(main, "_local_session", WeakEchoSession())
     payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local"})))
-    assert payload["min_confidence"] == main.LOCAL_DEFAULT_CONFIDENCE == 0.35
+    assert payload["min_confidence"] == main.LOCAL_DEFAULT_CONFIDENCE == 0.2
     assert payload["vehicle_count"] == 1
     payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local", "confidence": "0.1"})))
     assert payload["min_confidence"] == 0.1 and payload["vehicle_count"] == 2
     payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local", "confidence": "abc"})))
-    assert payload["min_confidence"] == 0.35
+    assert payload["min_confidence"] == 0.2
 
 
-def test_roboflow_default_confidence_is_035(upstream):
+def test_roboflow_default_confidence_is_020(upstream):
     payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "v6"})))
-    assert payload["min_confidence"] == main.DEFAULT_CONFIDENCE == 0.35
+    assert payload["min_confidence"] == main.DEFAULT_CONFIDENCE == 0.2
 
 
 def test_detect_frame_local_default_confidence(monkeypatch):

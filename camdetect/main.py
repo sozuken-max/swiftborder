@@ -43,9 +43,10 @@ def _env_float(name, default):
     return value if math.isfinite(value) else default
 
 
-# 0.35 since 10 Oct 2026 (was 0.1): low-confidence boxes were mostly second boxes on a vehicle
-# that already had one. Applies to every model; model=local has its own LOCAL_DEFAULT_CONFIDENCE.
-DEFAULT_CONFIDENCE = _env_float("DEFAULT_CONFIDENCE", 0.35)
+# 0.2 since 10 Oct 2026 (0.1 before, 0.35 briefly the same day): low-confidence boxes were mostly
+# second boxes on a vehicle that already had one; with the model=local dedupe rule in place, 0.2
+# keeps more faint real vehicles. Applies to every model; model=local has LOCAL_DEFAULT_CONFIDENCE.
+DEFAULT_CONFIDENCE = _env_float("DEFAULT_CONFIDENCE", 0.2)
 DATE_TIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 BOX_COLOR = (0, 255, 0)
@@ -152,11 +153,11 @@ LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never s
 # (1 turns it off).
 LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.6)
 LOCAL_SIZE_RATIO = _env_float("LOCAL_SIZE_RATIO", 3.0)
-# Default minimum confidence for model=local (Roboflow models use DEFAULT_CONFIDENCE). At 0.1 the
-# leftover double boxes were a confident box plus a weak echo at ~0.1-0.3; at 0.35 with the 0.6
-# overlap cut, 0-2 pairs over 40% mutual overlap remained per CAM 2701 frame (9 frames, 8-10 Oct).
-# It also drops real but faint vehicles: CAM 2702 went 52 -> 21. A request ``confidence`` wins.
-LOCAL_DEFAULT_CONFIDENCE = _env_float("LOCAL_DEFAULT_CONFIDENCE", 0.35)
+# Default minimum confidence for model=local (Roboflow models use DEFAULT_CONFIDENCE). 0.35 cleared
+# the weak echo boxes (confidence ~0.1-0.3) before the size-ratio dedupe existed; with it, 0.2 adds
+# 3-12 vehicles per CAM 2701 frame over 0.35 while dedupe removes 6-33 echoes (10 frames, 8-10 Oct).
+# A request ``confidence`` wins.
+LOCAL_DEFAULT_CONFIDENCE = _env_float("LOCAL_DEFAULT_CONFIDENCE", 0.2)
 
 MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, LOCAL_MODEL_KEY])
 
