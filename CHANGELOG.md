@@ -4,6 +4,8 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-10
 
+- `camdetect` CAM 2701 dividing line spans the full frame width. New end points `[0, 1106]` and `[1920, 313]` continue the first and last segments. Vehicles in the bottom-left corner (x < 176) were Unknown; the MY-SG carriageway leaves the frame right of x=176, so they are now SG-MY. Car slivers at the right edge (x > 1913) get a side too. On 9 saved CAM 2701 frames, Unknown went from 0-3 per frame to 0. Applies to every model. Merging redeploys `swiftbackend`.
+
 - `camdetect` default `confidence` goes from 0.35 to 0.2 for every model (`DEFAULT_CONFIDENCE`, `LOCAL_DEFAULT_CONFIDENCE`). 0.35 cleared weak echo boxes before the size-ratio dedupe for `local` existed. With dedupe on, 0.2 adds 3-12 `local` vehicles per CAM 2701 frame over 0.35, while dedupe removes 6-33 echoes per frame. CAM 2702 goes 21 -> 32. v6 counts change too (v6 has no dedupe by default). Set by eye, not scored against labels. Merging redeploys `swiftbackend`.
 
 - `camdetect` `model=local` dedupe rule, as specified by the team. Two boxes are one vehicle when more than 60% of the *smaller* box lies inside the other, whatever the classes, unless the bigger box is 3x or more the smaller's area (a car in front of a truck: both stay; `LOCAL_SIZE_RATIO`). Boxes are kept biggest first, so a car boxed whole plus front and back halves keeps the whole-car box. This replaces the mutual-overlap rule (each box 60% inside the other), which left those half boxes. It still removes shifted echoes and truck/bus double boxes. Live 13:42 frame: 87 -> 84; the 3 removed were checked by eye as duplicates. Not scored against labels. Merging redeploys `swiftbackend`.

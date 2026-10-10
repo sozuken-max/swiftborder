@@ -150,7 +150,12 @@ per-camera polyline separating the two carriageways:
 - **`SG-MY`** — above the line: Singapore heading to Malaysia.
 - **`MY-SG`** — on or below the line: Malaysia heading to Singapore.
 - **`Unknown`** — foot point outside the line's x-range, or no line configured
-  for this camera. Still included in `vehicle_count`, never attributed.
+  for this camera. Still included in `vehicle_count`, never attributed. The
+  CAM 2701 line spans the full frame width (since 10 Oct 2026; its end points
+  continue the first and last segments to x=0 and x=1920), so there it only
+  happens for a box with unreadable geometry. Before that, cars in the
+  bottom-left corner (x < 176, on the SG-MY road) and slivers at the right edge
+  (x > 1913) were Unknown.
 
 `sg_my + my_sg + unknown` always equals `vehicle_count`.
 
@@ -231,7 +236,7 @@ X-Workflow-Id            Roboflow workflow that scored the frame
     "my_sg": { "count": 4, "congestion": "Half Way" },
     "unknown": { "count": 2 }
   },
-  "dividing_line": [[176, 1074], "..."]
+  "dividing_line": [[0, 1106], "..."]
 }
 ```
 
@@ -305,7 +310,7 @@ ignored and every detection falls back to `Unknown`.
 {
   "2701": {
     "reference_size": [1920, 1080],
-    "points": [[176,1074],[500,1015],[764,929],[1074,779],[1913,317]]
+    "points": [[0,1106],[176,1074],[500,1015],[764,929],[1074,779],[1913,317],[1920,313]]
   }
 }
 ```

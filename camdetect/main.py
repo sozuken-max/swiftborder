@@ -73,7 +73,11 @@ DIR_COLORS = {
 DEFAULT_DIVIDING_LINES = {
     "2701": {
         "reference_size": [1920, 1080],
-        "points": [[176, 1074], [500, 1015], [764, 929], [1074, 779], [1913, 317]],
+        # The end points continue the first and last segments to the frame edges (10 Oct 2026), so
+        # the line spans the full width. [0, 1106], just below the frame: the MY-SG carriageway
+        # leaves the frame right of x=176, so a vehicle in the bottom-left corner is on the SG-MY
+        # road. [1920, 313]: cars cut off at the right edge (x 1908-1920) were Unknown.
+        "points": [[0, 1106], [176, 1074], [500, 1015], [764, 929], [1074, 779], [1913, 317], [1920, 313]],
     }
 }
 
