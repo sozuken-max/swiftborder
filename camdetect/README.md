@@ -161,6 +161,62 @@ the table above. `camdetect/models/**` is **not** in the trigger's
 `includedFiles`, so a model-only commit does not redeploy. Touch `main.py`
 in the same commit, or add the path to the trigger.
 
+## Retro-scoring stored frames (`model=local`)
+
+[`backfill_local_counts.py`](backfill_local_counts.py) scores the frames already stored in
+`gs://sg-lta-traffic-cameras/camera_id=2701/month=YYYY-MM/` with `detect_frame(...,
+workflow_id=LOCAL_MODEL_ID)`. That is the code behind the front end's "Local model" pane: same
+ONNX model, confidence, overlap dedupe and SG-MY / MY-SG dividing line. No Roboflow call, no cost.
+Default window: 6 Sep to 4 Oct 2026 inclusive, SGT dates (the `month=2026-09` and `month=2026-10`
+partitions are both listed). A dry run on 10 Oct found 4,054 frames in that window.
+
+Output goes to a CSV (default `backfill/cam2701_local_counts_20260906_20261004.csv`, tracked by
+git) or, with `--bq-table`, to BigQuery. The table is created on first use with the schema in
+[`sql/bigquery/cam2701/local_counts.sql`](../sql/bigquery/cam2701/local_counts.sql) (`BQ_SCHEMA`
+in the script): `camera_id`, `frame_datetime_sgt` (DATETIME, SGT), `frame_ts` (TIMESTAMP),
+`sg_my`, `my_sg`, `unknown`, `total` (INT64), `model_id`, `min_confidence`, `max_overlap`,
+`source` (the `gs://` frame) and `scored_at`. Rows go in with load jobs of 100 (no streaming
+buffer). `cam2701` is in `asia-southeast1`, so the table cannot be joined in one query with
+`causeway.travel_times` (`US`).
+
+The capture time is read from the object name (`2701_20260906T000546.jpg`). Those names are SGT:
+frames are bright 07:35-18:05 and dark 19:35-06:05. A name with no offset is read as SGT;
+`--name-tz` changes that. Two objects with the same capture time are scored once. A frame that
+fails to download or decode is reported and left out, and the next run retries it. Frames already
+in the output (matched on `source`) are skipped, so an interrupted run resumes.
+
+Locally:
+
+```bash
+pip install -r requirements-backfill.txt
+gcloud auth application-default login
+python backfill_local_counts.py --dry-run                                      # frames per day; no inference
+python backfill_local_counts.py --bq-table swiftborder.cam2701.local_counts   # or omit for the CSV
+```
+
+As a Cloud Run Job ([`backfill.Dockerfile`](backfill.Dockerfile); `swiftbackend` is not touched).
+With `--tasks N`, task *i* scores every *N*-th frame (`CLOUD_RUN_TASK_INDEX` / `CLOUD_RUN_TASK_COUNT`).
+The job's service account needs Storage Object Viewer on `sg-lta-traffic-cameras`, BigQuery Data
+Editor on dataset `cam2701` and BigQuery Job User on the project.
+
+```bash
+# from the repo root; the build context is camdetect/ with backfill.Dockerfile as its Dockerfile
+mkdir -p /tmp/bf && cp -r camdetect/. /tmp/bf/ && cp camdetect/backfill.Dockerfile /tmp/bf/Dockerfile
+gcloud run jobs deploy cam2701-local-backfill --source /tmp/bf \
+  --project swiftborder --region asia-southeast1 \
+  --tasks 4 --cpu 4 --memory 2Gi --task-timeout 1h --max-retries 1 \
+  --service-account <JOB_SA>@swiftborder.iam.gserviceaccount.com \
+  --args=--bq-table=swiftborder.cam2701.local_counts
+gcloud run jobs execute cam2701-local-backfill --region asia-southeast1 --project swiftborder \
+  --wait --tasks 1 --args=--dry-run                                            # check: 4054 frames
+gcloud run jobs execute cam2701-local-backfill --region asia-southeast1 --project swiftborder --wait
+```
+
+About 0.5 s per frame on 4 vCPU, so ~35 minutes for the window on one task, or about 9 on four.
+Run it again if any task logged `FAILED` frames: only the missing frames are scored. On three live
+frames (9-10 Oct) the script's totals equal the `local` totals in the confidence table above (93,
+103, 121). These are occupancy counts per frame, like the live service, not labelled results.
+
 ## Directions
 
 Each detection's foot point (bottom-centre of its box) is compared against a
