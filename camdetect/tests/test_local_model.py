@@ -269,9 +269,9 @@ def test_local_default_confidence_is_035_and_request_wins(upstream, monkeypatch)
     assert payload["min_confidence"] == 0.35
 
 
-def test_roboflow_default_confidence_unchanged(upstream):
+def test_roboflow_default_confidence_is_035(upstream):
     payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "v6"})))
-    assert payload["min_confidence"] == main.DEFAULT_CONFIDENCE
+    assert payload["min_confidence"] == main.DEFAULT_CONFIDENCE == 0.35
 
 
 def test_detect_frame_local_default_confidence(monkeypatch):
