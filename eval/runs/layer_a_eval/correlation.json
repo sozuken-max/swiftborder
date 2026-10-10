@@ -1,0 +1,296 @@
+{
+  "SG_TO_MY": {
+    "cam_sg_my": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.4623,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5142,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.3766,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.221
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.3953,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5048,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.3668,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.212
+      }
+    },
+    "cam_my_sg": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.3567,
+        "pearson_p": 0.0,
+        "spearman_r": 0.4717,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.3236,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.221
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.3826,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5006,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.3462,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.212
+      }
+    },
+    "cam_total": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.494,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5771,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.4098,
+        "kendall_p": 0.0,
+        "cam_mean": 49.076,
+        "maps_mean": 26.221
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.4944,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5869,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.4177,
+        "kendall_p": 0.0,
+        "cam_mean": 49.076,
+        "maps_mean": 26.212
+      }
+    },
+    "cam_dir": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.4623,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5142,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.3766,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.221
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.3953,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5048,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.3668,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.212
+      }
+    }
+  },
+  "MY_TO_SG": {
+    "cam_sg_my": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.057,
+        "pearson_p": 0.000307,
+        "spearman_r": 0.3278,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.2231,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.66
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.0698,
+        "pearson_p": 1e-05,
+        "spearman_r": 0.302,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.2045,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.682
+      }
+    },
+    "cam_my_sg": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.6183,
+        "pearson_p": 0.0,
+        "spearman_r": 0.7176,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.5461,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.66
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.5877,
+        "pearson_p": 0.0,
+        "spearman_r": 0.6813,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.5108,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.682
+      }
+    },
+    "cam_total": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.594,
+        "pearson_p": 0.0,
+        "spearman_r": 0.7112,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.5332,
+        "kendall_p": 0.0,
+        "cam_mean": 49.076,
+        "maps_mean": 26.66
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.5701,
+        "pearson_p": 0.0,
+        "spearman_r": 0.6732,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.4955,
+        "kendall_p": 0.0,
+        "cam_mean": 49.076,
+        "maps_mean": 26.682
+      }
+    },
+    "cam_dir": {
+      "y_persistence": {
+        "n": 4005,
+        "pearson_r": 0.6183,
+        "pearson_p": 0.0,
+        "spearman_r": 0.7176,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.5461,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.66
+      },
+      "y_30": {
+        "n": 4005,
+        "pearson_r": 0.5877,
+        "pearson_p": 0.0,
+        "spearman_r": 0.6813,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.5108,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.682
+      }
+    }
+  },
+  "BOTH": {
+    "cam_sg_my": {
+      "y_persistence": {
+        "n": 8010,
+        "pearson_r": 0.2639,
+        "pearson_p": 0.0,
+        "spearman_r": 0.4189,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.2966,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.44
+      },
+      "y_30": {
+        "n": 8010,
+        "pearson_r": 0.2358,
+        "pearson_p": 0.0,
+        "spearman_r": 0.4037,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.2841,
+        "kendall_p": 0.0,
+        "cam_mean": 10.099,
+        "maps_mean": 26.447
+      }
+    },
+    "cam_my_sg": {
+      "y_persistence": {
+        "n": 8010,
+        "pearson_r": 0.4844,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5789,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.415,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.44
+      },
+      "y_30": {
+        "n": 8010,
+        "pearson_r": 0.4828,
+        "pearson_p": 0.0,
+        "spearman_r": 0.579,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.4149,
+        "kendall_p": 0.0,
+        "cam_mean": 38.977,
+        "maps_mean": 26.447
+      }
+    },
+    "cam_total": {
+      "y_persistence": {
+        "n": 8010,
+        "pearson_r": 0.5427,
+        "pearson_p": 0.0,
+        "spearman_r": 0.6308,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.4565,
+        "kendall_p": 0.0,
+        "cam_mean": 49.076,
+        "maps_mean": 26.44
+      },
+      "y_30": {
+        "n": 8010,
+        "pearson_r": 0.5313,
+        "pearson_p": 0.0,
+        "spearman_r": 0.6205,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.447,
+        "kendall_p": 0.0,
+        "cam_mean": 49.076,
+        "maps_mean": 26.447
+      }
+    },
+    "cam_dir": {
+      "y_persistence": {
+        "n": 8010,
+        "pearson_r": 0.47,
+        "pearson_p": 0.0,
+        "spearman_r": 0.5475,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.4007,
+        "kendall_p": 0.0,
+        "cam_mean": 24.538,
+        "maps_mean": 26.44
+      },
+      "y_30": {
+        "n": 8010,
+        "pearson_r": 0.4381,
+        "pearson_p": 0.0,
+        "spearman_r": 0.53,
+        "spearman_p": 0.0,
+        "kendall_tau": 0.3851,
+        "kendall_p": 0.0,
+        "cam_mean": 24.538,
+        "maps_mean": 26.447
+      }
+    }
+  }
+}

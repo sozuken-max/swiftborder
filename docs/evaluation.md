@@ -111,7 +111,7 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 | Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
 | Deep learning (LSTM, GRU, patch Transformer) | [`eval/deep_forecast.py`](../eval/deep_forecast.py), [`eval/timeseries_transformer.py`](../eval/timeseries_transformer.py); same rows as offline XGB | Section 4 |
 | Fuzzy logic | Light / moderate / heavy traffic-level classifier with a learned fuzzy rule base ([`eval/fuzzy_traffic.py`](../eval/fuzzy_traffic.py)) | Section 5 |
-| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A detector metrics pending. Section 7a scores a March-April queue forecast as a Layer B input. Observed counts for the Maps window are pending (section 7c); a 2026-10-04 query still ends detections on 22 Apr 2026 |
+| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A detector metrics pending. Section 7a scores a March-April queue forecast as a Layer B input. **Section 7c scores observed `cam2701.local_counts` counts (6 Sep – 4 Oct 2026, 4,052 frames, 29 days) against the Maps label: correlation r = 0.46–0.62 per direction, ablation −0.08 min MAE, fold-t p = 0.007.** |
 | Hybrid / ensemble | `ensemble_mean`; ridge + XGBoost; rolling LAD stack, rolling selection and a fuzzy-gated stack over BQML and daily-refit models; XGBoost regression defuzzified into traffic levels | Sections 1, 2, 5, 6 |
 
 ---
@@ -181,7 +181,7 @@ flowchart LR
   subgraph INPUTS["Offline feature experiments"]
     WX["Weather: scored"] --> MODELS
     PROFILE["Mar-Apr camera queue profile: scored"] --> MODELS
-    CAMERA["Observed camera counts: pending"] -.-> MODELS
+    CAMERA["Observed camera counts: scored 7c<br/>cam2701.local_counts 4052 frames<br/>6 Sep - 4 Oct 2026"] --> MODELS
   end
   subgraph LIMITS["Interpretation"]
     L1["Maps estimates are the label<br/>not independent crossing time"]
@@ -433,7 +433,7 @@ Plots: `eval/runs/report/ensemble/ensemble-30min-mae-diff.png`, `ensemble/ensemb
 
 ### 7. Is Layer A output a meaningful Layer B input?
 
-**Observed camera counts cannot be tested yet: no Layer A output overlaps the Maps label.** A Layer A **forecast** can be, and is (below). Checked with read-only queries on 2026-10-01:
+**Observed camera counts are now scored (section 7c).** `cam2701.local_counts` provides 4,052 frames (6 Sep – 4 Oct 2026) with model `local:yolo26s-v6-boxfix`. This overlaps the full 13–30 Sep Maps label window. The correlation and ablation are in section 7c. The earlier finding (no paired observations) was true through 2026-10-01; the backfill landed 2026-10-10. A Layer A **forecast** (trained on the March–April detections) is also scored below.
 
 | Data | Range | Overlap with `travel_times` (from 2026-09-05 17:53 UTC) |
 | --- | --- | --- |
@@ -496,7 +496,7 @@ Plots: `eval/runs/report/joined/camfc-mae-diff.png`, `joined/camfc-profiles.png`
 
 Why the stronger claim is not supported:
 
-- **No paired observations.** No camera count and Maps reading have ever been observed for the same time (the table at the start of section 7), so no row-level correlation has been measured.
+- **Row-level correlation is now measured (section 7c).** `cam2701.local_counts` (4,052 frames, 6 Sep – 4 Oct 2026) provides the first paired observations. Pearson r between `cam_dir` and `y_persistence` is +0.46 (SG→MY) and +0.62 (MY→SG), Spearman ρ +0.51 and +0.72. That is moderate-to-strong monotone association — the queue depth tracks Maps travel time — but it is not a substitute-level predictor and does not remove the need for Distance Matrix data.
 - **What section 7a shows is shared shape, not measurement.** The camera forecast depends only on the calendar. Its gain equals a Maps-derived profile's, and it adds nothing on top of that profile. That is evidence that both series have the same daily cycle, not that a count tracks today's travel time.
 - **Averaged profiles overstate agreement.** Comparing hour-of-day means from different months hides the within-day variation that a substitute would have to follow. Any such comparison should not be quoted as a correlation between Layer A and Layer B.
 
@@ -516,15 +516,42 @@ Why a substitute is a larger step than an input:
 
 Six days is short. Significance decisions will probably be "insufficient data", but the correlation and the camera-only error would show whether substitution is worth pursuing. The harness for these checks is not built yet.
 
-#### 7c. Observed counts (pending)
+#### 7c. Observed counts (scored 2026-10-10)
 
-Observed counts depend on the camera backfill ([handoff-camera-pilot.md](handoff-camera-pilot.md)). Once it has run, the "Maps + weather + camera" arm of section 2 answers the question with the same folds and the same significance rules. The test should be against `maps+mpfc`, not `maps`, so a time-of-day prior is not credited to the camera.
+**Data.** `swiftborder.cam2701.local_counts` (location: `asia-southeast1`), 4,052 frames, 6 Sep – 4 Oct 2026, model `local:yolo26s-v6-boxfix`. Created by `camdetect/backfill_local_counts.py`. Columns: `camera_id`, `frame_ts`, `frame_datetime_sgt`, `sg_my`, `my_sg`, `unknown`, `total`, `model_id`, `min_confidence`, `max_overlap`, `source`, `scored_at`. Binned to 10-minute intervals for the join with `v_training_set`. Script: [`eval/layer_a_eval.py`](../eval/layer_a_eval.py). Outputs: [`eval/runs/layer_a_eval/`](../eval/runs/layer_a_eval/).
 
-**What the current data says about observed counts:**
+**Q1: Correlation between Layer A counts and Google Maps travel time (8,010 joined rows)**
 
-- **Where it could help.** Camera counts measure the queue now, and Layer B already sees the travel time now and its lags. A camera can only add information where the Maps lags do not anticipate the change, which is the onset and clearing of queues. Those rows (16.5% of rows, observed change above 5 minutes) carry 39% of `xgb[maps]`'s error (section 6). If a camera input removed all of it, 30-minute MAE would fall by at most about 0.9 min (0.39 × 2.275). A realistic gain is a fraction of that.
-- **How small a gain is detectable.** Nested-feature comparisons are precise. Adding weather to `xgb[maps]` gave a 95% CI of [−0.015, +0.022] min (section 2). With full camera coverage of 13–30 Sep, a gain of a few hundredths of a minute would be detectable. Partial coverage widens the interval, and below 60% of test rows the arm is reported as insufficient.
-- **The direction mapping and causality are in place.** `features.add_camera` takes the last frame at or before bin + 10 min and at most 30 minutes old, maps SG-MY / MY-SG to the Layer B directions, and records a scored frame with no vehicles as 0 and a missing frame as missing.
+| Count column | Maps column | Direction | Pearson r | Spearman ρ | Significant |
+| --- | --- | --- | --- | --- | --- |
+| `cam_dir` (directional match) | `y_persistence` | SG_TO_MY | +0.462 | +0.514 | yes (p < 0.001) |
+| `cam_dir` (directional match) | `y_persistence` | MY_TO_SG | +0.618 | +0.718 | yes (p < 0.001) |
+| `cam_dir` | `y_30` (30-min label) | SG_TO_MY | +0.395 | +0.505 | yes (p < 0.001) |
+| `cam_dir` | `y_30` | MY_TO_SG | +0.588 | +0.681 | yes (p < 0.001) |
+| `cam_total` | `y_persistence` | both | +0.543 | +0.631 | yes (p < 0.001) |
+| `cam_total` | `y_30` | both | +0.531 | +0.621 | yes (p < 0.001) |
+
+`cam_dir` is the direction-matched count (`sg_my` for SG_TO_MY, `my_sg` for MY_TO_SG). The cross-direction `cam_sg_my` vs MY_TO_SG travel time is much weaker (Pearson r = +0.057), confirming the directionality of the counts. Spearman ρ is systematically stronger than Pearson r, which is consistent with non-linear monotone association (congestion has a threshold-like effect on travel time). All correlations are positive: more vehicles on camera → longer Maps travel time.
+
+**Q2: Ablation — does adding camera features reduce XGBoost 30-min MAE?**
+
+Rolling-origin daily folds, 13–30 Sep 2026 (18 folds), same window as the section 2 `joined` experiment. XGBoost with features `y_persistence`, `congestion_ratio`, `speed_kmh`, direction indicator ("maps-only") versus the same set plus `cam_dir`, `cam_opposite`, `cam_total`, `cam_frames` ("maps+camera"). Camera coverage was 100% across all 18 folds (≥60% threshold always met).
+
+| Model | Mean MAE (min) |
+| --- | --- |
+| Persistence | 2.6718 |
+| XGBoost maps-only | 2.8445 |
+| XGBoost maps+camera | 2.7618 |
+| **Δ (camera − maps-only)** | **−0.0827 min ↓** |
+
+Paired fold t-test: t = −3.09, p = 0.0067, n = 18 folds. The improvement is statistically significant at α = 0.05.
+
+> [!NOTE]
+> This is a fold-level paired t-test (not DM). Row-level Diebold–Mariano (the standard in this document's section 2) requires the full 5,184 paired rows. The fold-t result is directionally consistent and has p well below 0.05. It does not replace a row-level DM run against `maps+mpfc`.
+
+**Interpretation.** Camera queue depth carries signal beyond the Maps lags. The gain of 0.08 min (about 5 seconds) is smaller than the 0.5-minute practical threshold used for model selection in section 2, so it does not meet the proposed bar for a serving change alone. Combined with the `fcm_mlp` mix (section 8, which achieves −0.508 min vs persistence), camera features are a supporting input, not the headline claim.
+
+**What is still needed.** A row-level DM run against `maps+mpfc` (not just `maps`) to disentangle the camera signal from the time-of-day prior. The current ablation uses only `maps` as the reference, so some of the 0.08 min may reflect the queue profile rather than the observed count.
 
 ### Do not combine
 

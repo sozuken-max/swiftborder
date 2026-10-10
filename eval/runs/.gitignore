@@ -12,3 +12,6 @@
 replay-*/*
 !replay-*/*/
 !replay-*/*/*.csv
+# Layer A evaluation
+!layer_a_eval/
+!layer_a_eval/**
