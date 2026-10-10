@@ -45,10 +45,10 @@ def test_plan_keeps_sgt_dates_inclusive_drops_duplicates_and_reports_unparsed(tm
     source = _tree(
         tmp_path,
         [
-            "camera_id=2701/month=2026-09/2026-09-05T15:59:00Z.jpg",  # 23:59 SGT 5 Sep: out
-            "camera_id=2701/month=2026-09/2026-09-05T16:00:00Z.jpg",  # 00:00 SGT 6 Sep: in
+            "camera_id=2701/month=2026-09/2026-09-05T15-59-00Z.jpg",  # 23:59 SGT 5 Sep: out
+            "camera_id=2701/month=2026-09/2026-09-05T16-00-00Z.jpg",  # 00:00 SGT 6 Sep: in
             "camera_id=2701/month=2026-09/20260906_160000.jpg",  # 6 Sep 16:00 SGT
-            "camera_id=2701/month=2026-09/2026-09-06T08:00:00Z.jpg",  # same instant, stored twice
+            "camera_id=2701/month=2026-09/2026-09-06T08-00-00Z.jpg",  # same instant, stored twice
             "camera_id=2701/month=2026-10/20261004_235500.jpg",  # last bin: in
             "camera_id=2701/month=2026-10/20261005_000000.jpg",  # out
             "camera_id=2701/month=2026-10/frame.jpg",  # no time

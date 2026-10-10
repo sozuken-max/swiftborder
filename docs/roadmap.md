@@ -50,7 +50,7 @@ These choices are written down before any October label is scored, so the frozen
 | C6 | `xgb[maps+camfc]` vs `xgb[maps]` | camfc | −0.065, family-level only |
 | C7 | `xgb[maps+camfc]` vs `xgb[maps+mpfc]` (camera beyond the Maps profile) | camfc | −0.007, not significant |
 | C8 | Rolling LAD stack vs `xgb[maps]` (expected: no gain; local-only pool) | ensemble | −0.021, not significant |
-| C9 (proposed 2026-10-08, team confirms before 19 Oct) | Equal mean of `fcm_mlp` and `xgb[maps]` vs `xgb[maps]` | fcm (evaluation.md §8) | −0.142, challenger in its own family; formed after scoring |
+| C9 (proposed 2026-10-08, team confirms before 19 Oct) | Equal mean of `fcm_mlp` and `xgb[maps]` vs `xgb[maps]` (`layer_b_fcm_xgb_mix.py`) | fcm (evaluation.md §8) | −0.143, challenger in its own family (CI [−0.215, −0.087]); implemented in Causeway |
 
 `xgb[maps]` stays the "best single" reference (`ensemble.BEST_SINGLE_30`). It is not re-picked on October data.
 

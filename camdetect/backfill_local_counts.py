@@ -375,7 +375,8 @@ def main(argv=None):
                     sink.write(pending)
                     pending = []
                 if i % 100 == 0 or i == len(todo):
-                    rate = i / (time.monotonic() - began)
+                    elapsed = time.monotonic() - began
+                    rate = i / elapsed if elapsed > 0 else 0.0
                     print(f"  {i}/{len(todo)}  {stamp:%Y-%m-%d %H:%M}  {rate:.1f} frames/s", flush=True)
     finally:
         if pending:

@@ -22,18 +22,21 @@ Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `
 - A `Causeway/README.md` row and a `CHANGELOG.md` entry.
 
 ## Verification (10 Oct 2026)
-- **Local backtest:** run on bins exported from BigQuery for 13–30 Sep with `--allow-protected-window`, 5,184 rows.
+- **Local backtest:** run on live BigQuery bins for 13–30 Sep with `--allow-protected-window` (`run_id: backtest-20261010T080013Z-6a139c3f`, 5,184 rows, 18 calendar days):
 
-  | Model | MAE (min) | [evaluation.md §8](../docs/evaluation.md#8-timesfm-25-and-fcm--mlp-shared-13-30-sep-window-2026-10-05) (min) |
-  |---|---|---|
-  | persistence | 2.640 | 2.640 |
-  | `fcm_mlp` | 2.230 | 2.230 |
-  | `xgb[maps]` | 2.273 | 2.276 |
-  | mix | 2.130 | 2.134 |
+  | Model | MAE (min) | RMSE (min) | Bias (min) | [evaluation.md §8](../docs/evaluation.md#8-timesfm-25-and-fcm--mlp-shared-13-30-sep-window-2026-10-05) (min) |
+  |---|---|---|---|---|
+  | persistence | 2.640 | 3.894 | +0.008 | 2.640 |
+  | `fcm_mlp` | 2.230 | 3.291 | −0.284 | 2.230 |
+  | `xgb[maps]` | 2.275 | 3.311 | +0.409 | 2.276 |
+  | mix | 2.132 | 3.147 | +0.062 | 2.134 |
 
-  The small differences come from the data export: `xgb[maps]` is identical to the forecast-api code on the same bins. Without the flag, 5,178 rows are scored, because six labels fall on 1 Oct.
+  - **Directional MAE:** MY→SG: persistence 2.504, `xgb[maps]` 2.150, `fcm_mlp` 2.062, **mix 1.988 min**; SG→MY: persistence 2.777, `xgb[maps]` 2.399, `fcm_mlp` 2.397, **mix 2.277 min**.
+  - **Paired day-block bootstrap 95% CIs:** `mix_vs_persistence` −0.508 [−0.628, −0.368] min; `mix_vs_xgb_maps` −0.143 [−0.215, −0.087] min; `mix_vs_fcm_mlp` −0.097 [−0.143, −0.049] min.
+  - **Slices:** Morning peak 2.613 min, evening peak 2.834 min, off-peak 1.623 min; weekday 1.998 min, weekend 2.482 min. Share within 15 min of Maps duration: 99.90%.
+  Without `--allow-protected-window`, 5,178 rows are scored because six labels fall on 1 Oct.
 - **`train` on 24–30 Sep:** took 88 s and served the mix in both directions (validation mix 2.09 against persistence 2.74). The registry round trip is exact, and the registry entry is 0.74 MB.
-- **Tests and checks:** on `main` f90e62b the Causeway suite passes (189 tests, including a fresh CI-like venv), and so do the repo doc checks. ruff and mypy are clean.
+- **Tests and checks:** all 42 tests in `Causeway/tests/test_layer_b_fcm_xgb_mix.py` pass; all 577 tests pass across the repository (`scripts/run_tests.ps1`). ruff and mypy clean.
 - **Independent review:** two passes. All findings were fixed, including the lookback default (now all history) and the registry age.
 
 ## Open items for the team
