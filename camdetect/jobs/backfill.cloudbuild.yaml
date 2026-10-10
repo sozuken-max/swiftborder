@@ -1,0 +1,21 @@
+# Builds the Cloud Run Job image for camdetect/backfill_local_counts.py (camdetect/backfill.Dockerfile).
+# Use as the "Cloud Build configuration file" of a manual trigger. It only builds and pushes the image;
+# the job is created in Cloud Run (camdetect/README.md, "Retro-scoring stored frames").
+# Kept under jobs/ so the swiftbackend trigger (includedFiles camdetect/*.yaml) does not fire on it.
+# CLOUD_LOGGING_ONLY: a trigger that runs as a user-chosen service account needs a logging option.
+steps:
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=camdetect/backfill.Dockerfile
+      - --tag=$_IMAGE:latest
+      - --tag=$_IMAGE:$SHORT_SHA
+      - camdetect
+images:
+  - $_IMAGE:latest
+  - $_IMAGE:$SHORT_SHA
+substitutions:
+  _IMAGE: asia-southeast1-docker.pkg.dev/swiftborder/cloud-run-source-deploy/cam2701-local-backfill
+options:
+  logging: CLOUD_LOGGING_ONLY
