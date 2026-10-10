@@ -142,11 +142,14 @@ LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never s
 
 # Overlap suppression after NMS: two boxes are one vehicle when each covers more than this fraction
 # of the other (intersection over the larger box's area), whatever the classes. Class-aware NMS at
-# IoU 0.7 leaves the same vehicle boxed as both truck and bus (IoU 0.9+). A small box inside a big
-# one (a car in front of a truck) is never dropped: only the small box is mostly covered.
+# IoU 0.7 leaves the same vehicle boxed as both truck and bus (IoU 0.9+), and a confident box plus a
+# weak echo (confidence ~0.1-0.3) shifted a little on one car. A small box inside a big one (a car in
+# front of a truck) is never dropped: only the small box is mostly covered. 0.6 set by eye on 8
+# CAM 2701/2702 frames (8-10 Oct): pairs at 0.6-0.8 were one car boxed twice; below 0.6 a car beside
+# a truck, or a truck beside a bus, starts to appear. Not scored against labels.
 # On by default for model=local only, so v4/v6 counts stay comparable with earlier output; the
 # ``overlap`` request parameter sets it for any model (1 turns it off).
-LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.8)
+LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.6)
 
 MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, LOCAL_MODEL_KEY])
 

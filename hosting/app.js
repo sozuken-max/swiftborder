@@ -114,12 +114,13 @@ function readDetectionSummary(headers) {
     return { supported, uncalibrated, dirs, total, unknown, attributed, frameTime: headers.get('X-Frame-Datetime') };
 }
 
-// Side-by-side comparison: the same LTA frame (pinned by date_time) scored by two
-// Roboflow workflow versions. `model` is a backend allowlist (camdetect WORKFLOW_VERSIONS).
-// Each pane is one billed Roboflow call.
+// Side-by-side comparison: the same LTA frame (pinned by date_time) scored by the Roboflow v6
+// workflow and the in-container YOLO26s (`model=local`). `model` is a backend allowlist
+// (camdetect WORKFLOW_VERSIONS plus `local`). The v6 pane is one billed Roboflow call; the local
+// pane runs on the backend's own CPU (unbilled, ~1-2 s slower on the first call after a cold start).
 const AI_MODELS = [
-    { key: 'v6', label: 'Model v6', note: 'current' },
-    { key: 'v4', label: 'Model v4', note: 'previous' }
+    { key: 'v6', label: 'Model v6', note: 'Roboflow' },
+    { key: 'local', label: 'Local model', note: 'YOLO26s, in-house' }
 ];
 
 function ensureModelPanes() {

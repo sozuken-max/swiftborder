@@ -238,3 +238,13 @@ def test_roboflow_models_do_not_suppress_unless_asked(upstream):
 @pytest.mark.parametrize("raw,expected", [(None, None), ("", None), ("abc", None), ("-1", None), ("nan", None), ("0.5", 0.5), ("3", 1.0)])
 def test_parse_overlap(raw, expected):
     assert main._parse_overlap(raw) == expected
+
+
+def test_default_cut_drops_a_shifted_echo_on_one_car():
+    # Confident box plus a weak echo shifted 12 px and 6 px: each covers 68% of the other (0.8 kept both).
+    box, echo = _pred(100, 100, 60, 40, 0.7), _pred(112, 106, 60, 40, 0.15)
+    assert main._mutual_overlap(main._box(box), main._box(echo)) == pytest.approx(0.8 * 0.85)
+    assert main._suppress_overlaps([box, echo], main.LOCAL_MAX_OVERLAP) == ([box], 1)
+    # Two cars in a queue, 30 px along and 10 px up (37.5% overlap), both stay at the default.
+    kept, dropped = main._suppress_overlaps([box, _pred(130, 90, 60, 40, 0.6)], main.LOCAL_MAX_OVERLAP)
+    assert dropped == 0 and len(kept) == 2
