@@ -4,7 +4,8 @@ HTTP Cloud Function that counts vehicles on a Singapore traffic camera frame,
 and attributes each one to a direction of travel across the Causeway.
 
 Pipeline: resolve a frame from data.gov.sg's traffic-images API -> run the
-Roboflow vehicle-detection workflow over it -> filter by confidence -> classify
+Roboflow vehicle-detection workflow over it (or, with `model=local`, the
+YOLO26s ONNX model shipped in the image) -> filter by confidence -> classify
 each detection by direction -> return JSON or an annotated JPEG.
 
 ## Request parameters
@@ -20,7 +21,102 @@ is missing, `null` or an empty string (so `confidence: 0` is honoured, and
 | `date_time` | now, Asia/Singapore | frame timestamp, `YYYY-MM-DDTHH:MM:SS` |
 | `confidence` | `0.1` | minimum detection confidence |
 | `format` | `image` | `image`, `directional` or `json` |
-| `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (allowlist `WORKFLOW_VERSIONS`); anything else is 400 before any upstream call |
+| `overlap` | `0.6` for `local`, off for `v4`/`v6` | mutual-overlap cut in [0, 1]: boxes are merged when each covers more than this share of the other; `1` turns it off; malformed values fall back to the model default (see below) |
+| `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (Roboflow, allowlist `WORKFLOW_VERSIONS`), or `local` (in-container model, below); case-insensitive; anything else is 400 before any upstream call |
+
+## In-container model (`model=local`)
+
+`model=local` scores the frame inside the service with
+[`models/yolo26s_v6_boxfix.onnx`](models/yolo26s_v6_boxfix.onnx) on
+onnxruntime (CPU). There is no Roboflow call and no credit cost, and it works
+with `ROBOFLOW_API_KEY` unset. Every response key, header and `format` is the
+same as for `v4`/`v6`. `workflow_id` / `X-Workflow-Id` read
+`local:yolo26s-v6-boxfix` (`LOCAL_MODEL_ID`), and each prediction also carries
+`class_id`.
+
+| | |
+| --- | --- |
+| Source | Colab run `v6_yolo26s_boxfix`, Ultralytics 8.4.175, from `yolo26s.pt` on Roboflow dataset v6 (polygon labels rewritten as boxes), `imgsz=1280`, `freeze=10`, AdamW `lr0=0.001`, cosine LR, `patience=50` |
+| Classes | `bus`, `car`, `truck` |
+| Checkpoint | `best.pt`, sha256 `de7d105b380dbe1b1f4aa962487920b6cbb3128704f337591a8043d3b38abf0e`, 20.4 MB (not in git; it lives in the team Drive under `swiftborder_runs/v6_yolo26s_boxfix/weights/`) |
+| Export | `YOLO("best.pt").export(format="onnx", imgsz=[736, 1280], simplify=True)`; sha256 `dc43db2fe30ab8cf08b6d7056bd7d20d0f111f0a5ec577a51ed86cb593f65fe8`, 38 MB |
+| Validation (from the checkpoint) | mAP50 0.833, mAP50-95 0.558, P 0.797, R 0.734 (Colab, best epoch). This is the run's own validation split of about 15 images, which also picked the checkpoint. It is not a held-out score or a harness result. |
+
+How it matches Ultralytics' `model.predict(imgsz=1280)`:
+
+- **Input 736×1280.** A 1920×1080 frame is letterboxed to 1280×720 plus 8 px
+  grey (114) bands, which is the shape Ultralytics' own predict uses. A square
+  1280×1280 export padded the frame further and found 41 vehicles where
+  `.pt` predict found 59 on the same CAM 2702 frame. Other frame sizes are
+  letterboxed into the same input.
+- **Resize.** `_resize_linear` reproduces OpenCV `INTER_LINEAR`, including
+  its fixed-point rounding (bit-identical on 1920×1080 → 1280×720). PIL's
+  bilinear antialiases when shrinking, which lost distant vehicles. A plain
+  float bilinear still flipped borderline boxes.
+- **Decoding.** The checkpoint's head has `end2end=False`, so its validation
+  used the one-to-many head with class-aware NMS (IoU 0.7, max 300 boxes). The
+  ONNX graph is that head, and `_local_predictions` runs the same NMS in numpy.
+  The NMS-free `end2end=True` export decodes a different head and was not used.
+- **Parity check.** On two live 10 Oct frames, this code and Ultralytics
+  `.pt` predict at `conf=0.1` gave identical counts and class splits: CAM 2701
+  121 (92 car, 23 truck, 6 bus) and CAM 2702 59 (37/20/2).
+
+**Cost on Cloud Run.** Measured locally (4 vCPU, Python 3.11), not on the
+service: about 0.4-0.6 s per 1920×1080 frame warm and about 1 s for the first
+frame. Peak RSS is about 380 MB with the onnxruntime memory arena off (about
+625 MB with it on). The session loads lazily on the first `model=local` request,
+so Roboflow requests do not pay for it. Local inference is serialised per
+instance (`_local_inference_lock`). Give the service at least 1 GiB of memory,
+and expect concurrent `local` requests on one instance to queue.
+
+**Overlap suppression.** After NMS and the confidence filter, boxes are
+taken in confidence order. Two boxes count as one vehicle when *each* has more
+than `max_overlap` (0.6) of its area inside the other, whatever the classes.
+That is the intersection over the *larger* box's area. It removes two kinds of
+double count that class-aware NMS at IoU 0.7 leaves:
+
+- the same vehicle boxed as both truck and bus (IoU 0.9 and above), and
+- a confident box plus a weak echo (confidence about 0.1-0.3) shifted a little
+  on the same car.
+
+A small box inside a big one, such as a car in front of a truck, is never
+dropped, because only the small box is mostly covered.
+
+The 0.6 cut was set by eye on 8 CAM 2701/2702 frames (8-10 Oct). Pairs at
+0.6-0.8 were one car boxed twice. Below 0.6, a car beside a truck, or a truck
+beside a bus, starts to appear. The first live default (0.8) caught only the
+pairs above 0.8, about 20 of the 118 pairs above 0.6 on five 2701 frames.
+
+On by default for `local` (`LOCAL_MAX_OVERLAP`, 0.6). Off by default for
+`v4`/`v6`, so their counts stay comparable with earlier output. Pass
+`overlap=` to set it for any model, or `overlap=1` to turn it off. JSON reports
+`max_overlap` (null when off) and `overlap_suppressed`.
+
+Total count on those frames, `local`, `confidence=0.1`, at each cut:
+
+| Frame | off | 0.8 | 0.7 | **0.6** | 0.5 |
+| --- | --- | --- | --- | --- | --- |
+| 2701 10 Oct 08:00 | 149 | 146 | 135 | **119** | 113 |
+| 2701 10 Oct 12:30 | 121 | 117 | 115 | **103** | 100 |
+| 2701 10 Oct 12:45 | 137 | 133 | 127 | **118** | 111 |
+| 2701 10 Oct 13:25 | 105 | 103 | 95 | **92** | 89 |
+| 2701 9 Oct 18:30 | 167 | 160 | 151 | **142** | 138 |
+| 2701 9 Oct 07:30 | 62 | 62 | 61 | **58** | 54 |
+| 2701 8 Oct 21:00 | 96 | 91 | 89 | **87** | 81 |
+| 2702 10 Oct 12:30 | 59 | 59 | 57 | **52** | 50 |
+
+Not scored against labels. The congestion bands were cut on v6 counts, so
+`local` counts are not on the same scale.
+
+A missing or unloadable model file returns **503** `Local model is not
+available`. No upstream inference call is made.
+
+To ship a new model: export with the same arguments, replace the file (or set
+`LOCAL_MODEL_PATH`), change `LOCAL_MODEL_ID` so responses say which weights
+scored them, update `LOCAL_MODEL_CLASSES` if the classes changed, and update
+the table above. `camdetect/models/**` is **not** in the trigger's
+`includedFiles`, so a model-only commit does not redeploy. Touch `main.py`
+in the same commit, or add the path to the trigger.
 
 ## Directions
 
@@ -99,6 +195,8 @@ X-Workflow-Id            Roboflow workflow that scored the frame
   "date_time": "2025-12-01T07:36:21",
   "source_image": "https://images.data.gov.sg/...",
   "min_confidence": 0.1,
+  "max_overlap": null,
+  "overlap_suppressed": 0,
   "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
   "vehicle_count": 10,
   "predictions": [{ "x": 300, "y": 1000, "width": 70, "height": 50,
@@ -119,7 +217,8 @@ X-Workflow-Id            Roboflow workflow that scored the frame
 | --- | --- |
 | 400 | `date_time` is not a real `YYYY-MM-DDTHH:MM:SS` string, or `model` is not in the allowlist (both checked before any upstream call) |
 | 404 | data.gov.sg has no frame for that camera and time |
-| 500 | `ROBOFLOW_API_KEY` is not configured (no upstream call is made) |
+| 500 | `ROBOFLOW_API_KEY` is not configured and `model` is not `local` (no upstream call is made) |
+| 503 | `model=local` and the ONNX model cannot be loaded |
 | 502 | data.gov.sg, the frame download, or Roboflow failed, or the frame is not an image |
 
 Error bodies are `{"error": "..."}` with a generic message; upstream detail
@@ -152,7 +251,7 @@ All via environment variables. `ROBOFLOW_API_KEY` is required and must never be
 committed.
 
 ```
-ROBOFLOW_API_KEY      Roboflow key (required)
+ROBOFLOW_API_KEY      Roboflow key (required for v4/v6 and the default; not for model=local)
 ROBOFLOW_API_URL      default https://serverless.roboflow.com
 ROBOFLOW_WORKSPACE    default chads-workspace-t3qcz
 ROBOFLOW_WORKFLOW_ID  workflow to invoke
@@ -160,6 +259,9 @@ DEFAULT_CAMERA_ID     default 2701
 DEFAULT_CONFIDENCE    default 0.1
 ALLOWED_ORIGIN        CORS origin, default *
 DIVIDING_LINES        JSON, overrides the built-in per-camera lines
+LOCAL_MODEL_PATH      default models/yolo26s_v6_boxfix.onnx next to main.py
+LOCAL_MODEL_ID        default local:yolo26s-v6-boxfix (reported as workflow_id)
+LOCAL_MAX_OVERLAP     default 0.6, overlap suppression for model=local (1 = off)
 ```
 
 A malformed `DEFAULT_CONFIDENCE` or `DIVIDING_LINES` logs a warning and falls
@@ -227,6 +329,9 @@ Direction geometry, congestion, payload parsing, and the HTTP handler
 (`tests/test_handler.py`: parameter precedence, every `format`, 400/404/500/502
 paths, non-image frames, malformed predictions, `detect_frame` parity) run
 offline with data.gov.sg and Roboflow mocked. No key or network is needed.
+`tests/test_local_model.py` covers `model=local`: letterbox geometry, the
+resize, NMS, box mapping, the handler with no key and no Roboflow call, the
+503 path, and one real run of the checked-in ONNX file (about 1 s on CPU).
 
 ```bash
 pip install -r requirements-dev.txt
@@ -240,7 +345,9 @@ the repo root). `requirements.txt` is the pinned Cloud Run dependency set;
 
 ## Reuse outside the handler
 
-`detect_frame(image_bytes, camera_id, min_confidence)` runs validation,
-inference and direction attribution on raw bytes and returns `kept`,
-`summary`, `image_size` and `points`. The offline camera backfill in
+`detect_frame(image_bytes, camera_id, min_confidence, workflow_id)` runs
+validation, inference and direction attribution on raw bytes and returns
+`kept`, `summary`, `image_size` and `points`. Pass
+`workflow_id=main.LOCAL_MODEL_ID` to score with the in-container model, which
+is unbilled. The offline camera backfill in
 [`eval/`](../eval/README.md) uses it.

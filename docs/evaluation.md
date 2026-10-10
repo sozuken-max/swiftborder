@@ -124,11 +124,16 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 
 **Status:** labels live in Roboflow; `traffic_images.labels` has 0 rows; `traffic_images.metadata` is populated and is not a label table. **No export has been scored.**
 
-**Which detector is live (2026-10-08).** `swiftbackend` defaults to Roboflow workflow **v6** (`vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic`, commit `d34cc1d`). The service has no `ROBOFLOW_WORKFLOW_ID` override. `?model=v4` still calls the earlier workflow, and the page's AI panel calls both.
-- **What to score:** v6 is the model to score first, against an export whose `test` split neither version trained on. Each score records the workflow id and the dataset version.
+**Which detectors are live (2026-10-10, `swiftbackend-00035-5dg`, commit `f72b8b2`, 2 GiB).** Three detectors are available:
+- **Roboflow workflow v6** is the default (`vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic`, commit `d34cc1d`). The service has no `ROBOFLOW_WORKFLOW_ID` override.
+- **`model=local`** runs a YOLO26s exported to ONNX (`local:yolo26s-v6-boxfix`, Colab run `v6_yolo26s_boxfix`, dataset v6). It runs in the container with no Roboflow call. Overlap suppression is on (`LOCAL_MAX_OVERLAP` 0.6, set by eye on five frames). Its mAP50 of 0.833 is from the Colab run's own split of about 15 images, not a harness score.
+- **`model=v4`** still calls the earlier workflow.
+
+The page's AI panel compares v6 with `model=local`, which costs one billed Roboflow call per view.
+- **What to score:** v6 and `model=local`, the two the demo shows, and v4 if the export allows. Score them on a `test` split that none of them trained on. The local model was trained on dataset v6, so the export must exclude v6's training images. Each score records the workflow or model id, the dataset version, and the overlap setting; suppression changes the counts.
 - **Older detections:** the March–April detections in `cam2701` / `cam2702` came from an earlier model and do not record which, so they are not comparable with v6 output.
 - **Congestion labels are a heuristic:** the page's labels are count bands per direction (< 20 Free Flow, 20–39 Quarter Way, 40–70 Half Way, > 70 Back to Back; commit `644bc25`). They were set from 14 v6 frames and are not an evaluated classifier.
-- **Cost:** the side-by-side panel makes two billed Roboflow calls per view.
+- **Cost:** one billed call per page view (v6). `model=local` is free, which also makes it the cheaper engine for the 6–11 Sep backfill once it is scored.
 
 <!-- mermaid:eval-layer-a -->
 ```mermaid

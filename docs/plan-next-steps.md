@@ -33,15 +33,18 @@ The largest gap is still Layer A: nothing in it is measured. The largest risk is
 | **Horizon claims** | Add none; add H1 (`xgb[maps+prof]` vs profile at 2 h); add H1 + H2 (the same at 4 h) | Add H1 and H2. They are the parts of the study that survive Holm, plus the 4 h edge |
 | Curve model cutoff | 330 min (uncorrected), or 180 min (Holm) | 180 min, unless the page is clearly labelled exploratory |
 | Page copy | No caveats (current), or a one-word `status` cue in the tooltip | Add the cue. The page is graded as the MVP and should not overclaim |
-| Detector to score first | v6 (live), v4, or both | Both on the same export; v6 is what the demo shows |
+| Detector to score first | v6 (Roboflow default), `model=local` (in-container YOLO26s), v4 | v6 and `model=local` on the same export; they are what the demo shows |
 
 ### 2. Layer A scoring (the critical path; needs the Roboflow key holder)
 
-1. Export a Roboflow dataset version with a `test` split that neither v4 nor v6 trained on.
-2. Score v6 and v4 with [`eval/layer_a.py`](../eval/layer_a.py), recording mAP, precision/recall, count error by direction, and day vs night.
-3. Record the workflow ids and the dataset version, and fill the Layer A table in [evaluation.md](evaluation.md#layer-a--vision).
-4. If the free credits allow it, run the 6–11 Sep backfill with v6 ([handoff-camera-pilot.md](handoff-camera-pilot.md), about 864 calls). It gives the first observed counts that overlap the Maps label (§7c).
-   - The page's side-by-side panel spends two calls per view, so turn it off, or check the quota, before the backfill.
+1. Export a Roboflow dataset version with a `test` split that none of the candidates trained on. The local YOLO26s was trained on dataset v6, so exclude v6's training images.
+2. Score v6 and `model=local` (and v4 if possible) with [`eval/layer_a.py`](../eval/layer_a.py), recording mAP, precision/recall, count error by direction, and day vs night.
+   - The local model can be scored offline from `camdetect/models/yolo26s_v6_boxfix.onnx`, with no Roboflow credits.
+   - Score it at its served overlap setting (0.6), and with suppression off.
+3. Record the model ids, the dataset version and the overlap setting, and fill the Layer A table in [evaluation.md](evaluation.md#layer-a--vision).
+4. Run the 6–11 Sep backfill ([handoff-camera-pilot.md](handoff-camera-pilot.md), about 864 frames). It gives the first observed counts that overlap the Maps label (§7c).
+   - With `model=local` the backfill costs no credits, so prefer it if its score is at least as good as v6's.
+   - The backfill script calls Roboflow today, so it needs a `model=local` path first.
 5. Check the count bands on the scored frames: do the four labels match a hand label? If not, report them as a display heuristic only.
 
 If step 2 cannot happen by 19 Oct, the report describes Layer A as an unvalidated prototype ([final-report-readiness.md](final-report-readiness.md) §1).

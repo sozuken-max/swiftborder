@@ -2,3 +2,6 @@ functions-framework==3.10.2
 requests==2.34.2
 Pillow==12.3.0
 backports.zoneinfo==0.2.1; python_version < "3.9"
+# model=local: in-container YOLO26s ONNX inference (no torch in the image)
+onnxruntime==1.29.0
+numpy==2.4.6

@@ -6,6 +6,7 @@ import logging
 import math
 import os
 import re
+import threading
 
 try:
     from zoneinfo import ZoneInfo
@@ -113,6 +114,44 @@ WORKFLOW_VERSIONS = {
 
 def _workflow_url(workflow_id=None):
     return f"{ROBOFLOW_API_URL}/{ROBOFLOW_WORKSPACE}/workflows/{workflow_id or ROBOFLOW_WORKFLOW_ID}"
+
+
+# --- In-container model (``model=local``) ---
+# YOLO26s trained outside Roboflow (Colab run v6_yolo26s_boxfix: dataset v6, freeze=10, imgsz 1280),
+# exported to ONNX. The checkpoint's head has end2end=False, so its validation (and Ultralytics'
+# own predict) decode the one-to-many head with class-aware NMS; this service does the same.
+# Runs on the service's own CPU: no Roboflow key, no per-image credit.
+LOCAL_MODEL_KEY = "local"
+LOCAL_MODEL_ID = os.environ.get("LOCAL_MODEL_ID", "local:yolo26s-v6-boxfix")
+LOCAL_MODEL_PATH = os.environ.get(
+    "LOCAL_MODEL_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "yolo26s_v6_boxfix.onnx"),
+)
+# Input H x W comes from the graph (exported at 736x1280: what Ultralytics' own predict letterboxes a
+# 1920x1080 frame to at imgsz=1280). This is only the fallback.
+LOCAL_MODEL_INPUT = (736, 1280)
+LOCAL_MODEL_CLASSES = ("bus", "car", "truck")
+LETTERBOX_FILL = (114, 114, 114)
+# Ultralytics predict/val defaults. Candidates go in at a low floor so the request's ``confidence``
+# filter afterwards gives the same boxes as running NMS at that threshold.
+LOCAL_NMS_IOU = 0.7
+LOCAL_CANDIDATE_FLOOR = 0.001
+LOCAL_MAX_DET = 300
+LOCAL_MAX_CANDIDATES = 30000
+LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never suppresses across classes
+
+# Overlap suppression after NMS: two boxes are one vehicle when each covers more than this fraction
+# of the other (intersection over the larger box's area), whatever the classes. Class-aware NMS at
+# IoU 0.7 leaves the same vehicle boxed as both truck and bus (IoU 0.9+), and a confident box plus a
+# weak echo (confidence ~0.1-0.3) shifted a little on one car. A small box inside a big one (a car in
+# front of a truck) is never dropped: only the small box is mostly covered. 0.6 set by eye on 8
+# CAM 2701/2702 frames (8-10 Oct): pairs at 0.6-0.8 were one car boxed twice; below 0.6 a car beside
+# a truck, or a truck beside a bus, starts to appear. Not scored against labels.
+# On by default for model=local only, so v4/v6 counts stay comparable with earlier output; the
+# ``overlap`` request parameter sets it for any model (1 turns it off).
+LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.6)
+
+MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, LOCAL_MODEL_KEY])
 
 # Headers browsers may read cross-origin. Without this the X-* headers are
 # invisible to fetch()/XHR, which is why they are exposed explicitly.
@@ -224,6 +263,203 @@ def _extract_predictions(outputs):
             conf = 0.0
         clean.append({**p, "confidence": conf if math.isfinite(conf) else 0.0})
     return clean
+
+
+class LocalModelUnavailable(RuntimeError):
+    """The in-container ONNX model or its runtime could not be loaded."""
+
+
+_local_session = None
+_local_session_lock = threading.Lock()
+# One frame at a time per instance: onnxruntime already spreads a frame over every core, and
+# concurrent requests would each hold ~200 MB of activations.
+_local_inference_lock = threading.Lock()
+
+
+def _get_local_session():
+    """Load the ONNX session once per instance; later calls reuse it."""
+    global _local_session
+    if _local_session is None:
+        with _local_session_lock:
+            if _local_session is None:
+                try:
+                    import onnxruntime as ort
+
+                    options = ort.SessionOptions()
+                    # The arena keeps its high-water mark: ~625 MB peak RSS with it, ~380 MB without,
+                    # at the same latency (1920x1080 frame, 4 vCPU).
+                    options.enable_cpu_mem_arena = False
+                    _local_session = ort.InferenceSession(
+                        LOCAL_MODEL_PATH, options, providers=["CPUExecutionProvider"]
+                    )
+                except Exception as exc:  # missing file, bad graph, or runtime not installed
+                    raise LocalModelUnavailable(str(exc)) from exc
+    return _local_session
+
+
+def _resize_linear(pixels, new_w, new_h):
+    """uint8 bilinear resize reproducing OpenCV INTER_LINEAR, fixed-point rounding included.
+
+    Ultralytics letterboxes with cv2.resize. PIL's bilinear antialiases when shrinking, which
+    softened distant vehicles and cost 5 of 59 detections on a CAM 2702 frame; a float bilinear
+    still flipped borderline boxes. This is bit-identical to cv2 on 1920x1080 -> 1280x720.
+    """
+    import numpy as np
+
+    def taps(n_out, n_in):
+        src = (np.arange(n_out) + 0.5) * (n_in / n_out) - 0.5
+        lo = np.floor(src).astype(np.int64)
+        frac = np.where(lo < 0, 0.0, src - lo)
+        lo = np.clip(lo, 0, n_in - 1)
+        frac = np.where(lo >= n_in - 1, 0.0, frac)
+        weight = np.rint(frac * 2048).astype(np.int32)  # cv2 INTER_RESIZE_COEF_SCALE
+        return lo, np.minimum(lo + 1, n_in - 1), weight
+
+    height, width = pixels.shape[:2]
+    y0, y1, wy = taps(new_h, height)
+    x0, x1, wx = taps(new_w, width)
+    wx = wx[None, :, None]
+    src = pixels.astype(np.int32)  # peak term 2048 * 32640 fits int32
+    rows0 = src[y0][:, x0] * (2048 - wx) + src[y0][:, x1] * wx
+    rows1 = src[y1][:, x0] * (2048 - wx) + src[y1][:, x1] * wx
+    b0, b1 = (2048 - wy)[:, None, None], wy[:, None, None]
+    out = (((b0 * (rows0 >> 4)) >> 16) + ((b1 * (rows1 >> 4)) >> 16) + 2) >> 2
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def _letterbox(image_bytes, target=LOCAL_MODEL_INPUT):
+    """Ultralytics-style letterbox into ``target`` (H, W): (NCHW float32 tensor, scale, (pad_x, pad_y))."""
+    import numpy as np
+
+    target_h, target_w = target
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as src:
+            pixels = np.asarray(src.convert("RGB"))
+    except (OSError, ValueError) as exc:  # header parsed (see _image_size) but the body is truncated
+        raise InvalidImage(str(exc)) from exc
+    height, width = pixels.shape[:2]
+    scale = min(target_w / width, target_h / height)
+    new_w, new_h = round(width * scale), round(height * scale)
+    pad_x = round((target_w - new_w) / 2 - 0.1)
+    pad_y = round((target_h - new_h) / 2 - 0.1)
+
+    canvas = np.empty((target_h, target_w, 3), dtype=np.uint8)
+    canvas[:] = LETTERBOX_FILL
+    if (new_w, new_h) == (width, height):
+        canvas[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = pixels
+    else:
+        canvas[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = _resize_linear(pixels, new_w, new_h)
+    tensor = canvas.transpose(2, 0, 1)[None].astype(np.float32) / 255.0
+    return np.ascontiguousarray(tensor), scale, (pad_x, pad_y)
+
+
+def _nms(boxes, scores, iou_threshold):
+    """Greedy NMS over xyxy boxes; returns kept indices, highest score first."""
+    import numpy as np
+
+    order = np.argsort(-scores, kind="stable")
+    areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    keep = []
+    while order.size and len(keep) < LOCAL_MAX_DET:
+        i = order[0]
+        keep.append(int(i))
+        rest = order[1:]
+        xx1 = np.maximum(boxes[i, 0], boxes[rest, 0])
+        yy1 = np.maximum(boxes[i, 1], boxes[rest, 1])
+        xx2 = np.minimum(boxes[i, 2], boxes[rest, 2])
+        yy2 = np.minimum(boxes[i, 3], boxes[rest, 3])
+        inter = np.clip(xx2 - xx1, 0, None) * np.clip(yy2 - yy1, 0, None)
+        iou = inter / (areas[i] + areas[rest] - inter + 1e-9)
+        order = rest[iou <= iou_threshold]
+    return keep
+
+
+def _local_predictions(raw, scale, pad, image_size):
+    """Raw head output (4 + classes, anchors) -> NMS -> Roboflow-shaped prediction dicts.
+
+    Rows 0-3 are cx, cy, w, h in letterboxed pixels; the rest are per-class scores.
+    """
+    import numpy as np
+
+    raw = np.asarray(raw, dtype=np.float32)
+    class_scores = raw[4:].T
+    class_ids = class_scores.argmax(axis=1)
+    scores = class_scores[np.arange(class_ids.size), class_ids]
+    candidates = np.flatnonzero(np.isfinite(scores) & (scores > LOCAL_CANDIDATE_FLOOR))
+    if candidates.size > LOCAL_MAX_CANDIDATES:
+        candidates = candidates[np.argsort(-scores[candidates])[:LOCAL_MAX_CANDIDATES]]
+    cx, cy, w, h = raw[:4, candidates]
+    boxes = np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], axis=1)
+    scores, class_ids = scores[candidates], class_ids[candidates]
+    keep = _nms(boxes + class_ids[:, None] * LOCAL_CLASS_OFFSET, scores, LOCAL_NMS_IOU)
+
+    width, height = image_size
+    pad_x, pad_y = pad
+    preds = []
+    for i in keep:
+        x1, y1, x2, y2 = (float(v) for v in boxes[i])
+        x1 = min(max((x1 - pad_x) / scale, 0.0), width)
+        x2 = min(max((x2 - pad_x) / scale, 0.0), width)
+        y1 = min(max((y1 - pad_y) / scale, 0.0), height)
+        y2 = min(max((y2 - pad_y) / scale, 0.0), height)
+        if x2 <= x1 or y2 <= y1:
+            continue
+        class_id = int(class_ids[i])
+        name = LOCAL_MODEL_CLASSES[class_id] if class_id < len(LOCAL_MODEL_CLASSES) else str(class_id)
+        preds.append(
+            {
+                "x": round((x1 + x2) / 2, 1),
+                "y": round((y1 + y2) / 2, 1),
+                "width": round(x2 - x1, 1),
+                "height": round(y2 - y1, 1),
+                "confidence": round(float(scores[i]), 4),
+                "class": name,
+                "class_id": class_id,
+            }
+        )
+    return preds
+
+
+def _run_local(image_bytes, image_size):
+    """Score the frame with the in-container ONNX model."""
+    session = _get_local_session()
+    model_input = session.get_inputs()[0]
+    shape = model_input.shape[2:]
+    target = tuple(shape) if all(isinstance(v, int) for v in shape) else LOCAL_MODEL_INPUT
+    with _local_inference_lock:
+        tensor, scale, pad = _letterbox(image_bytes, target)
+        (output,) = session.run(None, {model_input.name: tensor})
+    return _local_predictions(output[0], scale, pad, image_size)
+
+
+def _mutual_overlap(a, b):
+    """The smaller of the two coverages: intersection over the larger box's area.
+
+    Over 0.8 means each box has more than 80% of its area inside the other.
+    """
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    inter = max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(0.0, min(ay2, by2) - max(ay1, by1))
+    larger = max((ax2 - ax1) * (ay2 - ay1), (bx2 - bx1) * (by2 - by1))
+    return inter / larger if larger > 0 else 0.0
+
+
+def _suppress_overlaps(predictions, max_overlap):
+    """Greedy, class-agnostic: keep boxes by confidence, dropping any whose mutual overlap with a
+    kept box is over ``max_overlap``. Boxes without geometry are kept as is.
+    Returns (kept, dropped_count) with ``kept`` in the input order.
+    """
+    survivors = []
+    dropped = set()
+    for i in sorted(range(len(predictions)), key=lambda i: -predictions[i]["confidence"]):
+        box = _box(predictions[i])
+        if box is None:
+            continue
+        if any(_mutual_overlap(box, other) > max_overlap for other in survivors):
+            dropped.add(i)
+        else:
+            survivors.append(box)
+    return [p for i, p in enumerate(predictions) if i not in dropped], len(dropped)
 
 
 def _box(pred):
@@ -442,28 +678,54 @@ class MissingApiKey(RuntimeError):
     """ROBOFLOW_API_KEY is not configured."""
 
 
-def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None, workflow_id=None):
+def detect_frame(
+    image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None, workflow_id=None, max_overlap=None
+):
     """Run detection and direction attribution on one frame (no HTTP request object).
 
-    Returns a dict: ``kept`` (predictions at or above ``min_confidence``, each tagged with
-    ``direction``), ``summary`` (per-direction counts, congestion labels and extents),
-    ``image_size`` and ``points`` (the scaled dividing line or None).
+    Returns a dict: ``kept`` (predictions at or above ``min_confidence`` that survive overlap
+    suppression, each tagged with ``direction``), ``summary`` (per-direction counts, congestion
+    labels and extents), ``image_size``, ``points`` (the scaled dividing line or None),
+    ``max_overlap`` (the suppression threshold applied, or None) and ``overlap_suppressed``
+    (boxes it removed).
+
+    ``max_overlap`` None means the model's default (``LOCAL_MAX_OVERLAP`` for the local model,
+    off for Roboflow workflows); a value of 1 or more turns suppression off.
 
     Raises InvalidImage for undecodable bytes (checked before any billed inference call),
     MissingApiKey when no key is configured, and requests/ValueError errors from the workflow.
-    ``workflow_id`` defaults to ``ROBOFLOW_WORKFLOW_ID``.
+    ``workflow_id`` defaults to ``ROBOFLOW_WORKFLOW_ID``; ``LOCAL_MODEL_ID`` scores the frame with
+    the in-container ONNX model instead (no key, no Roboflow call; LocalModelUnavailable if it
+    cannot load).
     Used by ``detect()`` and by the offline camera backfill in ``eval/``.
     """
     if min_confidence is None:
         min_confidence = DEFAULT_CONFIDENCE
     image_size = _image_size(image_bytes)
-    if not ROBOFLOW_API_KEY:
+    if workflow_id == LOCAL_MODEL_ID:
+        predictions = _run_local(image_bytes, image_size)
+    elif not ROBOFLOW_API_KEY:
         raise MissingApiKey("ROBOFLOW_API_KEY is not set")
-    predictions = _extract_predictions(_run_workflow(image_bytes, workflow_id))
+    else:
+        predictions = _extract_predictions(_run_workflow(image_bytes, workflow_id))
     kept = [p for p in predictions if p["confidence"] >= min_confidence]
+    if max_overlap is None:
+        max_overlap = LOCAL_MAX_OVERLAP if workflow_id == LOCAL_MODEL_ID else None
+    if max_overlap is not None and max_overlap >= 1:
+        max_overlap = None
+    suppressed = 0
+    if max_overlap is not None:
+        kept, suppressed = _suppress_overlaps(kept, max_overlap)
     points = _dividing_line(camera_id, image_size)
     summary = _summarize_directions(kept, points, image_size)
-    return {"kept": kept, "summary": summary, "image_size": image_size, "points": points}
+    return {
+        "kept": kept,
+        "summary": summary,
+        "image_size": image_size,
+        "points": points,
+        "max_overlap": max_overlap,
+        "overlap_suppressed": suppressed,
+    }
 
 
 def _param(body, args, name):
@@ -482,6 +744,19 @@ def _parse_confidence(value):
     except (TypeError, ValueError):
         return DEFAULT_CONFIDENCE
     return conf if math.isfinite(conf) else DEFAULT_CONFIDENCE
+
+
+def _parse_overlap(value):
+    """Request ``overlap``: a fraction in [0, 1]; missing or malformed means the model default."""
+    if value is None or value == "":
+        return None
+    try:
+        overlap = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(overlap) or overlap < 0:
+        return None
+    return min(overlap, 1.0)
 
 
 def _valid_date_time(value):
@@ -509,13 +784,17 @@ def detect(request):
     date_time = _param(body, args, "date_time")
     output_format = str(_param(body, args, "format") or "image").lower()
     min_confidence = _parse_confidence(_param(body, args, "confidence"))
+    max_overlap = _parse_overlap(_param(body, args, "overlap"))
     model = _param(body, args, "model")
     if model is None or model == "":
         workflow_id = ROBOFLOW_WORKFLOW_ID
     elif isinstance(model, str) and model.lower() in WORKFLOW_VERSIONS:
         workflow_id = WORKFLOW_VERSIONS[model.lower()]
+    elif isinstance(model, str) and model.lower() == LOCAL_MODEL_KEY:
+        workflow_id = LOCAL_MODEL_ID
     else:
-        return _error(f"model must be one of: {', '.join(sorted(WORKFLOW_VERSIONS))}", 400)
+        return _error(f"model must be one of: {', '.join(MODEL_CHOICES)}", 400)
+    is_local = workflow_id == LOCAL_MODEL_ID
 
     # If no timestamp is supplied, use the current Singapore-local time.
     if date_time is None or date_time == "":
@@ -525,7 +804,7 @@ def detect(request):
     elif not _valid_date_time(date_time):
         return _error("date_time must be YYYY-MM-DDTHH:MM:SS (Singapore time)", 400)
 
-    if not ROBOFLOW_API_KEY:
+    if not is_local and not ROBOFLOW_API_KEY:
         logger.error("ROBOFLOW_API_KEY is not set")
         return _error("Service is not configured", 500)
 
@@ -548,9 +827,15 @@ def detect(request):
         logger.warning("source frame is not an image: %s", exc)
         return _error("Source frame is not a valid image", 502)
 
-    # 3. Run the Roboflow workflow and attribute directions
+    # 3. Run the Roboflow workflow (or the in-container model) and attribute directions
     try:
-        result = detect_frame(image_bytes, camera_id, min_confidence, workflow_id)
+        result = detect_frame(image_bytes, camera_id, min_confidence, workflow_id, max_overlap)
+    except LocalModelUnavailable as exc:
+        logger.error("local model could not be loaded: %s", exc)
+        return _error("Local model is not available", 503)
+    except InvalidImage as exc:
+        logger.warning("source frame could not be decoded: %s", exc)
+        return _error("Source frame is not a valid image", 502)
     except requests.RequestException as exc:
         logger.warning("inference request failed: %s", exc)
         return _error("Inference request failed", 502)
@@ -566,6 +851,8 @@ def detect(request):
             "date_time": date_time,
             "source_image": image_url,
             "min_confidence": min_confidence,
+            "max_overlap": result["max_overlap"],
+            "overlap_suppressed": result["overlap_suppressed"],
             "workflow_id": workflow_id,
             "vehicle_count": len(kept),
             "predictions": kept,

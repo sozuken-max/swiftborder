@@ -10,6 +10,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
+COPY models/ models/
 
 # Cloud Run sets PORT; functions-framework serves the `detect` HTTP function with gunicorn.
 CMD exec functions-framework --target=detect --port=${PORT:-8080}
