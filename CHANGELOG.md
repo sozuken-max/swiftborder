@@ -4,6 +4,11 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-10
 
+- `camdetect` adds `model=local-conf`: the `local` YOLO26s with the same confidence floor, overlap rule and size exception, but overlap suppression keeps the most confident box first (area breaks ties) instead of the biggest. `model=local` is unchanged.
+  - It exists to compare the two orders on the same frame. Under biggest-first, a weaker box above the floor that spans two confident adjacent cars removes both; under confidence-first, a car whose half boxes are more confident than its whole box counts twice.
+  - On 16 live CAM 2701/2702 frames, `local-conf` counted 0-4 more vehicles per frame, never fewer.
+  - JSON adds `dedupe_order`; `workflow_id` is `local:yolo26s-v6-boxfix+conf-first`.
+  - Not scored against labels. Merging redeploys `swiftbackend`.
 - `camdetect` CAM 2701 dividing line spans the full frame width. New end points `[0, 1106]` and `[1920, 313]` continue the first and last segments. Vehicles in the bottom-left corner (x < 176) were Unknown; the MY-SG carriageway leaves the frame right of x=176, so they are now SG-MY. Car slivers at the right edge (x > 1913) get a side too. On 9 saved CAM 2701 frames, Unknown went from 0-3 per frame to 0. Applies to every model. Merging redeploys `swiftbackend`.
 
 - `camdetect` default `confidence` goes from 0.35 to 0.2 for every model (`DEFAULT_CONFIDENCE`, `LOCAL_DEFAULT_CONFIDENCE`). 0.35 cleared weak echo boxes before the size-ratio dedupe for `local` existed. With dedupe on, 0.2 adds 3-12 `local` vehicles per CAM 2701 frame over 0.35, while dedupe removes 6-33 echoes per frame. CAM 2702 goes 21 -> 32. v6 counts change too (v6 has no dedupe by default). Set by eye, not scored against labels. Merging redeploys `swiftbackend`.
