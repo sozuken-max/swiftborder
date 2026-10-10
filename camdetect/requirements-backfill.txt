@@ -1,0 +1,4 @@
+# backfill_local_counts.py (offline / Cloud Run Job), not the swiftbackend image
+-r requirements.txt
+google-cloud-storage==3.17.0
+google-cloud-bigquery==3.46.1

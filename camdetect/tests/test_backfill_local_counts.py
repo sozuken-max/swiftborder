@@ -89,3 +89,81 @@ def test_main_writes_integer_counts_and_resumes(tmp_path, monkeypatch):
         ("2026-09-06T08:00:00", "2", "5", "7"),
         ("2026-09-06T08:10:00", "2", "5", "7"),
     ]
+
+
+def test_task_shard_splits_work_across_cloud_run_tasks():
+    todo = list(range(10))
+    assert bf.task_shard(todo, {}) == (todo, 0, 1)
+    shards = [bf.task_shard(todo, {"CLOUD_RUN_TASK_INDEX": str(i), "CLOUD_RUN_TASK_COUNT": "3"})[0] for i in range(3)]
+    assert sorted(sum(shards, [])) == todo and shards[1] == [1, 4, 7]
+
+
+def test_make_row_matches_the_bigquery_schema():
+    row = bf.make_row("2701", dt.datetime(2026, 9, 6, 8, 0), {"sg_my": 2, "my_sg": 5, "unknown": 0, "total": 7},
+                      "gs://b/x.jpg", dt.datetime(2026, 10, 10, tzinfo=dt.timezone.utc))
+    assert set(row) == {name for name, _, _ in bf.BQ_SCHEMA}
+    assert row["frame_datetime_sgt"] == "2026-09-06T08:00:00"
+    assert row["frame_ts"] == "2026-09-06T00:00:00+00:00"
+    assert row["model_id"] == main.LOCAL_MODEL_ID
+
+
+def test_bigquery_schema_matches_the_checked_in_ddl():
+    ddl = (bf.HERE.parent / "sql" / "bigquery" / "cam2701" / "local_counts.sql").read_text()
+    for name, kind, mode in bf.BQ_SCHEMA:
+        assert f"  {name} {kind}{' NOT NULL' if mode == 'REQUIRED' else ''}" in ddl, name
+
+
+class FakeBigQuery:
+    def __init__(self, existing=()):
+        self.created, self.loads, self.existing = [], [], set(existing)
+
+    def create_table(self, table, exists_ok=False):
+        self.created.append((table, exists_ok))
+
+    def query(self, sql, job_config=None):
+        rows = [{"source": s} for s in self.existing]
+        return type("Job", (), {"result": lambda self: rows})()
+
+    def load_table_from_json(self, rows, table_id, job_config=None):
+        self.loads.append((list(rows), table_id, job_config.write_disposition))
+        return type("Job", (), {"result": lambda self: None})()
+
+
+def test_bigquery_sink_creates_the_table_reads_done_and_appends():
+    pytest = __import__("pytest")
+    pytest.importorskip("google.cloud.bigquery")
+    client = FakeBigQuery(existing={"gs://b/a.jpg"})
+    sink = bf.BigQuerySink("swiftborder.cam2701.local_counts", client=client)
+    (table, exists_ok), = client.created
+    assert exists_ok and [f.name for f in table.schema] == [name for name, _, _ in bf.BQ_SCHEMA]
+    assert sink.done("2701") == {"gs://b/a.jpg"}
+    sink.write([{"source": "gs://b/b.jpg"}])
+    assert client.loads == [([{"source": "gs://b/b.jpg"}], "swiftborder.cam2701.local_counts", "WRITE_APPEND")]
+
+
+def test_main_with_bq_table_batches_rows_and_skips_scored_frames(tmp_path, monkeypatch):
+    root = tmp_path / "bucket"
+    source = _tree(root, [f"camera_id=2701/month=2026-09/20260906_08{m}000.jpg" for m in range(5)])
+
+    class Sink:
+        batch_size = 2
+        writes = []
+
+        def __init__(self, table_id):
+            self.table_id = table_id
+
+        def done(self, camera_id):
+            return {source.uri("camera_id=2701/month=2026-09/20260906_080000.jpg")}
+
+        def write(self, rows):
+            Sink.writes.append([r["frame_datetime_sgt"] for r in rows])
+
+    monkeypatch.setattr(bf, "BigQuerySink", Sink)
+    monkeypatch.setattr(main, "detect_frame", lambda *a, **k: {
+        "kept": [{}], "summary": {"sg_my": {"count": 1}, "my_sg": {"count": 0}, "unknown": {"count": 0}}})
+    args = ["--local-dir", str(root), "--bq-table", "p.d.t", "--start", "2026-09-06", "--end", "2026-09-06"]
+    assert bf.main(args) == 0
+    assert Sink.writes == [
+        ["2026-09-06T08:10:00", "2026-09-06T08:20:00"],
+        ["2026-09-06T08:30:00", "2026-09-06T08:40:00"],
+    ]

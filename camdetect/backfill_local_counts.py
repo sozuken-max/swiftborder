@@ -9,14 +9,20 @@ front end's "Local model" pane: YOLO26s ONNX, ``LOCAL_DEFAULT_CONFIDENCE``, over
 (``LOCAL_MAX_OVERLAP`` / ``LOCAL_SIZE_RATIO``) and the per-camera dividing line that splits SG-MY
 from MY-SG. No Roboflow call is made, so nothing is billed.
 
-One CSV row per frame: capture time (SGT) and integer counts per direction. Rows are appended as
-frames are scored, so an interrupted run resumes where it stopped (frames already in the CSV are
-skipped). A frame that fails to download or decode is reported and left out, so a re-run retries it.
+One row per frame: capture time (SGT) and integer counts per direction, written to a CSV (default)
+or, with ``--bq-table``, to a BigQuery table that is created with ``BQ_SCHEMA`` if it is missing
+(DDL: ``sql/bigquery/cam2701/local_counts.sql``). Rows are saved as frames are scored, so an
+interrupted run resumes where it stopped (frames already in the output are skipped). A frame that
+fails to download or decode is reported and left out, so a re-run retries it.
 
-    pip install -r requirements.txt google-cloud-storage
-    gcloud auth application-default login          # needs storage.objects.list/get on the bucket
+On a Cloud Run Job with N tasks, task i scores every N-th remaining frame
+(``CLOUD_RUN_TASK_INDEX`` / ``CLOUD_RUN_TASK_COUNT``), so the tasks split the work between them.
+
+    pip install -r requirements-backfill.txt
+    gcloud auth application-default login          # storage read on the bucket (+ BigQuery write)
     python backfill_local_counts.py --dry-run      # list and parse names, no inference
-    python backfill_local_counts.py                # 6 Sep - 4 Oct 2026, camera 2701
+    python backfill_local_counts.py                # 6 Sep - 4 Oct 2026, camera 2701, CSV
+    python backfill_local_counts.py --bq-table swiftborder.cam2701.local_counts
 
 Or score a local copy (``gsutil -m cp -r gs://sg-lta-traffic-cameras/camera_id=2701 frames/``)
 with ``--local-dir frames``. The object names must carry the capture time; ``--dry-run`` prints a
@@ -29,6 +35,7 @@ import argparse
 import concurrent.futures
 import csv
 import datetime as dt
+import os
 import re
 import sys
 import time
@@ -44,6 +51,21 @@ DEFAULT_START = "2026-09-06"
 DEFAULT_END = "2026-10-04"
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png")
 FIELDS = ["frame_datetime_sgt", "sg_my", "my_sg", "unknown", "total", "source"]
+# (name, type, mode). Keep in step with sql/bigquery/cam2701/local_counts.sql.
+BQ_SCHEMA = [
+    ("camera_id", "STRING", "REQUIRED"),
+    ("frame_datetime_sgt", "DATETIME", "REQUIRED"),
+    ("frame_ts", "TIMESTAMP", "REQUIRED"),
+    ("sg_my", "INT64", "REQUIRED"),
+    ("my_sg", "INT64", "REQUIRED"),
+    ("unknown", "INT64", "REQUIRED"),
+    ("total", "INT64", "REQUIRED"),
+    ("model_id", "STRING", "REQUIRED"),
+    ("min_confidence", "FLOAT64", "REQUIRED"),
+    ("max_overlap", "FLOAT64", "NULLABLE"),
+    ("source", "STRING", "REQUIRED"),
+    ("scored_at", "TIMESTAMP", "REQUIRED"),
+]
 
 # 2026-09-06T08:15:30, 20260906_081530, 2026-09-06 08-15-30, optional Z / +08:00 suffix.
 _STAMP = re.compile(
@@ -174,21 +196,88 @@ def plan_frames(source, camera_id, start, end, name_tz=SGT):
     return sorted(frames.items()), unparsed, duplicates
 
 
-def read_done(path):
-    if not path.exists():
-        return set()
-    with open(path, newline="", encoding="utf-8") as f:
-        return {row["source"] for row in csv.DictReader(f)}
+class CsvSink:
+    batch_size = 1  # one row per write: a killed run loses at most the frame in flight
+
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def __str__(self):
+        return str(self.path)
+
+    def done(self, camera_id):
+        if not self.path.exists():
+            return set()
+        with open(self.path, newline="", encoding="utf-8") as f:
+            return {row["source"] for row in csv.DictReader(f)}
+
+    def write(self, rows):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        new = not self.path.exists()
+        with open(self.path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
+            if new:
+                writer.writeheader()
+            writer.writerows(rows)
 
 
-def append_row(path, row):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    new = not path.exists()
-    with open(path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        if new:
-            writer.writeheader()
-        writer.writerow(row)
+class BigQuerySink:
+    """Appends rows with load jobs (free, no streaming buffer), creating the table if missing."""
+
+    def __init__(self, table_id, batch_size=100, client=None):
+        from google.cloud import bigquery  # imported here so CSV runs need no BigQuery package
+
+        self.bigquery = bigquery
+        self.client = client or bigquery.Client(project=table_id.split(".")[0])
+        self.table_id = table_id
+        self.batch_size = batch_size
+        self.schema = [bigquery.SchemaField(name, kind, mode=mode) for name, kind, mode in BQ_SCHEMA]
+        table = bigquery.Table(table_id, schema=self.schema)
+        table.clustering_fields = ["camera_id"]
+        table.description = "Per-frame model=local vehicle counts by direction (camdetect/backfill_local_counts.py)."
+        self.client.create_table(table, exists_ok=True)
+
+    def __str__(self):
+        return self.table_id
+
+    def done(self, camera_id):
+        job = self.client.query(
+            f"SELECT DISTINCT source FROM `{self.table_id}` WHERE camera_id = @camera_id",
+            job_config=self.bigquery.QueryJobConfig(
+                query_parameters=[self.bigquery.ScalarQueryParameter("camera_id", "STRING", camera_id)]
+            ),
+        )
+        return {row["source"] for row in job.result()}
+
+    def write(self, rows):
+        config = self.bigquery.LoadJobConfig(
+            schema=self.schema,
+            write_disposition="WRITE_APPEND",
+            source_format="NEWLINE_DELIMITED_JSON",
+        )
+        self.client.load_table_from_json(rows, self.table_id, job_config=config).result()
+
+
+def task_shard(todo, environ=None):
+    """This Cloud Run task's share of ``todo`` (all of it outside a multi-task job)."""
+    environ = os.environ if environ is None else environ
+    count = int(environ.get("CLOUD_RUN_TASK_COUNT") or 1)
+    index = int(environ.get("CLOUD_RUN_TASK_INDEX") or 0)
+    return todo[index::count] if count > 1 else todo, index, count
+
+
+def make_row(camera_id, stamp, counts, source_uri, scored_at):
+    return {
+        "camera_id": str(camera_id),
+        "frame_datetime_sgt": stamp.isoformat(),
+        "frame_ts": stamp.replace(tzinfo=SGT).astimezone(dt.timezone.utc).isoformat(),
+        **counts,
+        "model_id": camdetect.LOCAL_MODEL_ID,
+        "min_confidence": camdetect.LOCAL_DEFAULT_CONFIDENCE,
+        "max_overlap": camdetect.LOCAL_MAX_OVERLAP if camdetect.LOCAL_MAX_OVERLAP < 1 else None,
+        "source": source_uri,
+        "scored_at": scored_at.isoformat(),
+    }
 
 
 def score(image_bytes, camera_id):
@@ -226,6 +315,7 @@ def main(argv=None):
     parser.add_argument("--bucket", default=DEFAULT_BUCKET)
     parser.add_argument("--local-dir", help="score a local copy of the bucket tree instead of GCS")
     parser.add_argument("--out", type=Path, help="CSV path (default camdetect/backfill/...)")
+    parser.add_argument("--bq-table", help="write to BigQuery PROJECT.DATASET.TABLE instead of a CSV")
     parser.add_argument(
         "--name-tz",
         default="Asia/Singapore",
@@ -238,7 +328,6 @@ def main(argv=None):
 
     start = dt.date.fromisoformat(args.start)
     end = dt.date.fromisoformat(args.end)
-    out = args.out or _default_out(start, end)
     source = LocalSource(args.local_dir) if args.local_dir else GcsSource(args.bucket)
 
     frames, unparsed, duplicates = plan_frames(source, args.camera, start, end, ZoneInfo(args.name_tz))
@@ -249,9 +338,13 @@ def main(argv=None):
         print("nothing to score", file=sys.stderr)
         return 1
 
-    done = read_done(out)
+    sink = BigQuerySink(args.bq_table) if args.bq_table else CsvSink(args.out or _default_out(start, end))
+    done = sink.done(args.camera)
     todo = [(stamp, name) for stamp, name in frames if source.uri(name) not in done]
-    print(f"{len(frames) - len(todo)} already in {out}; {len(todo)} to score")
+    print(f"{len(frames) - len(todo)} already in {sink}; {len(todo)} to score")
+    todo, task_index, task_count = task_shard(todo)
+    if task_count > 1:
+        print(f"task {task_index} of {task_count}: {len(todo)} frames")
     if args.limit is not None:
         todo = todo[: args.limit]
     print(
@@ -260,26 +353,35 @@ def main(argv=None):
     )
 
     failures = 0
+    pending = []
     began = time.monotonic()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
-        # Downloads run ahead of inference; map keeps time order so the CSV stays sorted.
-        downloads = pool.map(lambda item: _fetch(source, item[1]), todo)
-        for i, ((stamp, name), (image_bytes, error)) in enumerate(zip(todo, downloads), 1):
-            if error is None:
-                try:
-                    counts = score(image_bytes, args.camera)
-                except Exception as exc:  # noqa: BLE001 - one bad frame must not stop the month
-                    error = exc
-            if error is not None:
-                failures += 1
-                print(f"FAILED {name}: {type(error).__name__}: {error}", file=sys.stderr)
-                continue
-            append_row(out, {"frame_datetime_sgt": stamp.isoformat(), **counts, "source": source.uri(name)})
-            if i % 100 == 0 or i == len(todo):
-                rate = i / (time.monotonic() - began)
-                print(f"  {i}/{len(todo)}  {stamp:%Y-%m-%d %H:%M}  {rate:.1f} frames/s", flush=True)
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+            # Downloads run ahead of inference; map keeps time order so the CSV stays sorted.
+            downloads = pool.map(lambda item: _fetch(source, item[1]), todo)
+            for i, ((stamp, name), (image_bytes, error)) in enumerate(zip(todo, downloads), 1):
+                if error is None:
+                    try:
+                        counts = score(image_bytes, args.camera)
+                    except Exception as exc:  # noqa: BLE001 - one bad frame must not stop the month
+                        error = exc
+                if error is not None:
+                    failures += 1
+                    print(f"FAILED {name}: {type(error).__name__}: {error}", file=sys.stderr)
+                    continue
+                now = dt.datetime.now(dt.timezone.utc)
+                pending.append(make_row(args.camera, stamp, counts, source.uri(name), now))
+                if len(pending) >= sink.batch_size:
+                    sink.write(pending)
+                    pending = []
+                if i % 100 == 0 or i == len(todo):
+                    rate = i / (time.monotonic() - began)
+                    print(f"  {i}/{len(todo)}  {stamp:%Y-%m-%d %H:%M}  {rate:.1f} frames/s", flush=True)
+    finally:
+        if pending:
+            sink.write(pending)  # keep what was scored even if the run is stopping on an error
 
-    print(f"done: {len(todo) - failures} scored, {failures} failed, output {out}")
+    print(f"done: {len(todo) - failures} scored, {failures} failed, output {sink}")
     return 1 if failures else 0
 
 
