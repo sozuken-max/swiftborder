@@ -21,6 +21,7 @@ is missing, `null` or an empty string (so `confidence: 0` is honoured, and
 | `date_time` | now, Asia/Singapore | frame timestamp, `YYYY-MM-DDTHH:MM:SS` |
 | `confidence` | `0.1` | minimum detection confidence |
 | `format` | `image` | `image`, `directional` or `json` |
+| `overlap` | `0.8` for `local`, off for `v4`/`v6` | overlap suppression threshold in [0, 1]; `1` turns it off; malformed values fall back to the model default (see below) |
 | `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (Roboflow, allowlist `WORKFLOW_VERSIONS`), or `local` (in-container model, below); case-insensitive; anything else is 400 before any upstream call |
 
 ## In-container model (`model=local`)
@@ -67,6 +68,39 @@ frame. Peak RSS is about 380 MB with the onnxruntime memory arena off (about
 so Roboflow requests do not pay for it. Local inference is serialised per
 instance (`_local_inference_lock`). Give the service at least 1 GiB of memory,
 and expect concurrent `local` requests on one instance to queue.
+
+**Overlap suppression.** After NMS and the confidence filter, boxes are
+taken in confidence order. A box is dropped when more than `max_overlap` of
+the *smaller* box's area lies inside a box already kept, whatever the classes.
+Class-aware NMS at IoU 0.7 leaves two kinds of double count:
+
+- the same vehicle boxed as both truck and bus (IoU 0.9 and above), and
+- a box nested inside a bigger one (IoU 0.5-0.7, so under the NMS cut, but
+  more than 80% contained).
+
+On by default for `local` at `LOCAL_MAX_OVERLAP` (0.8). Off by default for
+`v4`/`v6`, so their counts stay comparable with earlier output; pass `overlap=`
+to set it for any model, or `overlap=1` to turn it off. A vehicle partly
+hidden behind another keeps its box as long as no more than 80% of it is
+covered. JSON reports `max_overlap` (null when off) and `overlap_suppressed`.
+
+Effect on 7 CAM 2701/2702 frames (8-10 Oct), `local`, `confidence=0.1`:
+
+| Frame | Total | MY-SG | SG-MY |
+| --- | --- | --- | --- |
+| 2701 10 Oct 08:00 | 149 -> 119 | 111 -> 88 | 35 -> 28 |
+| 2701 10 Oct 12:30 | 121 -> 95 | 117 -> 92 | 3 -> 3 |
+| 2701 10 Oct 12:45 | 137 -> 107 | 129 -> 99 | 6 -> 6 |
+| 2701 9 Oct 18:30 | 167 -> 141 | 163 -> 138 | 3 -> 2 |
+| 2701 9 Oct 07:30 | 62 -> 51 | 45 -> 38 (Half Way -> Quarter Way) | 17 -> 13 |
+| 2701 8 Oct 21:00 | 96 -> 79 | 92 -> 75 | 4 -> 4 |
+| 2702 10 Oct 12:30 | 59 -> 49 | - | - |
+
+The dropped boxes were checked by eye on two crops: nearly all were a second
+box on an already-boxed vehicle, plus a few on motorcycle clusters (there is no
+motorcycle class). That is an inspection, not a precision/recall score
+against labels. The congestion bands were cut on v6 counts, so `local` counts
+(with or without suppression) are not on the same scale.
 
 A missing or unloadable model file returns **503** `Local model is not
 available`. No upstream inference call is made.
@@ -155,6 +189,8 @@ X-Workflow-Id            Roboflow workflow that scored the frame
   "date_time": "2025-12-01T07:36:21",
   "source_image": "https://images.data.gov.sg/...",
   "min_confidence": 0.1,
+  "max_overlap": null,
+  "overlap_suppressed": 0,
   "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
   "vehicle_count": 10,
   "predictions": [{ "x": 300, "y": 1000, "width": 70, "height": 50,
@@ -219,6 +255,7 @@ ALLOWED_ORIGIN        CORS origin, default *
 DIVIDING_LINES        JSON, overrides the built-in per-camera lines
 LOCAL_MODEL_PATH      default models/yolo26s_v6_boxfix.onnx next to main.py
 LOCAL_MODEL_ID        default local:yolo26s-v6-boxfix (reported as workflow_id)
+LOCAL_MAX_OVERLAP     default 0.8, overlap suppression for model=local (1 = off)
 ```
 
 A malformed `DEFAULT_CONFIDENCE` or `DIVIDING_LINES` logs a warning and falls

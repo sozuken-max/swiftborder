@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import main
+import test_handler
 from test_handler import _jpeg, _json, _post_urls, _request, upstream  # noqa: F401 (fixture)
 
 
@@ -153,3 +154,71 @@ def test_truncated_frame_is_502_on_local(upstream, fake_session):
     assert status == 502
     assert payload["error"] == "Source frame is not a valid image"
     assert fake_session.calls == 0
+
+
+def _pred(x, y, w, h, conf, cls="car"):
+    return {"x": x, "y": y, "width": w, "height": h, "confidence": conf, "class": cls}
+
+
+def test_overlap_suppression_drops_nested_and_cross_class_duplicates():
+    preds = [
+        _pred(100, 100, 50, 40, 0.9, "truck"),
+        _pred(101, 100, 50, 40, 0.4, "bus"),  # same vehicle, other class (IoU ~0.96)
+        _pred(110, 105, 30, 25, 0.5),  # fully inside the truck box (IoU ~0.4)
+        _pred(140, 100, 50, 40, 0.6),  # beside it: 10/50 of its width overlaps -> kept
+        _pred(400, 400, 50, 40, 0.2),
+    ]
+    kept, dropped = main._suppress_overlaps(preds, 0.8)
+    assert dropped == 2
+    assert [p["confidence"] for p in kept] == [0.9, 0.6, 0.2]  # input order kept
+
+
+def test_overlap_suppression_keeps_partly_occluded_vehicle():
+    # Car behind a truck: 60% of the car box is covered, under the 0.8 cut.
+    kept, dropped = main._suppress_overlaps([_pred(100, 100, 100, 60, 0.9), _pred(160, 100, 50, 40, 0.5)], 0.8)
+    assert dropped == 0 and len(kept) == 2
+
+
+class TwinSession(FakeSession):
+    """One car scored twice: as car and as truck at the same place (class-aware NMS keeps both)."""
+
+    def run(self, _outputs, feeds):
+        self.calls += 1
+        return [_raw((640, 368, 80, 160 / 3, 1, 0.9), (641, 368, 80, 160 / 3, 2, 0.4))[None]]
+
+
+@pytest.fixture
+def twin_session(monkeypatch):
+    session = TwinSession()
+    monkeypatch.setattr(main, "_local_session", session)
+    return session
+
+
+def test_local_suppresses_overlaps_by_default(upstream, twin_session):
+    payload, status, headers = _json(main.detect(_request(query={"format": "json", "model": "local"})))
+    assert status == 200
+    assert payload["vehicle_count"] == 1
+    assert payload["max_overlap"] == main.LOCAL_MAX_OVERLAP
+    assert payload["overlap_suppressed"] == 1
+    assert payload["predictions"][0]["class"] == "car"
+
+
+def test_overlap_param_one_turns_suppression_off(upstream, twin_session):
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "local", "overlap": "1"})))
+    assert payload["vehicle_count"] == 2
+    assert payload["max_overlap"] is None
+    assert payload["overlap_suppressed"] == 0
+
+
+def test_roboflow_models_do_not_suppress_unless_asked(upstream):
+    dup = {"x": 1500, "y": 300, "width": 60, "height": 40, "class": "truck", "confidence": 0.5}
+    upstream["workflow"]._payload["outputs"][0]["predictions"]["predictions"] = [*test_handler.PREDICTIONS, dup]
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "v6"})))
+    assert payload["vehicle_count"] == 3 and payload["max_overlap"] is None
+    payload, _, _ = _json(main.detect(_request(query={"format": "json", "model": "v6", "overlap": "0.8"})))
+    assert payload["vehicle_count"] == 2 and payload["overlap_suppressed"] == 1
+
+
+@pytest.mark.parametrize("raw,expected", [(None, None), ("", None), ("abc", None), ("-1", None), ("nan", None), ("0.5", 0.5), ("3", 1.0)])
+def test_parse_overlap(raw, expected):
+    assert main._parse_overlap(raw) == expected

@@ -140,6 +140,15 @@ LOCAL_MAX_DET = 300
 LOCAL_MAX_CANDIDATES = 30000
 LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never suppresses across classes
 
+# Overlap suppression after NMS: drop a box when more than this fraction of the smaller box lies
+# inside a higher-confidence kept box, whatever the classes. Class-aware NMS at IoU 0.7 leaves two
+# kinds of double count: one vehicle boxed as both truck and bus (IoU 0.9+), and a box nested in a
+# bigger one (IoU 0.5-0.7, so under the NMS cut). On 7 CAM 2701/2702 frames (8-10 Oct) 0.8 removed
+# 13-34 boxes per frame, by eye nearly all duplicates or motorcycle clusters. Not scored against
+# labels. On by default for model=local only, so v4/v6 counts stay comparable with earlier output;
+# the ``overlap`` request parameter sets it for any model (1 turns it off).
+LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.8)
+
 MODEL_CHOICES = sorted([*WORKFLOW_VERSIONS, LOCAL_MODEL_KEY])
 
 # Headers browsers may read cross-origin. Without this the X-* headers are
@@ -421,6 +430,33 @@ def _run_local(image_bytes, image_size):
     return _local_predictions(output[0], scale, pad, image_size)
 
 
+def _overlap_fraction(a, b):
+    """Intersection area over the smaller box's area (1.0 when one box contains the other)."""
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    inter = max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(0.0, min(ay2, by2) - max(ay1, by1))
+    smaller = min((ax2 - ax1) * (ay2 - ay1), (bx2 - bx1) * (by2 - by1))
+    return inter / smaller if smaller > 0 else 0.0
+
+
+def _suppress_overlaps(predictions, max_overlap):
+    """Greedy, class-agnostic: keep boxes by confidence, dropping any that overlap a kept one
+    by more than ``max_overlap`` of the smaller box. Boxes without geometry are kept as is.
+    Returns (kept, dropped_count) with ``kept`` in the input order.
+    """
+    survivors = []
+    dropped = set()
+    for i in sorted(range(len(predictions)), key=lambda i: -predictions[i]["confidence"]):
+        box = _box(predictions[i])
+        if box is None:
+            continue
+        if any(_overlap_fraction(box, other) > max_overlap for other in survivors):
+            dropped.add(i)
+        else:
+            survivors.append(box)
+    return [p for i, p in enumerate(predictions) if i not in dropped], len(dropped)
+
+
 def _box(pred):
     """(x1, y1, x2, y2) for a prediction, or None when geometry is missing or not numeric."""
     try:
@@ -637,12 +673,19 @@ class MissingApiKey(RuntimeError):
     """ROBOFLOW_API_KEY is not configured."""
 
 
-def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None, workflow_id=None):
+def detect_frame(
+    image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None, workflow_id=None, max_overlap=None
+):
     """Run detection and direction attribution on one frame (no HTTP request object).
 
-    Returns a dict: ``kept`` (predictions at or above ``min_confidence``, each tagged with
-    ``direction``), ``summary`` (per-direction counts, congestion labels and extents),
-    ``image_size`` and ``points`` (the scaled dividing line or None).
+    Returns a dict: ``kept`` (predictions at or above ``min_confidence`` that survive overlap
+    suppression, each tagged with ``direction``), ``summary`` (per-direction counts, congestion
+    labels and extents), ``image_size``, ``points`` (the scaled dividing line or None),
+    ``max_overlap`` (the suppression threshold applied, or None) and ``overlap_suppressed``
+    (boxes it removed).
+
+    ``max_overlap`` None means the model's default (``LOCAL_MAX_OVERLAP`` for the local model,
+    off for Roboflow workflows); a value of 1 or more turns suppression off.
 
     Raises InvalidImage for undecodable bytes (checked before any billed inference call),
     MissingApiKey when no key is configured, and requests/ValueError errors from the workflow.
@@ -661,9 +704,23 @@ def detect_frame(image_bytes, camera_id=DEFAULT_CAMERA_ID, min_confidence=None, 
     else:
         predictions = _extract_predictions(_run_workflow(image_bytes, workflow_id))
     kept = [p for p in predictions if p["confidence"] >= min_confidence]
+    if max_overlap is None:
+        max_overlap = LOCAL_MAX_OVERLAP if workflow_id == LOCAL_MODEL_ID else None
+    if max_overlap is not None and max_overlap >= 1:
+        max_overlap = None
+    suppressed = 0
+    if max_overlap is not None:
+        kept, suppressed = _suppress_overlaps(kept, max_overlap)
     points = _dividing_line(camera_id, image_size)
     summary = _summarize_directions(kept, points, image_size)
-    return {"kept": kept, "summary": summary, "image_size": image_size, "points": points}
+    return {
+        "kept": kept,
+        "summary": summary,
+        "image_size": image_size,
+        "points": points,
+        "max_overlap": max_overlap,
+        "overlap_suppressed": suppressed,
+    }
 
 
 def _param(body, args, name):
@@ -682,6 +739,19 @@ def _parse_confidence(value):
     except (TypeError, ValueError):
         return DEFAULT_CONFIDENCE
     return conf if math.isfinite(conf) else DEFAULT_CONFIDENCE
+
+
+def _parse_overlap(value):
+    """Request ``overlap``: a fraction in [0, 1]; missing or malformed means the model default."""
+    if value is None or value == "":
+        return None
+    try:
+        overlap = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(overlap) or overlap < 0:
+        return None
+    return min(overlap, 1.0)
 
 
 def _valid_date_time(value):
@@ -709,6 +779,7 @@ def detect(request):
     date_time = _param(body, args, "date_time")
     output_format = str(_param(body, args, "format") or "image").lower()
     min_confidence = _parse_confidence(_param(body, args, "confidence"))
+    max_overlap = _parse_overlap(_param(body, args, "overlap"))
     model = _param(body, args, "model")
     if model is None or model == "":
         workflow_id = ROBOFLOW_WORKFLOW_ID
@@ -753,7 +824,7 @@ def detect(request):
 
     # 3. Run the Roboflow workflow (or the in-container model) and attribute directions
     try:
-        result = detect_frame(image_bytes, camera_id, min_confidence, workflow_id)
+        result = detect_frame(image_bytes, camera_id, min_confidence, workflow_id, max_overlap)
     except LocalModelUnavailable as exc:
         logger.error("local model could not be loaded: %s", exc)
         return _error("Local model is not available", 503)
@@ -775,6 +846,8 @@ def detect(request):
             "date_time": date_time,
             "source_image": image_url,
             "min_confidence": min_confidence,
+            "max_overlap": result["max_overlap"],
+            "overlap_suppressed": result["overlap_suppressed"],
             "workflow_id": workflow_id,
             "vehicle_count": len(kept),
             "predictions": kept,
