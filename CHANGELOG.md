@@ -2,6 +2,15 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-10
+
+- Follow-up to the model updates. No code or GCP changes.
+  - The FCM + MLP "within 15 minutes" line now says it is the Maps series, not the crossing-time target.
+  - The `fcm_mlp` + `xgb[maps]` mean is labelled exploratory and proposed as claim C9 for Run B.
+  - `evaluation.md` records Roboflow v6 as the live detector, the count-band congestion labels as a heuristic, and TimesFM as an exception to local-only evaluation.
+  - `inventory.md` has a 10 Oct read-only update.
+  - [docs/plan-next-steps.md](docs/plan-next-steps.md) plans the work to 19 Oct and after.
+
 ## 2026-10-08
 
 - `swiftbackend` builds from `camdetect/Dockerfile` (`python:3.11-slim`, the Test step's image, then `functions-framework --target=detect`) instead of buildpacks. Build d949348e, the first run of `camdetect/cloudbuild.yaml` after trigger `76bbca35` was switched to it in the Console, spent most of its 60+ s Buildpack step pulling builder `google-22` and lifecycle `0.21.18`, neither cached on the build machine, for about 8 s of build work. Python stays 3.11. Merging starts a build.
