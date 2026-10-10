@@ -13,7 +13,14 @@ One row per frame: capture time (SGT) and integer counts per direction, written 
 or, with ``--bq-table``, to a BigQuery table that is created with ``BQ_SCHEMA`` if it is missing
 (DDL: ``sql/bigquery/cam2701/local_counts.sql``). Rows are saved as frames are scored, so an
 interrupted run resumes where it stopped (frames already in the output are skipped). A frame that
-fails to download or decode is reported and left out, so a re-run retries it.
+fails to download is reported and left out, so a re-run retries it. A stored JPEG that cannot be
+decoded (truncated upload) is logged as BROKEN and skipped: a retry cannot fix it.
+
+With ``--gcs-out gs://BUCKET/FOLDER`` each frame is instead saved as an annotated JPEG, drawn by the
+service's own ``format=directional`` code (the image the front end shows: boxes coloured by
+direction, the dividing line, and the SG to MY / MY to SG count banner), at
+``FOLDER/camera_id=<id>/month=<YYYY-MM>/<source file name>``. The counts ride along as object
+metadata. Frames whose image already exists there are skipped.
 
 On a Cloud Run Job with N tasks, task i scores every N-th remaining frame
 (``CLOUD_RUN_TASK_INDEX`` / ``CLOUD_RUN_TASK_COUNT``), so the tasks split the work between them.
@@ -23,6 +30,7 @@ On a Cloud Run Job with N tasks, task i scores every N-th remaining frame
     python backfill_local_counts.py --dry-run      # list and parse names, no inference
     python backfill_local_counts.py                # 6 Sep - 4 Oct 2026, camera 2701, CSV
     python backfill_local_counts.py --bq-table swiftborder.cam2701.local_counts
+    python backfill_local_counts.py --gcs-out gs://sg-lta-traffic-cameras/processed/local/
 
 Or score a local copy (``gsutil -m cp -r gs://sg-lta-traffic-cameras/camera_id=2701 frames/``)
 with ``--local-dir frames``. The object names must carry the capture time; ``--dry-run`` prints a
@@ -35,6 +43,7 @@ import argparse
 import concurrent.futures
 import csv
 import datetime as dt
+import io
 import os
 import re
 import sys
@@ -198,12 +207,16 @@ def plan_frames(source, camera_id, start, end, name_tz=SGT):
 
 class CsvSink:
     batch_size = 1  # one row per write: a killed run loses at most the frame in flight
+    wants_image = False
 
     def __init__(self, path):
         self.path = Path(path)
 
     def __str__(self):
         return str(self.path)
+
+    def key(self, uri, name):
+        return uri
 
     def done(self, camera_id):
         if not self.path.exists():
@@ -224,6 +237,8 @@ class CsvSink:
 class BigQuerySink:
     """Appends rows with load jobs (free, no streaming buffer), creating the table if missing."""
 
+    wants_image = False
+
     def __init__(self, table_id, batch_size=100, client=None):
         from google.cloud import bigquery  # imported here so CSV runs need no BigQuery package
 
@@ -239,6 +254,9 @@ class BigQuerySink:
 
     def __str__(self):
         return self.table_id
+
+    def key(self, uri, name):
+        return uri
 
     def done(self, camera_id):
         job = self.client.query(
@@ -256,6 +274,56 @@ class BigQuerySink:
             source_format="NEWLINE_DELIMITED_JSON",
         )
         self.client.load_table_from_json(rows, self.table_id, job_config=config).result()
+
+
+class GcsImageSink:
+    """Uploads one annotated JPEG per frame, at the source frame's path under ``gs://BUCKET/FOLDER``."""
+
+    batch_size = 1
+    wants_image = True
+    METADATA = ("frame_datetime_sgt", "sg_my", "my_sg", "unknown", "total", "model_id",
+                "min_confidence", "max_overlap", "source")
+
+    def __init__(self, uri, client=None):
+        match = re.fullmatch(r"gs://([^/]+)/?(.*)", uri)
+        if not match:
+            raise ValueError(f"--gcs-out must look like gs://BUCKET/FOLDER, got {uri!r}")
+        if client is None:
+            from google.cloud import storage
+
+            client = storage.Client()
+        self.client = client
+        self.bucket = client.bucket(match.group(1))
+        folder = match.group(2).strip("/")
+        self.prefix = folder + "/" if folder else ""
+
+    def __str__(self):
+        return f"gs://{self.bucket.name}/{self.prefix}"
+
+    def key(self, uri, name):
+        return name  # the source object name, e.g. camera_id=2701/month=2026-09/2701_...jpg
+
+    def done(self, camera_id):
+        start = len(self.prefix)
+        blobs = self.client.list_blobs(self.bucket, prefix=f"{self.prefix}camera_id={camera_id}/")
+        return {blob.name[start:] for blob in blobs}
+
+    def write(self, rows):
+        for row in rows:
+            blob = self.bucket.blob(self.prefix + row["object_name"])
+            blob.metadata = {k: "" if row[k] is None else str(row[k]) for k in self.METADATA}
+            blob.upload_from_string(row["annotated_jpeg"], content_type="image/jpeg")
+
+
+def render_directional(image_bytes, result):
+    """The service's ``format=directional`` JPEG for this frame (same drawing code and quality)."""
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    camdetect._draw_directional(image, result["kept"], result["points"], result["summary"])
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=95)
+    return out.getvalue()
 
 
 def task_shard(todo, environ=None):
@@ -281,14 +349,16 @@ def make_row(camera_id, stamp, counts, source_uri, scored_at):
 
 
 def score(image_bytes, camera_id):
+    """(counts, detect_frame result) for one frame."""
     result = camdetect.detect_frame(image_bytes, camera_id, workflow_id=camdetect.LOCAL_MODEL_ID)
     summary = result["summary"]
-    return {
+    counts = {
         "sg_my": int(summary["sg_my"]["count"]),
         "my_sg": int(summary["my_sg"]["count"]),
         "unknown": int(summary["unknown"]["count"]),
         "total": len(result["kept"]),
     }
+    return counts, result
 
 
 def report_plan(frames, unparsed, duplicates, start, end):
@@ -314,8 +384,10 @@ def main(argv=None):
     parser.add_argument("--end", default=DEFAULT_END, help="last SGT date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--bucket", default=DEFAULT_BUCKET)
     parser.add_argument("--local-dir", help="score a local copy of the bucket tree instead of GCS")
-    parser.add_argument("--out", type=Path, help="CSV path (default camdetect/backfill/...)")
-    parser.add_argument("--bq-table", help="write to BigQuery PROJECT.DATASET.TABLE instead of a CSV")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--out", type=Path, help="CSV path (default camdetect/backfill/...)")
+    output.add_argument("--bq-table", help="write to BigQuery PROJECT.DATASET.TABLE instead of a CSV")
+    output.add_argument("--gcs-out", help="save annotated JPEGs under gs://BUCKET/FOLDER instead of a CSV")
     parser.add_argument(
         "--name-tz",
         default="Asia/Singapore",
@@ -338,9 +410,16 @@ def main(argv=None):
         print("nothing to score", file=sys.stderr)
         return 1
 
-    sink = BigQuerySink(args.bq_table) if args.bq_table else CsvSink(args.out or _default_out(start, end))
+    if args.gcs_out:
+        sink = GcsImageSink(args.gcs_out)
+    elif args.bq_table:
+        sink = BigQuerySink(args.bq_table)
+    else:
+        sink = CsvSink(args.out or _default_out(start, end))
+    key = getattr(sink, "key", lambda uri, name: uri)
+    wants_image = getattr(sink, "wants_image", False)
     done = sink.done(args.camera)
-    todo = [(stamp, name) for stamp, name in frames if source.uri(name) not in done]
+    todo = [(stamp, name) for stamp, name in frames if key(source.uri(name), name) not in done]
     print(f"{len(frames) - len(todo)} already in {sink}; {len(todo)} to score")
     todo, task_index, task_count = task_shard(todo)
     if task_count > 1:
@@ -352,7 +431,7 @@ def main(argv=None):
         f"overlap {camdetect.LOCAL_MAX_OVERLAP}, size ratio {camdetect.LOCAL_SIZE_RATIO}"
     )
 
-    failures = 0
+    failures = broken = 0
     pending = []
     began = time.monotonic()
     try:
@@ -362,7 +441,14 @@ def main(argv=None):
             for i, ((stamp, name), (image_bytes, error)) in enumerate(zip(todo, downloads), 1):
                 if error is None:
                     try:
-                        counts = score(image_bytes, args.camera)
+                        counts, result = score(image_bytes, args.camera)
+                        annotated = render_directional(image_bytes, result) if wants_image else None
+                    except camdetect.InvalidImage as exc:
+                        # The stored JPEG itself is damaged (e.g. a truncated upload); retrying
+                        # cannot fix it, so it is logged and does not fail the task.
+                        broken += 1
+                        print(f"BROKEN {name}: {exc} (skipped; the stored image is damaged)", file=sys.stderr)
+                        continue
                     except Exception as exc:  # noqa: BLE001 - one bad frame must not stop the month
                         error = exc
                 if error is not None:
@@ -370,7 +456,10 @@ def main(argv=None):
                     print(f"FAILED {name}: {type(error).__name__}: {error}", file=sys.stderr)
                     continue
                 now = dt.datetime.now(dt.timezone.utc)
-                pending.append(make_row(args.camera, stamp, counts, source.uri(name), now))
+                row = make_row(args.camera, stamp, counts, source.uri(name), now)
+                if wants_image:
+                    row.update(object_name=name, annotated_jpeg=annotated)
+                pending.append(row)
                 if len(pending) >= sink.batch_size:
                     sink.write(pending)
                     pending = []
@@ -382,7 +471,8 @@ def main(argv=None):
         if pending:
             sink.write(pending)  # keep what was scored even if the run is stopping on an error
 
-    print(f"done: {len(todo) - failures} scored, {failures} failed, output {sink}")
+    scored = len(todo) - failures - broken
+    print(f"done: {scored} scored, {failures} failed, {broken} broken source images skipped, output {sink}")
     return 1 if failures else 0
 
 

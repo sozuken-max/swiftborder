@@ -212,6 +212,21 @@ gcloud run jobs execute cam2701-local-backfill --region asia-southeast1 --projec
 gcloud run jobs execute cam2701-local-backfill --region asia-southeast1 --project swiftborder --wait
 ```
 
+**Annotated images for checking the counts.** `--gcs-out gs://BUCKET/FOLDER` saves each frame as
+the service's `format=directional` JPEG instead of a row: the same drawing code the front end
+shows (boxes coloured SG-MY red / MY-SG blue, the white dividing line, and the count banner), at
+`FOLDER/camera_id=2701/month=YYYY-MM/<source file name>`, with `sg_my`, `my_sg`, `unknown`,
+`total`, `frame_datetime_sgt` and `model_id` as object metadata. Frames already in the folder are
+skipped. On the 10 Oct 08:00 frame the counts (25 / 78) and boxes matched the live
+`?model=local&format=directional` response. About 300-400 KB per image, so about 1.5 GB for the
+window. The job's service account needs Storage Object Creator on the output bucket (and Viewer
+to list what is already there). Re-run the same job with the arguments overridden:
+`--gcs-out=gs://sg-lta-traffic-cameras/processed/local`.
+
+A stored JPEG that cannot be decoded (two truncated uploads in this window, e.g.
+`2701_20260914T155546.jpg`, 32 KB against about 110 KB) is logged as `BROKEN` and skipped without
+failing the task; a download error is still `FAILED` and fails it, so a re-run retries it.
+
 About 0.5 s per frame on 4 vCPU, so ~35 minutes for the window on one task, or about 9 on four.
 Run it again if any task logged `FAILED` frames: only the missing frames are scored. On three live
 frames (9-10 Oct) the script's totals equal the `local` totals in the confidence table above (93,
