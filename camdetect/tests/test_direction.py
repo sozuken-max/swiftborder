@@ -103,6 +103,7 @@ def test_2702_line_splits_left_and_right_of_the_elevated_roads():
     into_sg += [(623, 633)]                                                 # queued just below the junction
     to_my = [(1344, 640), (1300, 1000), (775, 350), (1010, 400)]            # Causeway road, flyover
     to_my += [(542, 527), (657, 562), (715, 545), (798, 564)]                # the junction under the flyover
+    to_my += [(880, 640), (920, 700)]                                        # slip lane right of the island
     for x, y in into_sg:
         assert main._classify_direction({"x": x, "y": y - 10, "width": 20, "height": 20}, points) == main.DIR_MY_SG
     for x, y in to_my:

@@ -85,13 +85,15 @@ DEFAULT_DIVIDING_LINES = {
     # the junction under it and the Causeway road) leads to the Singapore checkpoint and Malaysia.
     # The bend at [470, 300] keeps that flyover on the right where it crosses to the left; from
     # [505, 585] to [870, 600] the line runs along the junction's bottom edge, just below its stop
-    # line, so cars in the junction are SG-MY and cars queued below it are MY-SG. A steep line is
+    # line, so cars in the junction are SG-MY and cars queued below it are MY-SG. From [775, 596]
+    # to [937, 740] it follows the traffic island (traced by the team), so the slip lane right of
+    # the island, from the junction to the Causeway road, is SG-MY. A steep line is
     # still y over ascending x: "above" it means right of it. The end points run off the frame
     # so the line spans the full width. Only SG-MY is tracked: MY-SG here is free traffic past
     # the last checkpoint.
     "2702": {
         "reference_size": [1920, 1080],
-        "points": [[0, -3010], [430, 0], [470, 300], [505, 585], [870, 600], [1090, 1080], [1920, 4500]],
+        "points": [[0, -3010], [430, 0], [470, 300], [505, 585], [775, 596], [830, 654], [869, 693], [911, 719], [937, 740], [1090, 1080], [1920, 4500]],
         "tracked": ["SG-MY"],
     },
 }
