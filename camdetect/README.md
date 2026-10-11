@@ -165,7 +165,7 @@ in the same commit, or add the path to the trigger.
 
 [`backfill_local_counts.py`](backfill_local_counts.py) scores the frames already stored in
 `gs://sg-lta-traffic-cameras/camera_id=2701/month=YYYY-MM/` with `detect_frame(...,
-workflow_id=LOCAL_MODEL_ID)`. That is the code behind the front end's "Local model" pane: same
+workflow_id=LOCAL_MODEL_ID)`. That is the code behind the front end's AI Vehicle Detection panes: same
 ONNX model, confidence, overlap dedupe and SG-MY / MY-SG dividing line. No Roboflow call, no cost.
 Default window: 6 Sep to 4 Oct 2026 inclusive, SGT dates (the `month=2026-09` and `month=2026-10`
 partitions are both listed). A dry run on 10 Oct found 4,054 frames in that window.
