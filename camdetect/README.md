@@ -23,6 +23,7 @@ is missing, `null` or an empty string (so `confidence: 0` is honoured, and
 | `format` | `image` | `image`, `directional` or `json` |
 | `overlap` | `0.6` for `local`, off for `v4`/`v6` | mutual-overlap cut in [0, 1]: boxes are merged when each covers more than this share of the other; `1` turns it off; malformed values fall back to the model default (see below) |
 | `model` | `ROBOFLOW_WORKFLOW_ID` | `v4` or `v6` (Roboflow, allowlist `WORKFLOW_VERSIONS`), or `local` (in-container model, below); case-insensitive; anything else is 400 before any upstream call |
+| `line` | off (`DRAW_DIVIDING_LINE`) | `1` / `true` / `yes` / `on` draws the dividing line on the `directional` image; `0` / `false` / `no` / `off` hides it; anything else uses the service default |
 
 ## In-container model (`model=local`)
 
@@ -301,7 +302,9 @@ Limits of this proxy, stated so reports do not over-read it:
 `format=image` (default) — unchanged: JPEG with green boxes and a
 `Vehicles: N` banner.
 
-`format=directional` — same frame with the dividing line drawn in white, 1 px
+`format=directional` — same frame with the dividing line drawn in white (only
+with `line=1` or `DRAW_DIVIDING_LINE=1`; hidden by default since 11 Oct 2026, so
+front-end users do not see the internal divider), 1 px
 boxes coloured by direction (SG-MY red, MY-SG blue, Unknown grey) with no
 per-box labels, and a top-left banner whose blocks are filled with the same
 colours and carry each direction's count and congestion level (plus an
@@ -400,6 +403,7 @@ LOCAL_MODEL_ID        default local:yolo26s-v6-boxfix (reported as workflow_id)
 LOCAL_MAX_OVERLAP     default 0.6, overlap suppression for model=local (1 = off)
 LOCAL_SIZE_RATIO      default 3, a box this many times bigger never removes the smaller one
 LOCAL_DEFAULT_CONFIDENCE  default 0.2, minimum confidence for model=local
+DRAW_DIVIDING_LINE    default off; 1 draws the divider on format=directional (a request's line= wins)
 ```
 
 A malformed `DEFAULT_CONFIDENCE` or `DIVIDING_LINES` logs a warning and falls
