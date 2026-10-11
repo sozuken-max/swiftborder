@@ -252,8 +252,20 @@ per-camera polyline separating the two carriageways:
 These labels are **not** the BigQuery congestion-view names. This service emits
 `SG-MY` and `MY-SG`. `cam2701.v_congestion_index_10min` maps stored values
 `to_JB` / `to_Woodlands` onto `SG_TO_MY` / `MY_TO_SG`. A join has to translate
-them. Camera **2702** has no dividing line here, so every detection on that
-camera is `Unknown`.
+them.
+
+Camera **2702** got a line on 11 Oct 2026, drawn by eye on one live frame and
+not scored against labels. It runs down between the two elevated roads. Left of
+it are the BKE viaduct and the at-grade roads beside it: traffic into Singapore
+that is already past the checkpoint (`MY-SG`). Right of it are the flyover that
+crosses the top of the frame and the Causeway road, which lead to the Singapore
+checkpoint and Malaysia (`SG-MY`). The line is steep, so "above" it means right
+of it. Only `SG-MY` is tracked on 2702 (`"tracked": ["SG-MY"]`): the
+`directional` image draws no `MY-SG` boxes and no `MY-SG` banner block. The
+JSON and headers still report both counts, so `sg_my + my_sg + unknown` still
+equals `vehicle_count`. On that frame the local model found 1 of about 8 cars
+queued on the flyover and no motorcycles, so 2702 `SG-MY` counts are likely to
+read low.
 
 These are **occupancy** counts — vehicles currently visible in each
 carriageway, i.e. queue depth. They are not flow counts: data.gov.sg refreshes
@@ -326,6 +338,7 @@ X-Workflow-Id            Roboflow workflow that scored the frame
     "my_sg": { "count": 4, "congestion": "Half Way" },
     "unknown": { "count": 2 }
   },
+  "tracked_directions": ["SG-MY", "MY-SG"],
   "dividing_line": [[0, 1106], "..."]
 }
 ```
@@ -394,7 +407,9 @@ not read it, and no code in git writes to `swiftborder-frame-cache`.
 Points are pixels of a reference frame and are rescaled to whatever resolution
 the camera actually returns, so calibrate once against any frame and record the
 size you used. Points must be ordered by ascending x; a line that is not is
-ignored and every detection falls back to `Unknown`.
+ignored and every detection falls back to `Unknown`. Optional `tracked` (for
+example `["SG-MY"]`) limits which directions the `directional` image draws;
+it defaults to both.
 
 ```json
 {

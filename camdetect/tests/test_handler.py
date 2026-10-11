@@ -329,3 +329,15 @@ def test_directional_banner_is_the_colour_key():
 
     unknown = {**known, "x": 300, "direction": main.DIR_UNKNOWN}
     assert main.DIR_COLORS[main.DIR_UNKNOWN] in banner_colours([known, unknown])
+
+
+def test_untracked_direction_gets_no_box_and_no_banner_block():
+    image = Image.new("RGB", (1920, 1080), (40, 40, 40))
+    my_sg = {"x": 1000, "y": 500, "width": 200, "height": 100, "confidence": 0.9, "direction": main.DIR_MY_SG}
+    main._draw_directional(image, [my_sg], None, _summary_stub(), tracked=(main.DIR_SG_MY,))
+    x1, y1, _, _ = main._box(my_sg)
+    assert image.getpixel((x1 + 50, y1)) == (40, 40, 40)
+    strip = image.crop((0, 0, 1920, 20))
+    colours = {c for _, c in strip.getcolors(maxcolors=100000)}
+    assert main.DIR_COLORS[main.DIR_SG_MY] in colours
+    assert main.DIR_COLORS[main.DIR_MY_SG] not in colours

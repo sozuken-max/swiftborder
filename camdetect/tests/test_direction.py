@@ -96,8 +96,28 @@ def test_2701_bottom_left_corner_is_sg_my():
         assert main._classify_direction(pred, points) == main.DIR_SG_MY
 
 
+def test_2702_line_splits_left_and_right_of_the_elevated_roads():
+    points = main._dividing_line("2702", FRAME)
+    # Foot points read off the 11 Oct 2026 12:45 frame.
+    into_sg = [(380, 880), (800, 756), (841, 948), (542, 527), (403, 320)]  # BKE viaduct, at-grade roads
+    to_my = [(1344, 640), (1300, 1000), (775, 350), (1010, 400)]            # Causeway road, flyover
+    for x, y in into_sg:
+        assert main._classify_direction({"x": x, "y": y - 10, "width": 20, "height": 20}, points) == main.DIR_MY_SG
+    for x, y in to_my:
+        assert main._classify_direction({"x": x, "y": y - 10, "width": 20, "height": 20}, points) == main.DIR_SG_MY
+    # The line spans the full frame width, so nothing falls outside it.
+    assert main._classify_direction({"x": 0, "y": 500, "width": 20, "height": 20}, points) != main.DIR_UNKNOWN
+    assert main._classify_direction({"x": 1920, "y": 500, "width": 20, "height": 20}, points) != main.DIR_UNKNOWN
+
+
+def test_tracked_directions_default_to_both():
+    assert main._tracked_directions("2701") == (main.DIR_SG_MY, main.DIR_MY_SG)
+    assert main._tracked_directions("9999") == (main.DIR_SG_MY, main.DIR_MY_SG)
+    assert main._tracked_directions("2702") == (main.DIR_SG_MY,)
+
+
 def test_dividing_line_rejects_unknown_camera_and_unsorted_x():
-    assert main._dividing_line("2702", FRAME) is None
+    assert main._dividing_line("9999", FRAME) is None
     assert main._dividing_line("2701", None) is None
     unsorted = {
         "2701": {
