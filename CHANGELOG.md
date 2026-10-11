@@ -4,6 +4,8 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-11
 
+- `camdetect`: the `format=directional` image no longer draws the white dividing line by default, on any camera, so front-end users do not see the internal divider. `line=1` on a request, or `DRAW_DIVIDING_LINE=1` on the service, draws it again; a request's `line=` wins. Boxes, colours, banner, counts and headers are unchanged, and JSON still returns `dividing_line`. `backfill_local_counts.py --gcs-out` images still draw the line (they exist to check the split). Merging redeploys `swiftbackend`.
+
 - `hosting/`: the AI Vehicle Detection card now shows CAM 2701 and then CAM 2702, both scored with `model=local` at the same requested `date_time`. The Roboflow `v6` pane is gone, so the page makes no billed Roboflow call. `v4` / `v6` stay on `swiftbackend`. The CAM 2702 pane shows only SG → JB, with a note that JB → SG there is past the checkpoint.
 - `camdetect`: CAM 2702 has a dividing line, drawn by eye on one 11 Oct frame. It runs down between the two elevated roads: the left side (BKE viaduct and the at-grade road below the junction) is `MY-SG`, and the right side (the flyover, the junction under it and the Causeway road) is `SG-MY`. A new optional per-camera `tracked` key in the line config is set to `["SG-MY"]` for 2702, so its `directional` image draws only SG-MY boxes and the SG-MY banner block. JSON adds `tracked_directions`. Headers and counts are unchanged. The line is not scored against labels, and on that frame the local model found 1 of about 8 cars queued on the flyover. Merging redeploys `swiftbackend`.
 

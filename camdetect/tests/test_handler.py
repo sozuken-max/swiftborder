@@ -341,3 +341,33 @@ def test_untracked_direction_gets_no_box_and_no_banner_block():
     colours = {c for _, c in strip.getcolors(maxcolors=100000)}
     assert main.DIR_COLORS[main.DIR_SG_MY] in colours
     assert main.DIR_COLORS[main.DIR_MY_SG] not in colours
+
+
+def _line_pixel(body):
+    # (1074, 779) is a vertex of the 2701 line; the mocked boxes and the banner are far from it.
+    return Image.open(io.BytesIO(body)).convert("RGB").getpixel((1074, 779))
+
+
+@pytest.mark.parametrize(
+    "query, drawn",
+    [({}, False), ({"line": "1"}, True), ({"line": "true"}, True), ({"line": "0"}, False), ({"line": "x"}, False)],
+)
+def test_dividing_line_is_hidden_unless_asked(upstream, query, drawn):
+    body, status, _ = main.detect(_request(query={"format": "directional", **query}))
+    assert status == 200
+    assert (min(_line_pixel(body)) > 200) is drawn
+
+
+def test_draw_dividing_line_env_default_and_request_override(upstream, monkeypatch):
+    monkeypatch.setattr(main, "DRAW_DIVIDING_LINE", True)
+    body, _, _ = main.detect(_request(query={"format": "directional"}))
+    assert min(_line_pixel(body)) > 200
+    body, _, _ = main.detect(_request(query={"format": "directional", "line": "off"}))
+    assert min(_line_pixel(body)) < 200
+
+
+def test_flag_parsing():
+    assert main._flag("YES", False) is True
+    assert main._flag(" off ", True) is False
+    assert main._flag(None, True) is True
+    assert main._flag("maybe", False) is False

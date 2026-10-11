@@ -117,6 +117,24 @@ def _load_dividing_lines():
 
 DIVIDING_LINES = _load_dividing_lines()
 
+_TRUE_WORDS = {"1", "true", "yes", "on"}
+_FALSE_WORDS = {"0", "false", "no", "off"}
+
+
+def _flag(value, default):
+    """A yes/no request or env value; missing or unrecognised means ``default``."""
+    word = str(value).strip().lower() if value is not None else ""
+    if word in _TRUE_WORDS:
+        return True
+    if word in _FALSE_WORDS:
+        return False
+    return default
+
+
+# The divider is internal logic, so the directional image leaves it out unless asked:
+# DRAW_DIVIDING_LINE=1 on the service, or ``line=1`` on a request (which wins either way).
+DRAW_DIVIDING_LINE = _flag(os.environ.get("DRAW_DIVIDING_LINE"), False)
+
 
 def _tracked_directions(camera_id):
     """Directions the camera's image draws (``tracked`` in its line config; both by default)."""
@@ -700,16 +718,17 @@ def _draw_direction_banner(draw, image, segments):
         x += w
 
 
-def _draw_directional(image, predictions, points, summary, tracked=(DIR_SG_MY, DIR_MY_SG)):
+def _draw_directional(image, predictions, points, summary, tracked=(DIR_SG_MY, DIR_MY_SG), draw_line=True):
     """Same frame: boxes outlined 1 px in the direction colour, the divider drawn in, and a banner.
 
     Boxes carry no per-box labels (in heavy traffic they hid the vehicles). The banner's blocks
     are filled with the same colours, so it is both the count and the colour key. A direction not
     in ``tracked`` gets no boxes and no banner block; its count still rides on the headers.
+    ``draw_line=False`` leaves the divider out (the HTTP handler's default, see DRAW_DIVIDING_LINE).
     """
     draw = ImageDraw.Draw(image)
 
-    if points:
+    if points and draw_line:
         draw.line(points, fill=(255, 255, 255), width=max(3, image.width // 384))
 
     unknown = 0
@@ -934,7 +953,8 @@ def detect(request):
     # 5. Draw the boxes on the full-resolution frame and return it
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     if output_format == "directional":
-        _draw_directional(image, kept, points, summary, _tracked_directions(camera_id))
+        draw_line = _flag(_param(body, args, "line"), DRAW_DIVIDING_LINE)
+        _draw_directional(image, kept, points, summary, _tracked_directions(camera_id), draw_line)
     else:
         _draw_boxes(image, kept)
 
