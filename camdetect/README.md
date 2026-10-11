@@ -260,8 +260,8 @@ it are the BKE viaduct and the at-grade road below the junction: traffic into
 Singapore that is already past the checkpoint (`MY-SG`). Right of it are the
 flyover that crosses the top of the frame, the junction under it and the
 Causeway road, which lead to the Singapore checkpoint and Malaysia (`SG-MY`).
-The line runs along the junction's bottom edge, so cars waiting in the junction
-count as `SG-MY`. The line is steep, so "above" it means right
+The line runs along the junction's bottom edge, just below its stop line, so
+cars in the junction count as `SG-MY` and cars queued below it as `MY-SG`. The line is steep, so "above" it means right
 of it. Only `SG-MY` is tracked on 2702 (`"tracked": ["SG-MY"]`): the
 `directional` image draws no `MY-SG` boxes and no `MY-SG` banner block. The
 JSON and headers still report both counts, so `sg_my + my_sg + unknown` still
