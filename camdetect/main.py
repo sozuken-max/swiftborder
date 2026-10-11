@@ -81,15 +81,17 @@ DEFAULT_DIVIDING_LINES = {
     },
     # CAM 2702 (11 Oct 2026, by eye on one live frame): the line runs down between the two elevated
     # roads. Left of it (the BKE viaduct and the at-grade roads beside it) is traffic into
-    # Singapore, past the checkpoint; right of it (the flyover that crosses the top of the frame
-    # and the Causeway road) leads to the Singapore checkpoint and Malaysia. The bend at
-    # [470, 300] keeps that flyover on the right where it crosses to the left. A steep line is
+    # Singapore, past the checkpoint; right of it (the flyover that crosses the top of the frame,
+    # the junction under it and the Causeway road) leads to the Singapore checkpoint and Malaysia.
+    # The bend at [470, 300] keeps that flyover on the right where it crosses to the left; from
+    # [505, 640] to [870, 655] the line runs along the junction's bottom edge, so cars in the
+    # junction are SG-MY and the road below it is MY-SG. A steep line is
     # still y over ascending x: "above" it means right of it. The end points run off the frame
     # so the line spans the full width. Only SG-MY is tracked: MY-SG here is free traffic past
     # the last checkpoint.
     "2702": {
         "reference_size": [1920, 1080],
-        "points": [[0, -3010], [430, 0], [470, 300], [700, 480], [880, 640], [1090, 1080], [1920, 4500]],
+        "points": [[0, -3010], [430, 0], [470, 300], [505, 640], [870, 655], [1090, 1080], [1920, 4500]],
         "tracked": ["SG-MY"],
     },
 }

@@ -98,9 +98,10 @@ def test_2701_bottom_left_corner_is_sg_my():
 
 def test_2702_line_splits_left_and_right_of_the_elevated_roads():
     points = main._dividing_line("2702", FRAME)
-    # Foot points read off the 11 Oct 2026 12:45 frame.
-    into_sg = [(380, 880), (800, 756), (841, 948), (542, 527), (403, 320)]  # BKE viaduct, at-grade roads
+    # Foot points read off the 11 Oct 2026 12:45 and 13:00 frames.
+    into_sg = [(380, 880), (800, 756), (841, 948), (403, 320), (775, 720)]  # BKE viaduct, road below the junction
     to_my = [(1344, 640), (1300, 1000), (775, 350), (1010, 400)]            # Causeway road, flyover
+    to_my += [(542, 527), (620, 630), (720, 530), (850, 600)]                # the junction under the flyover
     for x, y in into_sg:
         assert main._classify_direction({"x": x, "y": y - 10, "width": 20, "height": 20}, points) == main.DIR_MY_SG
     for x, y in to_my:
