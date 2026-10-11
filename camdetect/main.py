@@ -78,7 +78,24 @@ DEFAULT_DIVIDING_LINES = {
         # leaves the frame right of x=176, so a vehicle in the bottom-left corner is on the SG-MY
         # road. [1920, 313]: cars cut off at the right edge (x 1908-1920) were Unknown.
         "points": [[0, 1106], [176, 1074], [500, 1015], [764, 929], [1074, 779], [1913, 317], [1920, 313]],
-    }
+    },
+    # CAM 2702 (11 Oct 2026, by eye on one live frame): the line runs down between the two elevated
+    # roads. Left of it (the BKE viaduct and the at-grade roads beside it) is traffic into
+    # Singapore, past the checkpoint; right of it (the flyover that crosses the top of the frame,
+    # the junction under it and the Causeway road) leads to the Singapore checkpoint and Malaysia.
+    # The bend at [470, 300] keeps that flyover on the right where it crosses to the left; from
+    # [505, 585] to [870, 600] the line runs along the junction's bottom edge, just below its stop
+    # line, so cars in the junction are SG-MY and cars queued below it are MY-SG. From [775, 596]
+    # to [937, 740] it follows the traffic island (traced by the team), so the slip lane right of
+    # the island, from the junction to the Causeway road, is SG-MY. A steep line is
+    # still y over ascending x: "above" it means right of it. The end points run off the frame
+    # so the line spans the full width. Only SG-MY is tracked: MY-SG here is free traffic past
+    # the last checkpoint.
+    "2702": {
+        "reference_size": [1920, 1080],
+        "points": [[0, -3010], [430, 0], [470, 300], [505, 585], [775, 596], [830, 654], [869, 693], [911, 719], [937, 740], [1090, 1080], [1920, 4500]],
+        "tracked": ["SG-MY"],
+    },
 }
 
 
@@ -99,6 +116,15 @@ def _load_dividing_lines():
 
 
 DIVIDING_LINES = _load_dividing_lines()
+
+
+def _tracked_directions(camera_id):
+    """Directions the camera's image draws (``tracked`` in its line config; both by default)."""
+    config = DIVIDING_LINES.get(str(camera_id))
+    tracked = config.get("tracked") if isinstance(config, dict) else None
+    if not isinstance(tracked, list):
+        return (DIR_SG_MY, DIR_MY_SG)
+    return tuple(d for d in (DIR_SG_MY, DIR_MY_SG) if d in tracked)
 
 # Detections in a direction, and the label each band maps to. Ordered by
 # ascending threshold (count < threshold); the last entry is the fallback.
@@ -674,11 +700,12 @@ def _draw_direction_banner(draw, image, segments):
         x += w
 
 
-def _draw_directional(image, predictions, points, summary):
+def _draw_directional(image, predictions, points, summary, tracked=(DIR_SG_MY, DIR_MY_SG)):
     """Same frame: boxes outlined 1 px in the direction colour, the divider drawn in, and a banner.
 
     Boxes carry no per-box labels (in heavy traffic they hid the vehicles). The banner's blocks
-    are filled with the same colours, so it is both the count and the colour key.
+    are filled with the same colours, so it is both the count and the colour key. A direction not
+    in ``tracked`` gets no boxes and no banner block; its count still rides on the headers.
     """
     draw = ImageDraw.Draw(image)
 
@@ -690,6 +717,8 @@ def _draw_directional(image, predictions, points, summary):
         direction = pred.get("direction", DIR_UNKNOWN)
         if direction not in (DIR_SG_MY, DIR_MY_SG):
             unknown += 1
+        elif direction not in tracked:
+            continue
         color = DIR_COLORS.get(direction, DIR_COLORS[DIR_UNKNOWN])
         box = _box(pred)
         if box is None:
@@ -700,6 +729,7 @@ def _draw_directional(image, predictions, points, summary):
         (DIR_SG_MY, f"SG to MY: {summary['sg_my']['count']} ({summary['sg_my']['congestion']})"),
         (DIR_MY_SG, f"MY to SG: {summary['my_sg']['count']} ({summary['my_sg']['congestion']})"),
     ]
+    segments = [seg for seg in segments if seg[0] in tracked]
     if unknown:
         segments.append((DIR_UNKNOWN, f"Unattributed: {unknown}"))
     _draw_direction_banner(draw, image, segments)
@@ -893,6 +923,7 @@ def detect(request):
             "vehicle_count": len(kept),
             "predictions": kept,
             "directions": summary,
+            "tracked_directions": list(_tracked_directions(camera_id)),
             "dividing_line": [[round(x, 2), round(y, 2)] for x, y in points]
             if points
             else None,
@@ -903,7 +934,7 @@ def detect(request):
     # 5. Draw the boxes on the full-resolution frame and return it
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     if output_format == "directional":
-        _draw_directional(image, kept, points, summary)
+        _draw_directional(image, kept, points, summary, _tracked_directions(camera_id))
     else:
         _draw_boxes(image, kept)
 

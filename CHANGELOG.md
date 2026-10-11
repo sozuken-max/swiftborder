@@ -2,6 +2,11 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-11
+
+- `hosting/`: the AI Vehicle Detection card now shows CAM 2701 and then CAM 2702, both scored with `model=local` at the same requested `date_time`. The Roboflow `v6` pane is gone, so the page makes no billed Roboflow call. `v4` / `v6` stay on `swiftbackend`. The CAM 2702 pane shows only SG → JB, with a note that JB → SG there is past the checkpoint.
+- `camdetect`: CAM 2702 has a dividing line, drawn by eye on one 11 Oct frame. It runs down between the two elevated roads: the left side (BKE viaduct and the at-grade road below the junction) is `MY-SG`, and the right side (the flyover, the junction under it and the Causeway road) is `SG-MY`. A new optional per-camera `tracked` key in the line config is set to `["SG-MY"]` for 2702, so its `directional` image draws only SG-MY boxes and the SG-MY banner block. JSON adds `tracked_directions`. Headers and counts are unchanged. The line is not scored against labels, and on that frame the local model found 1 of about 8 cars queued on the flyover. Merging redeploys `swiftbackend`.
+
 ## 2026-10-10
 
 - `backfill_local_counts.py --gcs-out gs://BUCKET/FOLDER` saves each frame as the `format=directional` JPEG (the front end's boxes, dividing line and count banner) with the counts as object metadata, so the BigQuery counts can be checked by eye. Damaged source JPEGs are now logged as `BROKEN` and skipped without failing the task (two in the 6 Sep - 4 Oct window). On the 10 Oct 08:00 frame, counts and boxes matched live `swiftbackend` `model=local`. No `swiftbackend` deploy.

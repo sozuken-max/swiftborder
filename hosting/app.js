@@ -65,10 +65,7 @@ const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app
 // The detection service exposes a direction split for every frame it scores.
 // One request carries both: the annotated JPEG as the body, and the counts as
 // response headers — so reading the split costs no extra inference call.
-// Only cameras with a calibrated dividing line return a usable split; 2701 is
-// the only one today, so the panel is pinned to it explicitly rather than
-// relying on the service's default.
-const AI_DETECTION_CAMERA = '2701';
+// Only cameras with a calibrated dividing line return a usable split (2701 and 2702).
 
 // Service labels travel direction SG-MY / MY-SG; the UI says SG -> JB / JB -> SG.
 const AI_DIRECTIONS = [
@@ -114,35 +111,37 @@ function readDetectionSummary(headers) {
     return { supported, uncalibrated, dirs, total, unknown, attributed, frameTime: headers.get('X-Frame-Datetime') };
 }
 
-// Side-by-side comparison: the same LTA frame (pinned by date_time) scored by the Roboflow v6
-// workflow and the in-container YOLO26s (`model=local`). `model` is a backend allowlist
-// (camdetect WORKFLOW_VERSIONS plus `local`). The v6 pane is one billed Roboflow call; the local
-// pane runs on the backend's own CPU (unbilled, ~1-2 s slower on the first call after a cold start).
-const AI_MODELS = [
-    { key: 'v6', label: 'Model v6', note: 'Roboflow' },
-    { key: 'local', label: 'Local model', note: 'YOLO26s, in-house' }
+// One pane per camera, in display order, each scored by the in-container YOLO26s (`model=local`,
+// unbilled; the first call after a cold start is ~1-2 s slower). The Roboflow workflows (`v4`/`v6`)
+// stay on the backend but the page no longer calls them. `dirs` lists the AI_DIRECTIONS keys a
+// pane shows: on 2702, JB -> SG is past the last checkpoint (free traffic into Singapore), so only
+// SG -> JB is tracked there (camdetect `tracked`).
+const AI_DETECTION_MODEL = 'local';
+const AI_PANES = [
+    { key: '2701', camera: '2701', label: 'CAM 2701', dirs: ['sg', 'jb'] },
+    { key: '2702', camera: '2702', label: 'CAM 2702', dirs: ['sg'] }
 ];
 
-function ensureModelPanes() {
+function ensureDetectionPanes() {
     const wrap = document.getElementById('ai-compare');
     if (!wrap || wrap.dataset.ready) return wrap;
-    wrap.innerHTML = AI_MODELS.map(m => `
-        <div class="ai-pane" data-model="${m.key}">
+    wrap.innerHTML = AI_PANES.map(p => `
+        <div class="ai-pane" data-camera="${p.camera}">
             <div class="ai-pane-head">
-                <span class="ai-pane-title">${m.label} <span class="ai-pane-note">${m.note}</span></span>
-                <span class="ai-pane-count" id="ai-count-${m.key}"></span>
+                <span class="ai-pane-title">${p.label} <span class="ai-pane-note" id="ai-time-${p.key}"></span></span>
+                <span class="ai-pane-count" id="ai-count-${p.key}"></span>
             </div>
             <div class="ai-detection-body">
-                <p class="ai-detection-status" id="ai-status-${m.key}">Fetching AI detection result…</p>
-                <img id="ai-img-${m.key}" class="ai-detection-img" alt="${m.label} detections at the checkpoint" style="display:none;" />
+                <p class="ai-detection-status" id="ai-status-${p.key}">Fetching AI detection result…</p>
+                <img id="ai-img-${p.key}" class="ai-detection-img" alt="${p.label} vehicle detections" style="display:none;" />
             </div>
-            <div class="ai-dir-grid" id="ai-dirs-${m.key}"></div>
+            <div class="ai-dir-grid" id="ai-dirs-${p.key}"></div>
         </div>`).join('');
     wrap.dataset.ready = '1';
     return wrap;
 }
 
-function renderDetectionSummary(box, summary) {
+function renderDetectionSummary(box, summary, pane) {
     if (!box) return;
 
     if (!summary.supported) {
@@ -154,7 +153,7 @@ function renderDetectionSummary(box, summary) {
         return;
     }
 
-    const cards = summary.dirs.map(d => {
+    const cards = summary.dirs.filter(d => pane.dirs.includes(d.key)).map(d => {
         const count = d.count == null ? '—' : d.count;
         const level = d.congestion || 'No Data';
         const cls = AI_CONGESTION_CLASS[level] || 'warning';
@@ -173,7 +172,11 @@ function renderDetectionSummary(box, summary) {
         ? `<p class="ai-dir-note">${summary.unknown} of ${summary.total} not attributed to a direction (outside the counting zone).</p>`
         : '';
 
-    box.innerHTML = cards + unknownNote;
+    const untrackedNote = pane.dirs.includes('jb')
+        ? ''
+        : '<p class="ai-dir-note">JB → SG on this camera is past the checkpoint (free traffic into Singapore), so it is not tracked.</p>';
+
+    box.innerHTML = cards + unknownNote + untrackedNote;
 }
 
 // Singapore wall-clock "YYYY-MM-DDTHH:MM:SS", the backend's date_time format.
@@ -181,24 +184,26 @@ function sgtNowParam() {
     return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Singapore', hour12: false }).replace(' ', 'T');
 }
 
-async function fetchModelDetection(model, dateTime) {
-    const imgEl = document.getElementById(`ai-img-${model.key}`);
-    const statusEl = document.getElementById(`ai-status-${model.key}`);
-    const dirsEl = document.getElementById(`ai-dirs-${model.key}`);
-    const countEl = document.getElementById(`ai-count-${model.key}`);
+async function fetchPaneDetection(pane, dateTime) {
+    const imgEl = document.getElementById(`ai-img-${pane.key}`);
+    const statusEl = document.getElementById(`ai-status-${pane.key}`);
+    const dirsEl = document.getElementById(`ai-dirs-${pane.key}`);
+    const countEl = document.getElementById(`ai-count-${pane.key}`);
+    const timeEl = document.getElementById(`ai-time-${pane.key}`);
 
     if (statusEl) statusEl.textContent = 'Fetching AI detection result…';
     if (imgEl) imgEl.style.display = 'none';
     if (dirsEl) dirsEl.innerHTML = '';
     if (countEl) countEl.textContent = '';
+    if (timeEl) timeEl.textContent = '';
 
     try {
         // format=directional draws the dividing line and colours the boxes by
         // direction. The counts ride on the headers either way.
         const url = new URL(BACKEND_URL);
         url.searchParams.set('format', 'directional');
-        url.searchParams.set('camera_id', AI_DETECTION_CAMERA);
-        url.searchParams.set('model', model.key);
+        url.searchParams.set('camera_id', pane.camera);
+        url.searchParams.set('model', AI_DETECTION_MODEL);
         url.searchParams.set('date_time', dateTime);
 
         const res = await fetch(url);
@@ -219,12 +224,18 @@ async function fetchModelDetection(model, dateTime) {
         imgEl.dataset.objectUrl = objectUrl;
         imgEl.src = objectUrl;
 
-        renderDetectionSummary(dirsEl, summary);
-        if (countEl && summary.total != null) countEl.textContent = `${summary.total} vehicles`;
+        renderDetectionSummary(dirsEl, summary, pane);
+        // A pane that tracks one direction counts only that direction, matching the boxes drawn.
+        const shown = pane.dirs.length < AI_DIRECTIONS.length && summary.supported && !summary.uncalibrated
+            ? summary.dirs.filter(d => pane.dirs.includes(d.key)).reduce((sum, d) => sum + (d.count || 0), 0)
+            : summary.total;
+        if (countEl && shown != null) countEl.textContent = `${shown} vehicles`;
+        // Prefer the frame's own capture time over the client clock.
+        if (timeEl) timeEl.textContent = `${(summary.frameTime || dateTime).slice(11, 19)} SGT`;
         return summary;
     } catch (err) {
         if (statusEl) statusEl.textContent = `AI detection unavailable: ${err.message}`;
-        console.error(`Backend image fetch error (${model.key}):`, err);
+        console.error(`Backend image fetch error (CAM ${pane.camera}):`, err);
         throw err;
     }
 }
@@ -232,18 +243,15 @@ async function fetchModelDetection(model, dateTime) {
 async function fetchBackendMessage() {
     const bar = document.getElementById('backend-message');
     if (bar) bar.style.display = 'none';
-    if (!ensureModelPanes()) return;
+    if (!ensureDetectionPanes()) return;
 
     const timestampEl = document.getElementById('ai-detection-timestamp');
-    const dateTime = sgtNowParam(); // one timestamp, so both models score the same frame
-    const results = await Promise.allSettled(AI_MODELS.map(m => fetchModelDetection(m, dateTime)));
+    const dateTime = sgtNowParam(); // one timestamp, so both cameras show the same moment
+    const results = await Promise.allSettled(AI_PANES.map(p => fetchPaneDetection(p, dateTime)));
 
-    // Prefer the frame's own capture time over the client clock.
-    const ok = results.find(r => r.status === 'fulfilled');
     if (timestampEl) {
-        const frameTime = ok?.value?.frameTime;
-        const stamp = frameTime ? `${frameTime.slice(11, 19)} SGT` : `${dateTime.slice(11, 19)} SGT`;
-        timestampEl.textContent = ok ? `CAM ${AI_DETECTION_CAMERA} · Frame: ${stamp} · same frame for both models` : '';
+        const ok = results.some(r => r.status === 'fulfilled');
+        timestampEl.textContent = ok ? `Local model (YOLO26s) · requested ${dateTime.slice(11, 19)} SGT` : '';
     }
 }
 
