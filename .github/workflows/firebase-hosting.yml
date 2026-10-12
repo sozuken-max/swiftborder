@@ -1,0 +1,32 @@
+name: Deploy hosting to Firebase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hosting/**"
+      - "firebase.json"
+      - ".firebaserc"
+  pull_request:
+    paths:
+      - "hosting/**"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Fork PRs cannot read secrets; skip rather than fail.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SWIFTBORDER_92B45 }}
+          projectId: swiftborder-92b45
+          # main -> live channel; PRs -> temporary preview URL commented on the PR
+          channelId: ${{ github.event_name == 'pull_request' && '' || 'live' }}
