@@ -121,19 +121,11 @@ h4 {
     color: var(--primary);
 }
 
-.nav-academic-badge {
-    display: flex;
-    align-items: center;
-    padding: 0.3rem 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-}
-
+/* Official NUS-ISS logo, cropped to its artwork so the height is all logo */
 .nav-nus-logo {
-    height: 32px;
+    display: block;
+    height: 52px;
     width: auto;
-    object-fit: contain;
 }
 
 .app-main {
@@ -1195,16 +1187,10 @@ h4 {
     color: var(--text-muted);
 }
 
-.footer-logo-wrapper {
-    display: inline-block;
-    padding: 0.4rem 0.8rem;
-    background: #ffffff;
-    border-radius: 6px;
-}
-
 .footer-academic-logo {
     display: block;
-    height: 20px;
+    height: 44px;
+    width: auto;
 }
 
 .footer-links {
@@ -1246,6 +1232,7 @@ h4 {
 }
 
 @media (max-width: 1024px) {
+    .nav-nus-logo { height: 42px; }
     .footer-container {
         flex-direction: column;
         gap: 2.5rem;
@@ -1264,7 +1251,7 @@ h4 {
     .nav-logo { font-size: 1.15rem; }
     .logo-icon { font-size: 1.25rem; }
     .nav-links,
-    .nav-academic-badge { display: none; }
+    .nav-nus-logo { display: none; }
 
     .app-main { padding: 0.9rem 1rem 2rem; }
     .view .section-container > * + * { margin-top: 0.9rem; }
