@@ -188,24 +188,57 @@ h4 {
 }
 
 .refresh-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    background: none;
-    border: none;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    background: rgba(0, 242, 254, 0.06);
+    border: 1px solid rgba(0, 242, 254, 0.25);
+    border-radius: 999px;
     color: var(--primary);
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 500;
     cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
 }
 
-.refresh-btn:hover {
-    text-decoration: underline;
+.refresh-btn:hover:not(:disabled) {
+    background: rgba(0, 242, 254, 0.14);
+    border-color: rgba(0, 242, 254, 0.5);
+}
+
+.refresh-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
 .refresh-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: default;
+}
+
+.refresh-icon {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Spins while the refresh task (and its cooldown) runs */
+.refresh-btn:disabled .refresh-icon {
+    animation: refresh-spin 0.9s linear infinite;
+}
+
+@keyframes refresh-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .refresh-btn:disabled .refresh-icon { animation: none; }
 }
 
 /* Red "LIVE" pill in card headers */
