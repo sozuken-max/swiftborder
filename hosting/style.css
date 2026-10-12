@@ -1,6 +1,6 @@
 /* SwiftBorder styles.
    Order: tokens, base, layout, shared components, summary view, forecast,
-   live view (trend chart, cameras, AI detection), footer, responsive. */
+   forecast view (trend chart, cameras), AI detection, footer, responsive. */
 
 /* ── Tokens ─────────────────────────────────────────────────────────────── */
 :root {
@@ -534,13 +534,6 @@ h4 {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    transition: background var(--transition-normal);
-}
-
-.fc-card:hover,
-.fc-card:focus-visible {
-    background: rgba(255, 255, 255, 0.05);
-    outline: none;
 }
 
 .fc-card-head {
@@ -551,12 +544,6 @@ h4 {
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-white);
-}
-
-.fc-card-head .summary-go {
-    margin-left: auto;
-    width: 1.7rem;
-    height: 1.7rem;
 }
 
 .fc-main {
@@ -627,7 +614,7 @@ h4 {
     font-weight: 600;
 }
 
-/* ── Live view: back link and Causeway | Tuas switcher ──────────────────── */
+/* ── Forecast view: back link and Causeway | Tuas switcher ──────────────── */
 .live-head {
     display: flex;
     align-items: center;

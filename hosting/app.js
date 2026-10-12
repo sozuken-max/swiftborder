@@ -1,9 +1,9 @@
 // SwiftBorder front end: Woodlands Causeway travel times, forecast and live cameras.
 //
 // Two views on one page, picked by the URL hash:
-//   "#"           summary: one card per direction + forecast vs typical day
-//   "#live"       Causeway: trend chart, LTA cameras, AI vehicle detection
-//   "#live/tuas"  Tuas: LTA cameras only (no travel-time feed for Tuas)
+//   "#"               summary: one card per direction + AI vehicle detection
+//   "#forecast"       Causeway: trend chart, forecast vs typical day, LTA cameras
+//   "#forecast/tuas"  Tuas: LTA cameras only (no travel-time feed for Tuas)
 //
 // Data sources (all public, read from the browser):
 //   traffic-24h.json  Google Maps Distance Matrix travel times, written every 5 min
@@ -11,7 +11,7 @@
 //   data.gov.sg       LTA traffic camera images
 //   swiftbackend      annotated camera frame + per-direction vehicle counts
 
-// ── Endpoints ──────────────────────────────────────────────────────────────
+// ── Endpoints ───────────────────────────────────────────────────────────────
 const TRAFFIC_API = 'https://storage.googleapis.com/swiftborder-public/traffic-24h.json';
 const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app/';
 const LTA_API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
@@ -19,7 +19,7 @@ const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
 
 const SGT = 'Asia/Singapore';
 
-// ── Directions ─────────────────────────────────────────────────────────────
+// ── Directions ──────────────────────────────────────────────────────────────
 // `series` is the key in traffic-24h.json, `apiKey` the key in forecast-api,
 // `aiKey` the direction suffix on swiftbackend's count headers. `color` must
 // match --dir-sg / --dir-jb in style.css: blue and violet, kept clear of the
@@ -29,13 +29,13 @@ const DIRECTIONS = [
     { key: 'jb', label: 'To Singapore', series: 'jb_to_woodlands', apiKey: 'MY_TO_SG', aiKey: 'MY-SG', color: '#c58aff' }
 ];
 
-// ── Checkpoints and cameras (data.gov.sg camera IDs) ───────────────────────
+// ── Checkpoints and cameras (data.gov.sg camera IDs) ────────────────────────
 const CHECKPOINTS = {
     woodlands: { name: 'Woodlands Causeway', cameras: ['2701', '2702', '2703', '2704', '2705', '2706'] },
     tuas: { name: 'Tuas Second Link', cameras: ['4703', '4712', '4713', '4714', '4716'] }
 };
 
-// ── Tuning ─────────────────────────────────────────────────────────────────
+// ── Tuning ──────────────────────────────────────────────────────────────────
 // Congestion colour: fixed cut-offs on the whole minutes shown, both directions.
 const LEVEL_WARN_MIN = 30;       // 30-50 min amber
 const LEVEL_DANGER_MIN = 50;     // over 50 min red
@@ -59,22 +59,19 @@ const FORECAST_TIMEOUT_MS = 60000;       // the first curve call can take ~20 s 
 const BASELINE_REFRESH_MS = 3600000;     // the typical-day profile is refitted once per day
 
 const REFRESH_MS = 300000;               // travel times and forecast
-const CAMERA_REFRESH_MS = 60000;         // camera images, live view only
+const CAMERA_REFRESH_MS = 60000;         // camera images, forecast view only
 const SLOT_MS = 300000;                  // one 5-min sample
 
-// ── State ──────────────────────────────────────────────────────────────────
-let currentView = null;          // 'home' | 'live'; null until the first route()
+// ── State ───────────────────────────────────────────────────────────────────
+let currentView = null;          // 'home' | 'forecast'; null until the first route()
 let currentCheckpoint = 'woodlands';
 let cameraTimer = null;
-let detectionLoaded = false;     // AI detection runs on the first Causeway live visit
 let trafficCache = { data: null, fetchedAt: 0, inFlight: null };
 let forecastView = null;         // { curve, dirs: { sg|jb: { originAt, points: [{ at, mins, base, model, lead }] } } }
 let baselineDay = null;          // { sg|jb: [{ t, mins }] } typical day, 24 h
 let baselineAt = 0;
 
-const CHEVRON = '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
-
-// ── Small helpers ──────────────────────────────────────────────────────────
+// ── Small helpers ───────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
 // "HH:MM" in Singapore time, from epoch ms or an ISO string.
@@ -149,7 +146,7 @@ function bindRefresh(id, task) {
     });
 }
 
-// ── Traffic feed (Google Maps travel times) ────────────────────────────────
+// ── Traffic feed (Google Maps travel times) ─────────────────────────────────
 // One fetch serves the summary cards, the trend chart and the forecast cards' "Now".
 async function loadTrafficData(force = false) {
     if (!force && trafficCache.data && Date.now() - trafficCache.fetchedAt < 60000) return trafficCache.data;
@@ -177,7 +174,7 @@ function seriesPoints(data, name) {
         .sort((a, b) => a.t - b.t);
 }
 
-// ── Summary cards ──────────────────────────────────────────────────────────
+// ── Summary cards ───────────────────────────────────────────────────────────
 const TREND_TEXT = { up: 'Rising', down: 'Easing', steady: 'Steady' };
 
 function macroTrend(pts, anchor) {
@@ -206,7 +203,7 @@ function renderSummaryCard(d, mins, trend) {
     trendEl.title = mins == null ? '' : `Last 30 min vs the hour before: ${trend.pct >= 0 ? '+' : ''}${trend.pct.toFixed(0)}%`;
 
     const said = mins == null ? 'no data' : `${fmtMin(mins)} minutes, ${level.text.toLowerCase()}, ${TREND_TEXT[dir].toLowerCase()}`;
-    card.setAttribute('aria-label', `${d.label}: ${said}. Open live cameras and trend.`);
+    card.setAttribute('aria-label', `${d.label}: ${said}. Open the forecast.`);
 }
 
 async function updateSummary() {
@@ -237,7 +234,7 @@ async function updateSummary() {
     }
 }
 
-// ── Trend chart (live view) ────────────────────────────────────────────────
+// ── Trend chart (forecast view) ─────────────────────────────────────────────
 // Today's samples for both directions, plus the forecast drawn as a dashed
 // extension in extra 5-min slots after the newest observation.
 async function renderTrendChart() {
@@ -437,7 +434,7 @@ async function renderTrendChart() {
     $('lc-footer').hidden = false;
 }
 
-// ── Forecast vs typical day (summary view) ─────────────────────────────────
+// ── Forecast vs typical day (forecast view, Causeway) ───────────────────────
 // `?curve=forecast` gives a forecast every 30 min from one origin; `?baseline=profile`
 // is the calendar-profile "typical day", not a forecast. If the curve fails, the
 // plain endpoint's single 30-min forecast is shown instead.
@@ -545,16 +542,16 @@ function renderForecastCards() {
     $('fc-cards').innerHTML = DIRECTIONS.map(d => {
         const view = forecastView.dirs[d.key];
         const f = view.points[0]; // nearest forecast point
-        const head = `<div class="fc-card-head"><span class="lc-dot ${d.key}"></span>${d.label}<span class="summary-go" aria-hidden="true">${CHEVRON}</span></div>`;
+        const head = `<div class="fc-card-head"><span class="lc-dot ${d.key}"></span>${d.label}</div>`;
         if (!f) {
-            return `<a class="fc-card" href="#live">${head}<div class="fc-value">—</div><div class="fc-when">no forecast available</div></a>`;
+            return `<div class="fc-card">${head}<div class="fc-value">—</div><div class="fc-when">no forecast available</div></div>`;
         }
         const now = traffic ? seriesPoints(traffic, d.series).at(-1)?.mins : null;
         const nowLine = now == null ? ''
             : `<div class="fc-now">Now <strong>${fmtMin(now)}</strong> min (${f.mins - now >= 0 ? '+' : ''}${(f.mins - now).toFixed(1)})</div>`;
         const lead = f.lead != null ? ` · ${Math.round(f.lead)} min ahead` : '';
         return `
-            <a class="fc-card" href="#live" aria-label="${d.label}: open live cameras and trend">
+            <div class="fc-card">
                 ${head}
                 <div class="fc-main">
                     <span class="fc-value lv-text ${congestionLevel(f.mins).cls}">${f.mins.toFixed(1)}</span>
@@ -562,7 +559,7 @@ function renderForecastCards() {
                 </div>
                 ${nowLine}
                 ${forecastCompare(d, view, spanH)}
-            </a>`;
+            </div>`;
     }).join('');
 
     const origin = DIRECTIONS.map(d => forecastView.dirs[d.key].originAt).filter(Number.isFinite).sort().pop();
@@ -615,7 +612,7 @@ async function fetchForecast() {
     renderForecastCards();
 }
 
-// ── LTA cameras (live view) ────────────────────────────────────────────────
+// ── LTA cameras (forecast view) ─────────────────────────────────────────────
 async function fetchLiveCameras() {
     const grid = $('live-cam-grid');
     const status = $('cam-last-fetched');
@@ -693,7 +690,7 @@ function openCamModal(cam) {
     requestAnimationFrame(() => modal.classList.add('visible'));
 }
 
-// ── AI vehicle detection (live view, Causeway) ─────────────────────────────
+// ── AI vehicle detection (summary view) ─────────────────────────────────────
 // swiftbackend returns the annotated JPEG as the body and the per-direction
 // counts as response headers, so one request gives both. Frames are scored by
 // the in-container YOLO26s (`model=local`, unbilled; the first call after a cold
@@ -832,10 +829,11 @@ async function fetchDetections() {
         ? `Local model (YOLO26s) · requested ${dateTime.slice(11, 19)} SGT` : '';
 }
 
-// ── Views and routing ──────────────────────────────────────────────────────
+// ── Views and routing ───────────────────────────────────────────────────────
 function parseRoute() {
-    const m = /^#live(?:\/(woodlands|tuas))?$/.exec(location.hash);
-    return m ? { view: 'live', checkpoint: m[1] || 'woodlands' } : { view: 'home', checkpoint: 'woodlands' };
+    // "#live" was this view's earlier name; old links still land here.
+    const m = /^#(?:forecast|live)(?:\/(woodlands|tuas))?$/.exec(location.hash);
+    return m ? { view: 'forecast', checkpoint: m[1] || 'woodlands' } : { view: 'home', checkpoint: 'woodlands' };
 }
 
 function applyCheckpoint(cp) {
@@ -845,8 +843,8 @@ function applyCheckpoint(cp) {
         b.classList.toggle('active', on);
         b.setAttribute('aria-selected', String(on));
     });
-    // Panels for one checkpoint only: trend + AI detection (Causeway), notice (Tuas).
-    document.querySelectorAll('#view-live [data-only]').forEach(el => { el.hidden = el.dataset.only !== cp; });
+    // Panels for one checkpoint only: trend + forecast (Causeway), notice (Tuas).
+    document.querySelectorAll('#view-forecast [data-only]').forEach(el => { el.hidden = el.dataset.only !== cp; });
     $('cam-title').textContent = `LTA Cameras — ${CHECKPOINTS[cp].name}`;
 }
 
@@ -860,8 +858,8 @@ function route() {
     document.querySelectorAll('[data-view-link]').forEach(a => a.classList.toggle('active', a.dataset.viewLink === view));
     if (viewChanged) window.scrollTo(0, 0);
 
-    // Cameras load and refresh only while the live view is open, to save mobile data.
-    if (view !== 'live') {
+    // Cameras load and refresh only while the forecast view is open, to save mobile data.
+    if (view !== 'forecast') {
         clearInterval(cameraTimer);
         cameraTimer = null;
         return;
@@ -869,17 +867,14 @@ function route() {
     applyCheckpoint(checkpoint);
     if (viewChanged || cpChanged) fetchLiveCameras();
     if (!cameraTimer) cameraTimer = setInterval(fetchLiveCameras, CAMERA_REFRESH_MS);
-    if (checkpoint === 'woodlands' && !detectionLoaded) {
-        detectionLoaded = true;
-        fetchDetections();
-    }
 }
 
-// ── Start ──────────────────────────────────────────────────────────────────
+// ── Start ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     updateSummary();
     renderTrendChart();
     fetchForecast();
+    fetchDetections();
 
     window.addEventListener('hashchange', route);
     route();
@@ -892,7 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Causeway | Tuas switcher. The hash carries the choice, so Back works.
     document.querySelectorAll('.seg-btn').forEach(btn => btn.addEventListener('click', () => {
-        location.hash = btn.dataset.checkpoint === 'woodlands' ? '#live' : `#live/${btn.dataset.checkpoint}`;
+        location.hash = btn.dataset.checkpoint === 'woodlands' ? '#forecast' : `#forecast/${btn.dataset.checkpoint}`;
     }));
 
     bindRefresh('refresh-dashboard', async () => {
