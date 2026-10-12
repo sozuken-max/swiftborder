@@ -1769,16 +1769,16 @@ h4 {
     flex-shrink: 0;
 }
 
+/* Direction colours (blue / violet) never overlap the congestion colours
+   (green / amber / red), so a hue means one thing on the page. */
 .lc-legend-dot.sg,
 .lc-dot.sg {
-    background: #00f2fe;
-    box-shadow: 0 0 6px rgba(0, 242, 254, 0.5);
+    background: var(--dir-sg);
 }
 
 .lc-legend-dot.jb,
 .lc-dot.jb {
-    background: #ff9f1c;
-    box-shadow: 0 0 6px rgba(255, 159, 28, 0.5);
+    background: var(--dir-jb);
 }
 
 .lc-chart-area {
@@ -1929,11 +1929,11 @@ h4 {
 }
 
 .lc-fc-line.sg {
-    stroke: #00f2fe;
+    stroke: var(--dir-sg);
 }
 
 .lc-fc-line.jb {
-    stroke: #ff9f1c;
+    stroke: var(--dir-jb);
 }
 
 /* Shaded band behind the forecast span */
@@ -1995,16 +1995,7 @@ h4 {
     padding: 1.1rem 1.25rem;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
-    border-left: 3px solid var(--text-muted);
     border-radius: 12px;
-}
-
-.fc-card.sg {
-    border-left-color: #00f2fe;
-}
-
-.fc-card.jb {
-    border-left-color: #ff9f1c;
 }
 
 .fc-card-head {
@@ -2174,16 +2165,7 @@ h4 {
     padding: 0.7rem 0.9rem;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
-    border-left: 3px solid var(--text-muted);
     border-radius: 10px;
-}
-
-.ai-dir-card.sg {
-    border-left-color: #00f2fe;
-}
-
-.ai-dir-card.jb {
-    border-left-color: #ff9f1c;
 }
 
 .ai-dir-label {
@@ -2255,6 +2237,9 @@ h4 {
     --lv-warning: #f5b324;
     --lv-danger: #ff5a5a;
     --lv-none: #94a3b8;
+    /* Direction: To Johor / To Singapore (charts, dots). Keep clear of the --lv hues. */
+    --dir-sg: #5b9dff;
+    --dir-jb: #c58aff;
 }
 
 .summary-head {
@@ -2316,6 +2301,9 @@ h4 {
 }
 
 .summary-dir {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     font-family: var(--font-heading);
     font-weight: 700;
     font-size: 1rem;
@@ -2581,6 +2569,11 @@ a.fc-card:focus-visible {
 
     .lc-stat {
         display: block;
+    }
+
+    .lc-stat .lc-dot {
+        display: inline-block;
+        margin-right: 0.4rem;
     }
 
     .cam-grid-footer {

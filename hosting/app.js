@@ -13,6 +13,10 @@ const checkpointMeta = {
 };
 
 // Direction config — keys map to the series names in traffic-24h.json.
+// Direction colours for charts; must match --dir-sg / --dir-jb in style.css. Blue and
+// violet stay clear of the green / amber / red congestion colours.
+const DIR_COLOR = { sg: '#5b9dff', jb: '#c58aff' };
+
 const DIRECTIONS = [
     { key: 'sg', label: 'To Johor', series: 'mandai_to_shell_jb', cardId: 'row-sg', timeId: 'sg-time', trendId: 'sg-trend' },
     { key: 'jb', label: 'To Singapore', series: 'jb_to_woodlands', cardId: 'row-jb', timeId: 'jb-time', trendId: 'jb-trend' }
@@ -648,12 +652,12 @@ async function fetchAndRenderCongestionChart() {
         const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="lc-svg">
             <defs>
                 <linearGradient id="grad-sg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.25"/>
-                    <stop offset="100%" stop-color="#00f2fe" stop-opacity="0"/>
+                    <stop offset="0%" stop-color="${DIR_COLOR.sg}" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="${DIR_COLOR.sg}" stop-opacity="0"/>
                 </linearGradient>
                 <linearGradient id="grad-jb" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#ff9f1c" stop-opacity="0.25"/>
-                    <stop offset="100%" stop-color="#ff9f1c" stop-opacity="0"/>
+                    <stop offset="0%" stop-color="${DIR_COLOR.jb}" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="${DIR_COLOR.jb}" stop-opacity="0"/>
                 </linearGradient>
             </defs>
             ${gridLines}
@@ -663,19 +667,19 @@ async function fetchAndRenderCongestionChart() {
                   letter-spacing="0.5">Travel time (min)</text>
             <path d="${areaPath(sgMap)}" fill="url(#grad-sg)"/>
             <path d="${areaPath(jbMap)}" fill="url(#grad-jb)"/>
-            ${sgLine ? `<polyline points="${sgLine}" fill="none" stroke="#00f2fe" stroke-width="${lineW}" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
-            ${jbLine ? `<polyline points="${jbLine}" fill="none" stroke="#ff9f1c" stroke-width="${lineW}" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
-            ${dotR ? allLabels.map((l, i) => sgMap[l] != null ? `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(sgMap[l]).toFixed(1)}" r="${dotR}" fill="#00f2fe" stroke="#070b13" stroke-width="${dotStroke}"/>` : '').join('') : ''}
-            ${dotR ? allLabels.map((l, i) => jbMap[l] != null ? `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(jbMap[l]).toFixed(1)}" r="${dotR}" fill="#ff9f1c" stroke="#070b13" stroke-width="${dotStroke}"/>` : '').join('') : ''}
+            ${sgLine ? `<polyline points="${sgLine}" fill="none" stroke="${DIR_COLOR.sg}" stroke-width="${lineW}" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+            ${jbLine ? `<polyline points="${jbLine}" fill="none" stroke="${DIR_COLOR.jb}" stroke-width="${lineW}" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+            ${dotR ? allLabels.map((l, i) => sgMap[l] != null ? `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(sgMap[l]).toFixed(1)}" r="${dotR}" fill="${DIR_COLOR.sg}" stroke="#070b13" stroke-width="${dotStroke}"/>` : '').join('') : ''}
+            ${dotR ? allLabels.map((l, i) => jbMap[l] != null ? `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(jbMap[l]).toFixed(1)}" r="${dotR}" fill="${DIR_COLOR.jb}" stroke="#070b13" stroke-width="${dotStroke}"/>` : '').join('') : ''}
             ${fcExtension(sgMap, fcSg, 'sg')}
             ${fcExtension(jbMap, fcJb, 'jb')}
-            ${lastDot(sgMap, '#00f2fe')}
-            ${lastDot(jbMap, '#ff9f1c')}
+            ${lastDot(sgMap, DIR_COLOR.sg)}
+            ${lastDot(jbMap, DIR_COLOR.jb)}
             ${xLabels}
             <line class="lc-crosshair" x1="0" y1="${padT}" x2="0" y2="${padT + plotH}"
                   stroke="rgba(148,163,184,0.55)" stroke-width="1" stroke-dasharray="4 4" style="display:none"/>
-            <circle class="lc-hover-dot lc-hd-sg" r="6" fill="none" stroke="#00f2fe" stroke-width="2" style="display:none"/>
-            <circle class="lc-hover-dot lc-hd-jb" r="6" fill="none" stroke="#ff9f1c" stroke-width="2" style="display:none"/>
+            <circle class="lc-hover-dot lc-hd-sg" r="6" fill="none" stroke="${DIR_COLOR.sg}" stroke-width="2" style="display:none"/>
+            <circle class="lc-hover-dot lc-hd-jb" r="6" fill="none" stroke="${DIR_COLOR.jb}" stroke-width="2" style="display:none"/>
             <rect class="lc-hit" x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="transparent"/>
         </svg>`;
 
@@ -794,8 +798,8 @@ const FORECAST_MAX_SLOTS = 66;        // 5.5 h in 5-min chart slots
 const FORECAST_TIMEOUT_MS = 60000;    // the first curve call can take ~20 s while the models fit
 const BASELINE_REFRESH_MS = 3600000;  // the profile is refitted once per SGT day
 const FORECAST_DIRECTIONS = [
-    { key: 'SG_TO_MY', label: 'To Johor', cls: 'sg', color: '#00f2fe', series: 'mandai_to_shell_jb' },
-    { key: 'MY_TO_SG', label: 'To Singapore', cls: 'jb', color: '#ff9f1c', series: 'jb_to_woodlands' }
+    { key: 'SG_TO_MY', label: 'To Johor', cls: 'sg', color: DIR_COLOR.sg, series: 'mandai_to_shell_jb' },
+    { key: 'MY_TO_SG', label: 'To Singapore', cls: 'jb', color: DIR_COLOR.jb, series: 'jb_to_woodlands' }
 ];
 
 const FORECAST_ERRORS = {
