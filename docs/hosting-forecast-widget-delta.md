@@ -3,6 +3,8 @@
 Baseline: the `app.js` and `index.html` uploaded on 2026-10-03 (the live Hosting release, per ADR 0002).
 Result: `hosting/app.js` and `hosting/index.html` on branch `claude/vigilant-cerf-eexe6f`.
 
+**Superseded names (2026-10-12):** `hosting/` was later reorganised. The function, constant and class names below (`fetchBackendMessage`, `updateDashboardUI`, `fetchAndRenderCongestionChart`, `FORECAST_DIRECTIONS`, `dashboard-card`, `live-chart-card`, `cam-grid-footer` and others) no longer exist; see the 2026-10-12 entries in [CHANGELOG.md](../CHANGELOG.md). This note is kept as a record of that change.
+
 ## Summary
 
 | File | Added | Removed | Changed |
