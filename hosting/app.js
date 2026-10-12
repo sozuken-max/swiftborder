@@ -5,16 +5,17 @@ const CHECKPOINT_CAMERAS = {
 };
 
 // ── Checkpoint Metadata ────────────────────────────────────────────────────
-// Live travel-time series only exist for Woodlands. Tuas has cameras only.
+// Live travel-time series only exist for Woodlands. Tuas has cameras only,
+// so the summary is Woodlands-only and Tuas appears only in the live view.
 const checkpointMeta = {
-    woodlands: { name: "Woodlands Causeway", hasTransitFeed: true },
-    tuas: { name: "Tuas Second Link", hasTransitFeed: false }
+    woodlands: { name: "Woodlands Causeway" },
+    tuas: { name: "Tuas Second Link" }
 };
 
 // Direction config — keys map to the series names in traffic-24h.json.
 const DIRECTIONS = [
-    { key: 'sg', series: 'mandai_to_shell_jb', timeId: 'sg-time', subId: 'sg-sub', trendId: 'sg-trend', statusId: 'sg-status' },
-    { key: 'jb', series: 'jb_to_woodlands', timeId: 'jb-time', subId: 'jb-sub', trendId: 'jb-trend', statusId: 'jb-status' }
+    { key: 'sg', series: 'mandai_to_shell_jb', fcKey: 'SG_TO_MY', timeId: 'sg-time', subId: 'sg-sub', trendId: 'sg-trend', statusId: 'sg-status', nextId: 'sg-next' },
+    { key: 'jb', series: 'jb_to_woodlands', fcKey: 'MY_TO_SG', timeId: 'jb-time', subId: 'jb-sub', trendId: 'jb-trend', statusId: 'jb-status', nextId: 'jb-next' }
 ];
 
 // ── Trend / status tuning ──────────────────────────────────────────────────
@@ -27,27 +28,11 @@ const BASELINE_PCTILE = 0.20;  // 20th percentile of the 24h series = free-flow 
 const STATUS_WARN_RATIO = 1.25; // recent mean / baseline
 const STATUS_DANGER_RATIO = 1.75;
 
-// ── Toll Fees ──────────────────────────────────────────────────────────────
-const tollFees = {
-    woodlands: {
-        car: { sg_to_my: { sg: 0, my: 2.50 }, my_to_sg: { sg: 0.80, my: 0 } },
-        motorcycle: { sg_to_my: { sg: 0, my: 0 }, my_to_sg: { sg: 0, my: 0 } },
-        van: { sg_to_my: { sg: 0, my: 3.80 }, my_to_sg: { sg: 1.20, my: 0 } },
-        bus: { sg_to_my: { sg: 0, my: 5.00 }, my_to_sg: { sg: 1.60, my: 0 } }
-    },
-    tuas: {
-        car: { sg_to_my: { sg: 2.10, my: 2.50 }, my_to_sg: { sg: 2.10, my: 0 } },
-        motorcycle: { sg_to_my: { sg: 0.50, my: 0 }, my_to_sg: { sg: 0.50, my: 0 } },
-        van: { sg_to_my: { sg: 3.10, my: 3.80 }, my_to_sg: { sg: 3.10, my: 0 } },
-        bus: { sg_to_my: { sg: 4.20, my: 5.00 }, my_to_sg: { sg: 4.20, my: 0 } }
-    }
-};
-
-const MYR_PER_SGD = 3.25; // approximate; update periodically
-
 // ── Global State ───────────────────────────────────────────────────────────
 let currentCheckpoint = 'woodlands';
+let currentView = 'home';      // 'home' (summary) or 'live' (cameras + trend)
 let cameraRefreshTimer = null;
+let detectionLoaded = false;   // AI detection runs on the first visit to the Causeway live view
 let chartRefreshTimer = null;
 let trafficCache = { data: null, fetchedAt: 0 }; // shared by the transit card and the chart
 // Forecast drawn as a dashed extension of the chart: { SG_TO_MY: [{ at, mins, status }], MY_TO_SG: [...] }.
@@ -277,7 +262,7 @@ async function fetchLiveCameras() {
         const allCameras = json.items[0].cameras;
         const cameras = allCameras.filter(c => allowedIds.includes(c.camera_id));
         renderCameraGrid(cameras);
-        const timeStr = new Date().toLocaleTimeString('en-GB', { hour12: false });
+        const timeStr = new Date().toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Singapore' });
         if (lastFetched) lastFetched.textContent = `Last updated: ${timeStr} SGT`;
     } catch (err) {
         console.error('Camera fetch error:', err);
@@ -298,7 +283,7 @@ function renderCameraGrid(cameras) {
     grid.innerHTML = '';
 
     cameras.forEach(cam => {
-        const timeStr = new Date(cam.timestamp).toLocaleTimeString('en-GB', { hour12: false });
+        const timeStr = new Date(cam.timestamp).toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Singapore' });
         const tile = document.createElement('div');
         tile.className = 'cam-tile';
         tile.setAttribute('role', 'button');
@@ -334,7 +319,7 @@ function openCamModal(cam, label) {
     const existing = document.getElementById('cam-modal');
     if (existing) existing.remove();
 
-    const camTime = new Date(cam.timestamp).toLocaleTimeString('en-GB', { hour12: false });
+    const camTime = new Date(cam.timestamp).toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Singapore' });
     const modal = document.createElement('div');
     modal.id = 'cam-modal';
     modal.className = 'cam-modal-backdrop';
@@ -494,25 +479,18 @@ function setDirStatus(el, level) {
     el.className = `status-indicator-badge ${level.cls}`;
 }
 
+// Whole minutes, the way the summary quotes Google's travel time. Every "now"
+// figure on the page (summary, forecast cards, chart footer) goes through this,
+// so they agree with each other and with the newest sample in traffic-24h.json.
+function fmtMin(m) {
+    return Math.round(m).toString();
+}
+
+// The summary headline is the newest Google Maps sample for each direction:
+// duration_in_traffic from the Distance Matrix fetcher, as written to traffic-24h.json.
+// Status and trend use the trailing hour so one noisy sample does not flip them.
 async function updateDashboardUI() {
-    const rows = document.getElementById('transit-breakdowns');
-    const unavailable = document.getElementById('transit-unavailable');
     const lastUpdated = document.getElementById('last-updated');
-    const meta = checkpointMeta[currentCheckpoint];
-
-    // Tuas has no travel-time feed - say so rather than inventing numbers.
-    if (!meta.hasTransitFeed) {
-        if (rows) rows.style.display = 'none';
-        if (unavailable) {
-            unavailable.style.display = 'block';
-            unavailable.textContent = `Live travel-time data is not available for ${meta.name}. Camera feeds below are live.`;
-        }
-        if (lastUpdated) lastUpdated.textContent = '-';
-        return;
-    }
-
-    if (rows) rows.style.display = '';
-    if (unavailable) unavailable.style.display = 'none';
 
     try {
         const data = await loadTrafficData();
@@ -535,39 +513,48 @@ async function updateDashboardUI() {
             const statusEl = document.getElementById(d.statusId);
 
             if (!r.ok) {
-                if (timeEl) timeEl.textContent = '-';
+                if (timeEl) timeEl.textContent = '—';
                 if (subEl) subEl.textContent = 'No samples in the last hour';
                 setDirStatus(statusEl, { text: 'No Data', cls: 'warning' });
                 renderTrend(trendEl, r);
                 return;
             }
 
-            // Typical range for the last hour: interquartile band, not the raw spread.
-            if (timeEl) timeEl.textContent = `${r.p25.toFixed(0)} - ${r.p75.toFixed(0)} min`;
+            const latest = byKey[d.key].filter(p => p.t <= anchor).pop();
+            if (timeEl) timeEl.textContent = fmtMin(latest.mins);
             if (subEl) {
-                subEl.textContent = `1h median ${r.median.toFixed(1)} · now ${r.recentMean.toFixed(1)} · ${r.count} pts`;
+                subEl.textContent = `at ${sgtClock(latest.t)} SGT · 1h range ${fmtMin(r.p25)}–${fmtMin(r.p75)} min`;
             }
             setDirStatus(statusEl, congestionLevel(r));
             renderTrend(trendEl, r);
         });
 
         if (lastUpdated) {
-            const t = new Date(latestTs).toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Singapore' });
             const ageMin = Math.round((nowMs - latestTs) / 60000);
-            lastUpdated.textContent = stale ? `${t} SGT (${ageMin} min old)` : `${t} SGT`;
+            lastUpdated.textContent = stale ? `${sgtClock(latestTs)} SGT (${ageMin} min old)` : `${sgtClock(latestTs)} SGT`;
         }
     } catch (err) {
         console.error('Traffic summary error:', err);
         DIRECTIONS.forEach(d => {
             const timeEl = document.getElementById(d.timeId);
             const subEl = document.getElementById(d.subId);
-            if (timeEl) timeEl.textContent = '-';
+            if (timeEl) timeEl.textContent = '—';
             if (subEl) subEl.textContent = 'Live data unavailable';
             setDirStatus(document.getElementById(d.statusId), { text: 'Unavailable', cls: 'danger' });
             renderTrend(document.getElementById(d.trendId), { ok: false });
         });
         if (lastUpdated) lastUpdated.textContent = 'Feed unavailable';
     }
+}
+
+// Nearest forecast point under each summary card. Empty until forecast-api answers.
+function renderSummaryNext() {
+    DIRECTIONS.forEach(d => {
+        const el = document.getElementById(d.nextId);
+        if (!el) return;
+        const f = forecastView?.dirs[d.fcKey]?.points[0];
+        el.innerHTML = f ? `Forecast <strong>${fmtMin(f.mins)} min</strong> at ${sgtClock(f.at)}` : '';
+    });
 }
 
 // ── Live Travel Time Chart ─────────────────────────────────────────────────
@@ -636,7 +623,7 @@ async function fetchAndRenderCongestionChart() {
         const minVal = Math.max(0, Math.min(...allMins) - pad);
         const maxVal = Math.max(...allMins) + pad;
 
-        const W = 800, H = 240;
+        const W = window.innerWidth < 640 ? 440 : 800, H = 240; // narrower viewBox keeps labels legible on phones
         const padL = 62, padR = 20, padT = 16, padB = 36;
         const plotW = W - padL - padR;
         const plotH = H - padT - padB;
@@ -843,10 +830,10 @@ async function fetchAndRenderCongestionChart() {
         const latestSg = sgPts[sgPts.length - 1];
         const latestJb = jbPts[jbPts.length - 1];
         if (statSg && latestSg) {
-            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>SG → JB</strong>&nbsp;Latest: <strong>${latestSg.mins.toFixed(1)} min</strong> at ${latestSg.label}${nextSg ? ` &rarr; <strong>${nextSg.mins.toFixed(1)}</strong> forecast at ${clockOf(nextSg.at)}` : ''}`;
+            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>SG → JB</strong>&nbsp;Latest: <strong>${fmtMin(latestSg.mins)} min</strong> at ${latestSg.label}${nextSg ? ` &rarr; <strong>${nextSg.mins.toFixed(1)}</strong> forecast at ${clockOf(nextSg.at)}` : ''}`;
         }
         if (statJb && latestJb) {
-            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>JB → SG</strong>&nbsp;Latest: <strong>${latestJb.mins.toFixed(1)} min</strong> at ${latestJb.label}${nextJb ? ` &rarr; <strong>${nextJb.mins.toFixed(1)}</strong> forecast at ${clockOf(nextJb.at)}` : ''}`;
+            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>JB → SG</strong>&nbsp;Latest: <strong>${fmtMin(latestJb.mins)} min</strong> at ${latestJb.label}${nextJb ? ` &rarr; <strong>${nextJb.mins.toFixed(1)}</strong> forecast at ${clockOf(nextJb.at)}` : ''}`;
         }
 
     } catch (err) {
@@ -860,8 +847,10 @@ async function fetchAndRenderCongestionChart() {
 // every 30 min from one origin. Only 30 min is evaluated; later points are exploratory,
 // and the model beat the typical-day baseline through about 5.5 h in the study (not
 // confirmed on Run B). So the page asks for 5 h, which stays inside the model's range.
-// `?baseline=profile` is the calendar-profile "typical day", not a forecast.
+// `?baseline=profile` is the calendar-profile "typical day", not a forecast. The
+// comparison chart always spans the full day: the 5 h forecast over the 24 h typical day.
 const FORECAST_HOURS = 5;
+const COMPARE_HOURS = 24;            // forecast-vs-typical chart span
 const FORECAST_MAX_SLOTS = 66;        // 5.5 h in 5-min chart slots
 const FORECAST_TIMEOUT_MS = 60000;    // the first curve call can take ~20 s while the models fit
 const BASELINE_REFRESH_MS = 3600000;  // the profile is refitted once per SGT day
@@ -879,7 +868,6 @@ const FORECAST_ERRORS = {
 let forecastView = null;      // { dirs: { KEY: { points, originAt } }, curve }
 let baselineDay = null;       // { KEY: [{ t, mins }] }
 let baselineAt = 0;
-let forecastSpanH = FORECAST_HOURS;
 
 function sgtClock(iso) {
     const t = typeof iso === 'number' ? iso : Date.parse(iso);
@@ -948,7 +936,7 @@ async function loadBaselineDay() {
         baselineDay = out;
         baselineAt = Date.now();
     } catch (err) {
-        console.error('Baseline fetch error:', err); // the curve's own baseline_min still draws the 5 h view
+        console.error('Baseline fetch error:', err); // the chart falls back to the curve's own baseline_min (5 h)
     }
 }
 
@@ -972,7 +960,7 @@ function forecastCompare(d, view, spanH) {
     const y = v => padT + (H - padT - padB) - ((v - (lo - pad)) / ((hi + pad) - (lo - pad) || 1)) * (H - padT - padB);
     const poly = arr => arr.map(p => `${x(p.t ?? p.at).toFixed(1)},${y(p.mins).toFixed(1)}`).join(' ');
 
-    const tickEvery = (spanH <= 6 ? 1 : 6) * 3600000;
+    const tickEvery = (spanH <= 6 ? 1 : 6) * 3600000; // 6-hourly ticks on the full day
     let ticks = '';
     for (let t = Math.ceil(t0 / tickEvery) * tickEvery; t <= t1; t += tickEvery) {
         ticks += `<line class="fc-tick" x1="${x(t).toFixed(1)}" y1="${padT}" x2="${x(t).toFixed(1)}" y2="${H - padB}"/>
@@ -1008,6 +996,9 @@ function renderForecastCards() {
     if (!cards || !forecastView) return;
     const traffic = trafficCache.data;
 
+    // Without the 24 h typical day the chart can only cover the curve's own 5 h.
+    const spanH = baselineDay ? COMPARE_HOURS : FORECAST_HOURS;
+
     cards.innerHTML = FORECAST_DIRECTIONS.map(d => {
         const view = forecastView.dirs[d.key];
         const f = view.points[0];
@@ -1035,12 +1026,12 @@ function renderForecastCards() {
                     : { cls: 'stable', txt: '▬ Steady' };
 
         const nowLine = delta == null ? '' :
-            `<div class="fc-now">Now <strong>${now.toFixed(1)}</strong> min <span class="fc-delta">(${delta >= 0 ? '+' : ''}${delta.toFixed(1)})</span></div>`;
+            `<div class="fc-now">Now <strong>${fmtMin(now)}</strong> min <span class="fc-delta">(${delta >= 0 ? '+' : ''}${delta.toFixed(1)})</span></div>`;
         const lead = f.lead != null ? ` · ${Math.round(f.lead)} min ahead` : '';
 
         return `
-            <div class="fc-card ${d.cls}">
-                <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}</div>
+            <a class="fc-card ${d.cls}" href="#live" aria-label="${d.label}: open live cameras and trend">
+                <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}<span class="fc-card-cta">Cameras &amp; trend &rsaquo;</span></div>
                 <div class="fc-main">
                     <span class="fc-value">${f.mins.toFixed(1)}</span>
                     <span class="fc-when">min at ${sgtClock(f.at)} SGT${lead}</span>
@@ -1050,15 +1041,11 @@ function renderForecastCards() {
                     <span class="status-indicator-badge ${level.cls}">${level.text}</span>
                     ${trend ? `<span class="time-trend ${trend.cls}">${trend.txt} vs now</span>` : ''}
                 </div>
-                ${forecastCompare(d, view, forecastSpanH)}
-            </div>`;
+                ${forecastCompare(d, view, spanH)}
+            </a>`;
     }).join('');
 
-    const withBaseline = forecastView.curve && FORECAST_DIRECTIONS.some(d => forecastView.dirs[d.key].points.length > 1);
-    const range = document.getElementById('fc-range');
-    if (range) range.style.display = withBaseline && baselineDay ? '' : 'none';
-    document.querySelectorAll('#fc-range button').forEach(b =>
-        b.classList.toggle('active', +b.dataset.hours === forecastSpanH));
+    renderSummaryNext();
 
     const origin = FORECAST_DIRECTIONS.map(d => forecastView.dirs[d.key].originAt).filter(Number.isFinite).sort().pop();
     const updatedEl = document.getElementById('fc-updated');
@@ -1102,6 +1089,7 @@ async function fetchForecast() {
                 : err.message;
         if (chartForecast) { chartForecast = null; fetchAndRenderCongestionChart(); } // drop a stale extension
         forecastView = null;
+        renderSummaryNext();
         cards.innerHTML = '';
         setForecastStatus(`Forecast unavailable: ${msg}`);
         if (updatedEl) updatedEl.textContent = 'Unavailable';
@@ -1125,58 +1113,59 @@ async function fetchForecast() {
     renderForecastCards();
 }
 
-// ── Toll Calculator ────────────────────────────────────────────────────────
-function updateTollCalculator() {
-    const calcRoute = document.getElementById('calc-route');
-    const calcVehicle = document.getElementById('calc-vehicle');
-    const fuelLevel = document.getElementById('fuel-level');
-    const tankGroup = document.getElementById('tank-group');
-    const sgTollText = document.getElementById('sg-toll');
-    const myTollText = document.getElementById('my-toll');
-    const totalCostText = document.getElementById('total-cost');
-    const complianceAlert = document.getElementById('compliance-alert');
-    const directionEl = document.querySelector('input[name="direction"]:checked');
-    if (!calcRoute || !calcVehicle || !directionEl) return;
+// ── Views ──────────────────────────────────────────────────────────────────
+// Two views on one page, picked by the URL hash: "#" is the summary, "#live" the
+// cameras and trend for the Causeway, "#live/tuas" the Tuas cameras.
+function parseRoute() {
+    const m = /^#live(?:\/(woodlands|tuas))?$/.exec(location.hash);
+    return m ? { view: 'live', checkpoint: m[1] || 'woodlands' } : { view: 'home', checkpoint: 'woodlands' };
+}
 
-    const route = calcRoute.value;
-    const vehicle = calcVehicle.value;
-    const direction = directionEl.value.replace(/-/g, '_'); // HTML uses hyphens; tollFees uses underscores
-    const fuelVal = fuelLevel ? parseInt(fuelLevel.value) : 100;
+function applyCheckpoint(cp) {
+    currentCheckpoint = cp;
+    document.querySelectorAll('.seg-btn').forEach(b => {
+        const on = b.dataset.checkpoint === cp;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    // Panels that exist for one checkpoint only (trend + AI detection: Causeway; notice: Tuas).
+    document.querySelectorAll('#view-live [data-only]').forEach(el => {
+        el.hidden = el.dataset.only !== cp;
+    });
+    const title = document.getElementById('cam-title');
+    if (title) title.textContent = `LTA Cameras — ${checkpointMeta[cp].name}`;
+}
 
-    if (tankGroup) tankGroup.style.display = direction === 'my_to_sg' ? 'none' : 'flex';
+function startCameraRefresh() {
+    if (cameraRefreshTimer) return;
+    cameraRefreshTimer = setInterval(fetchLiveCameras, 60000);
+}
 
-    const fees = tollFees[route][vehicle][direction];
-    const sgToll = fees.sg;
-    const myToll = fees.my;
-    const totalSgd = sgToll + (myToll / MYR_PER_SGD);
+function stopCameraRefresh() {
+    clearInterval(cameraRefreshTimer);
+    cameraRefreshTimer = null;
+}
 
-    if (sgTollText) sgTollText.textContent = `SGD ${sgToll.toFixed(2)}`;
-    if (myTollText) myTollText.textContent = `MYR ${myToll.toFixed(2)}`;
-    if (totalCostText) totalCostText.textContent = `SGD ${totalSgd.toFixed(2)}`;
+function route() {
+    const { view, checkpoint } = parseRoute();
+    const viewChanged = view !== currentView;
+    const cpChanged = checkpoint !== currentCheckpoint;
+    currentView = view;
 
-    if (complianceAlert) {
-        if (direction === 'sg_to_my') {
-            complianceAlert.style.display = 'flex';
-            if (fuelVal >= 75) {
-                complianceAlert.className = 'compliance-alert compliant';
-                complianceAlert.innerHTML = `
-                    <div class="alert-icon">✅</div>
-                    <div class="alert-content">
-                        <p class="alert-title">Fuel Gauge Compliant (${fuelVal}%)</p>
-                        <p class="alert-desc">Your fuel level is above 75%. You comply with the Singapore 3/4 tank rule.</p>
-                    </div>`;
-            } else {
-                complianceAlert.className = 'compliance-alert warning';
-                complianceAlert.innerHTML = `
-                    <div class="alert-icon">⚠️</div>
-                    <div class="alert-content">
-                        <p class="alert-title">Non-Compliant Alert (${fuelVal}%)</p>
-                        <p class="alert-desc">Your tank is below 75%. Leaving Singapore with less than 3/4 tank is an offense (fine up to SGD 500).</p>
-                    </div>`;
-            }
-        } else {
-            complianceAlert.style.display = 'none';
-        }
+    document.querySelectorAll('.view').forEach(el => { el.hidden = el.dataset.view !== view; });
+    document.querySelectorAll('[data-view-link]').forEach(a =>
+        a.classList.toggle('active', a.dataset.viewLink === view));
+    if (viewChanged) window.scrollTo(0, 0);
+
+    if (view !== 'live') { stopCameraRefresh(); return; }
+
+    applyCheckpoint(checkpoint);
+    // Cameras load only while the live view is open, which saves mobile data on the summary.
+    if (viewChanged || cpChanged || !document.querySelector('#live-cam-grid .cam-tile')) fetchLiveCameras();
+    startCameraRefresh();
+    if (checkpoint === 'woodlands' && !detectionLoaded) {
+        detectionLoaded = true;
+        fetchBackendMessage();
     }
 }
 
@@ -1185,11 +1174,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDashboardUI();
     fetchAndRenderCongestionChart();
     fetchForecast();
-    updateTollCalculator();
-    fetchBackendMessage();
-    fetchLiveCameras();
 
-    cameraRefreshTimer = setInterval(fetchLiveCameras, 60000);
+    window.addEventListener('hashchange', route);
+    currentView = null; // force the first route() to treat the view as new
+    route();
+
     chartRefreshTimer = setInterval(() => {
         fetchAndRenderCongestionChart();
         updateDashboardUI();
@@ -1220,24 +1209,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    document.querySelectorAll('#fc-range button').forEach(btn => {
+    // Causeway | Tuas switcher in the live view. The hash carries the choice, so Back works.
+    document.querySelectorAll('.seg-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            forecastSpanH = +btn.dataset.hours;
-            renderForecastCards();
-        });
-    });
-
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            tabBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentCheckpoint = btn.dataset.checkpoint;
-            const calcRoute = document.getElementById('calc-route');
-            if (calcRoute) calcRoute.value = currentCheckpoint;
-            updateDashboardUI();
-            updateTollCalculator();
-            fetchLiveCameras();
+            const cp = btn.dataset.checkpoint;
+            location.hash = cp === 'woodlands' ? '#live' : `#live/${cp}`;
         });
     });
 
@@ -1250,6 +1226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await loadTrafficData(true); // bypass the 60s cache
                 await Promise.all([updateDashboardUI(), fetchAndRenderCongestionChart()]);
+                renderForecastCards(); // "Now" on the forecast cards follows the fresh sample
             } catch (err) {
                 console.error('Dashboard refresh error:', err);
                 await updateDashboardUI();
@@ -1258,12 +1235,4 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    document.getElementsByName('direction').forEach(input => input.addEventListener('change', updateTollCalculator));
-    const calcRoute = document.getElementById('calc-route');
-    const calcVehicle = document.getElementById('calc-vehicle');
-    const fuelLevel = document.getElementById('fuel-level');
-    if (calcRoute) calcRoute.addEventListener('change', updateTollCalculator);
-    if (calcVehicle) calcVehicle.addEventListener('change', updateTollCalculator);
-    if (fuelLevel) fuelLevel.addEventListener('input', updateTollCalculator);
 });

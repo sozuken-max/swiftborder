@@ -323,7 +323,6 @@ h4 {
 /* Sections General */
 .dashboard-section,
 .predictions-section,
-.calculator-section,
 .community-section {
     padding: 6rem 2rem;
     border-top: 1px solid var(--border-color);
@@ -1168,204 +1167,6 @@ h4 {
     display: block;
 }
 
-/* Calculator Section */
-
-.calculator-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2.5rem;
-}
-
-.calc-input-card h3,
-.calc-output-card h3 {
-    margin-bottom: 1.5rem;
-    font-size: 1.3rem;
-    color: var(--text-white);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.8rem;
-}
-
-.calc-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.form-group label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-muted);
-}
-
-.form-select {
-    background: #0f172a;
-    border: 1px solid var(--border-color);
-    padding: 0.8rem 1rem;
-    border-radius: 8px;
-    color: var(--text-main);
-    font-family: inherit;
-    font-size: 0.95rem;
-    cursor: pointer;
-    transition: var(--transition-fast);
-}
-
-.form-select:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(0, 242, 254, 0.2);
-}
-
-/* Custom Toggle Switch for Direction */
-.toggle-switch {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    background: #0f172a;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 0.3rem;
-}
-
-.switch-option input {
-    display: none;
-}
-
-.switch-option span {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 0.6rem;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: var(--transition-fast);
-}
-
-.switch-option input:checked+span {
-    background: rgba(0, 242, 254, 0.1);
-    color: var(--primary);
-    border: 1px solid rgba(0, 242, 254, 0.2);
-}
-
-/* Fuel slider custom */
-.fuel-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 8px;
-    border-radius: 5px;
-    background: #1e293b;
-    outline: none;
-    margin: 1rem 0 0.5rem 0;
-}
-
-.fuel-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--primary);
-    cursor: pointer;
-    box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
-    transition: var(--transition-fast);
-}
-
-.fuel-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-}
-
-.slider-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.slider-labels .marker {
-    color: var(--accent-orange);
-    font-weight: 600;
-}
-
-/* Report box */
-.report-box {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.report-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.5rem 0;
-}
-
-.report-label {
-    color: var(--text-muted);
-}
-
-.report-val {
-    font-weight: 700;
-    color: var(--text-white);
-}
-
-.report-divider {
-    border: none;
-    border-top: 1px solid var(--border-color);
-    margin: 0.8rem 0;
-}
-
-.report-row.total {
-    font-size: 1.15rem;
-}
-
-.report-row.total .report-val {
-    font-size: 1.25rem;
-}
-
-/* Compliance Alert */
-.compliance-alert {
-    display: flex;
-    gap: 1rem;
-    padding: 1.2rem;
-    border-radius: 12px;
-    border: 1.5px solid;
-    transition: var(--transition-normal);
-}
-
-.compliance-alert.compliant {
-    background: rgba(46, 204, 113, 0.08);
-    border-color: rgba(46, 204, 113, 0.2);
-    color: var(--accent-green);
-}
-
-.compliance-alert.warning {
-    background: rgba(255, 77, 77, 0.08);
-    border-color: rgba(255, 77, 77, 0.2);
-    color: var(--accent-red);
-}
-
-.alert-title {
-    font-weight: 700;
-    margin-bottom: 0.25rem;
-    color: inherit;
-}
-
-.alert-desc {
-    font-size: 0.85rem;
-    line-height: 1.5;
-    color: var(--text-muted);
-}
-
 /* Community Section */
 .community-grid {
     display: grid;
@@ -1778,7 +1579,6 @@ h4 {
 
     .dashboard-grid,
     .predictions-grid,
-    .calculator-grid,
     .community-grid {
         grid-template-columns: 1fr;
     }
@@ -1906,21 +1706,10 @@ h4 {
     display: block;
 }
 
-/* Adjust navbar top offset for sticky nav due to top banner */
+/* The navbar sits in the flow (sticky), so content starts right under it. */
 .navbar {
-    top: 30px;
-    /* offset by top banner height */
-}
-
-@media (max-width: 640px) {
-    .navbar {
-        top: 48px;
-        /* account for wrapped top banner text on small mobile */
-    }
-
-    .academic-top-banner {
-        font-size: 0.7rem;
-    }
+    position: sticky;
+    top: 0;
 }
 
 /* ── Live Congestion Chart Card ─────────────────────────────────────────── */
@@ -2129,111 +1918,6 @@ h4 {
     color: var(--text-muted);
 }
 
-/* ── Traffic Summary: direction rows (live feed) ───────────────────────── */
-.card-subnote {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-left: 0.5rem;
-}
-
-.status-card .card-header {
-    margin-bottom: 1.5rem;
-}
-
-.time-item.direction {
-    gap: 1rem;
-}
-
-.dir-label {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.3;
-}
-
-.dir-route {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-}
-
-.dir-dot {
-    font-size: 1rem;
-    line-height: 1;
-}
-
-.dir-dot.sg {
-    color: #00f2fe;
-}
-
-.dir-dot.jb {
-    color: #ff9f1c;
-}
-
-.time-figure {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    text-align: right;
-    margin-left: auto;
-    margin-right: 1rem;
-}
-
-.time-sub {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    margin-top: 0.2rem;
-    white-space: nowrap;
-}
-
-/* Congestion label stacked above its trend, both scoped to the direction */
-.dir-badges {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.4rem;
-    min-width: 9.5rem;
-}
-
-.dir-badges .status-indicator-badge {
-    font-size: 0.7rem;
-    padding: 0.3rem 0.7rem;
-    white-space: nowrap;
-}
-
-.dir-badges .time-trend {
-    white-space: nowrap;
-    font-size: 0.72rem;
-}
-
-.transit-unavailable {
-    padding: 1.5rem 1rem;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed var(--border-color);
-    border-radius: 12px;
-}
-
-@media (max-width: 560px) {
-    .time-item.direction {
-        flex-wrap: wrap;
-        row-gap: 0.75rem;
-    }
-
-    .time-figure {
-        margin-right: 0;
-    }
-
-    .dir-badges {
-        width: 100%;
-        flex-direction: row;
-        justify-content: flex-end;
-        align-items: center;
-    }
-}
 /* ── Live Congestion Chart: 30-min forecast extension ──────────────────── */
 /* Dashed continuation of each line from its last observation to the forecast point. */
 .lc-fc-line {
@@ -2429,32 +2113,6 @@ h4 {
     font-weight: 600;
 }
 
-/* "Next 5 h | Full day" toggle */
-.fc-range {
-    display: inline-flex;
-    gap: 0.25rem;
-    padding: 0.2rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-}
-
-.fc-range button {
-    background: none;
-    border: none;
-    padding: 0.3rem 0.8rem;
-    border-radius: 6px;
-    color: var(--text-muted);
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.fc-range button.active {
-    background: rgba(0, 242, 254, 0.1);
-    color: var(--primary);
-}
-
 /* ── AI detection: two models side by side ─────────────────────────────── */
 .ai-compare {
     display: grid;
@@ -2566,3 +2224,329 @@ h4 {
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Layout: summary view and live view ─────────────────────────────────── */
+[hidden] {
+    display: none !important;
+}
+
+.app-main {
+    padding: 1.5rem 2rem 3rem;
+}
+
+.view .section-container > * + * {
+    margin-top: 1.25rem;
+}
+
+.dashboard-section,
+.predictions-section {
+    padding: 0;
+    border-top: none;
+}
+
+.nav-link.active {
+    color: var(--primary);
+}
+
+/* ── Traffic summary: one tappable card per direction ───────────────────── */
+.summary-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+}
+
+.summary-title {
+    font-size: 1.35rem;
+    color: var(--text-white);
+}
+
+.summary-updated {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.summary-updated strong {
+    color: var(--text-main);
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.summary-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding: 1.1rem 1.25rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--text-muted);
+    border-radius: 16px;
+    transition: var(--transition-normal);
+    min-width: 0;
+}
+
+.summary-card.sg {
+    border-top-color: #00f2fe;
+}
+
+.summary-card.jb {
+    border-top-color: #ff9f1c;
+}
+
+.summary-card:hover,
+.summary-card:focus-visible {
+    background: var(--bg-card-hover);
+    border-color: rgba(0, 242, 254, 0.3);
+    outline: none;
+}
+
+.summary-dir {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-white);
+}
+
+.summary-route,
+.summary-sub,
+.summary-next {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.summary-next strong {
+    color: var(--text-main);
+}
+
+.summary-next:empty {
+    display: none;
+}
+
+.summary-time {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin-top: 0.2rem;
+}
+
+.summary-num {
+    font-family: var(--font-heading);
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-white);
+}
+
+.summary-unit {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.summary-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.2rem;
+}
+
+.summary-badges .status-indicator-badge {
+    font-size: 0.68rem;
+    padding: 0.25rem 0.6rem;
+    white-space: nowrap;
+}
+
+.summary-badges .time-trend {
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.summary-cta,
+.fc-card-cta {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.summary-cta {
+    margin-top: 0.3rem;
+}
+
+.fc-card-cta {
+    margin-left: auto;
+    font-family: var(--font-body);
+}
+
+.summary-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+a.fc-card {
+    transition: var(--transition-normal);
+}
+
+a.fc-card:hover,
+a.fc-card:focus-visible {
+    background: rgba(255, 255, 255, 0.05);
+    outline: none;
+}
+
+/* ── Live view: back link and Causeway | Tuas switcher ──────────────────── */
+.live-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.back-link {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.seg-switch {
+    display: inline-flex;
+    padding: 0.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+}
+
+.seg-btn {
+    background: none;
+    border: none;
+    padding: 0.45rem 1.1rem;
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.seg-btn.active {
+    background: rgba(0, 242, 254, 0.1);
+    color: var(--primary);
+}
+
+.transit-unavailable {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+}
+
+.ai-detection-card {
+    margin-top: 0;
+}
+
+/* ── Mobile ─────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .nav-container {
+        padding: 0.6rem 1rem;
+    }
+
+    .nav-logo {
+        font-size: 1.15rem;
+    }
+
+    .logo-icon {
+        font-size: 1.25rem;
+    }
+
+    .nav-academic-badge {
+        display: none;
+    }
+
+    .app-main {
+        padding: 0.9rem 1rem 2rem;
+    }
+
+    .view .section-container > * + * {
+        margin-top: 0.9rem;
+    }
+
+    .summary-title {
+        font-size: 1.1rem;
+    }
+
+    .summary-grid {
+        gap: 0.6rem;
+    }
+
+    .summary-card {
+        padding: 0.85rem 0.8rem;
+    }
+
+    .summary-num {
+        font-size: 2.4rem;
+    }
+
+    .dashboard-card {
+        padding: 1rem;
+        border-radius: 14px;
+    }
+
+    .card-header {
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .card-header h3 {
+        font-size: 1.05rem;
+    }
+
+    .live-cam-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        padding: 0;
+        min-height: 120px;
+    }
+
+    .cam-debug-url,
+    .cam-tile-label {
+        display: none;
+    }
+
+    .summary-badges .time-trend {
+        white-space: normal;
+    }
+
+    .lc-stat {
+        display: block;
+    }
+
+    .cam-grid-footer {
+        padding: 0.6rem 0 0;
+    }
+}
+
+@media (max-width: 360px) {
+    .summary-num {
+        font-size: 2rem;
+    }
+
+    .summary-route {
+        display: none;
+    }
+}
+

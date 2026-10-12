@@ -2,6 +2,15 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-12
+
+- `hosting/`: the page opens on the traffic summary. The navbar is one slim sticky row (on phones the nav links and NUS-ISS badge are hidden), and the 7rem top padding, page title and Causeway/Tuas tabs above the summary are gone. Two tappable cards show SG → JB and JB → SG. Each card's headline is the newest Google Maps `duration_in_traffic` sample in `traffic-24h.json`, in whole minutes, with its SGT time and the trailing-hour range; it used to be the trailing-hour interquartile range. The forecast cards' "Now" and the chart footer use the same rounding, so all three agree. On 12 Oct 14:30 SGT the feed held 1,654 s and 2,364 s, and the page showed 28 and 39 min. No Tuas content appears on the summary.
+  - Tapping a summary card or a forecast card opens `#live`: a Causeway | Tuas switcher (`#live`, `#live/tuas`; the browser Back button works). Causeway shows the travel-time trend chart with the forecast extension, the LTA cameras and AI detection. Tuas shows only its LTA cameras and a note that it has no travel-time feed or forecast. Cameras load only while the live view is open, and AI detection loads on the first Causeway visit.
+  - Forecast vs Typical Day always spans the full day (the 5 h forecast over the 24 h typical day); the "Next 5 h" toggle is gone. The request is still `hours=5`.
+  - The Toll & Compliance Calculator section, its toll table and its CSS are removed.
+  - Camera capture times are formatted in `Asia/Singapore`; before this they used the browser's timezone and were labelled SGT anyway.
+  - Not deployed; Hosting deploy stays manual ([ADR 0002](docs/adr/0002-firebase-hosting-source.md)).
+
 ## 2026-10-11
 
 - `camdetect`: the `format=directional` image no longer draws the white dividing line by default, on any camera, so front-end users do not see the internal divider. `line=1` on a request, or `DRAW_DIVIDING_LINE=1` on the service, draws it again; a request's `line=` wins. Boxes, colours, banner, counts and headers are unchanged, and JSON still returns `dividing_line`. `backfill_local_counts.py --gcs-out` images still draw the line (they exist to check the split). Merging redeploys `swiftbackend`.
