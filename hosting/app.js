@@ -14,8 +14,8 @@ const checkpointMeta = {
 
 // Direction config — keys map to the series names in traffic-24h.json.
 const DIRECTIONS = [
-    { key: 'sg', label: 'SG to JB', series: 'mandai_to_shell_jb', cardId: 'row-sg', timeId: 'sg-time', trendId: 'sg-trend' },
-    { key: 'jb', label: 'JB to SG', series: 'jb_to_woodlands', cardId: 'row-jb', timeId: 'jb-time', trendId: 'jb-trend' }
+    { key: 'sg', label: 'To Johor', series: 'mandai_to_shell_jb', cardId: 'row-sg', timeId: 'sg-time', trendId: 'sg-trend' },
+    { key: 'jb', label: 'To Singapore', series: 'jb_to_woodlands', cardId: 'row-jb', timeId: 'jb-time', trendId: 'jb-trend' }
 ];
 
 // ── Trend / status tuning ──────────────────────────────────────────────────
@@ -58,8 +58,8 @@ const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app
 
 // Service labels travel direction SG-MY / MY-SG; the UI says SG -> JB / JB -> SG.
 const AI_DIRECTIONS = [
-    { key: 'sg', label: 'SG → JB', cls: 'sg', countHeader: 'X-Vehicle-Count-SG-MY', congestionHeader: 'X-Congestion-SG-MY' },
-    { key: 'jb', label: 'JB → SG', cls: 'jb', countHeader: 'X-Vehicle-Count-MY-SG', congestionHeader: 'X-Congestion-MY-SG' }
+    { key: 'sg', label: 'To Johor', cls: 'sg', countHeader: 'X-Vehicle-Count-SG-MY', congestionHeader: 'X-Congestion-SG-MY' },
+    { key: 'jb', label: 'To Singapore', cls: 'jb', countHeader: 'X-Vehicle-Count-MY-SG', congestionHeader: 'X-Congestion-MY-SG' }
 ];
 
 // Congestion here is queue depth — banded from a direction's vehicle count in
@@ -163,7 +163,7 @@ function renderDetectionSummary(box, summary, pane) {
 
     const untrackedNote = pane.dirs.includes('jb')
         ? ''
-        : '<p class="ai-dir-note">JB → SG on this camera is past the checkpoint (free traffic into Singapore), so it is not tracked.</p>';
+        : '<p class="ai-dir-note">Traffic to Singapore on this camera is past the checkpoint (free traffic into Singapore), so it is not tracked.</p>';
 
     box.innerHTML = cards + unknownNote + untrackedNote;
 }
@@ -715,7 +715,7 @@ async function fetchAndRenderCongestionChart() {
             cross.style.display = '';
 
             const rows = [];
-            [[sgMap, fcSg, hdSg, 'SG → JB', 'sg'], [jbMap, fcJb, hdJb, 'JB → SG', 'jb']].forEach(([map, fcVal, dot, name, cls]) => {
+            [[sgMap, fcSg, hdSg, 'To Johor', 'sg'], [jbMap, fcJb, hdJb, 'To Singapore', 'jb']].forEach(([map, fcVal, dot, name, cls]) => {
                 // Slots past the last observation carry no data, except the forecast point.
                 const fp = isFc ? fcVal[i - (n - 1)] : null;
                 const v = isFc ? (fp ? fp.mins : null) : (i < n ? map[label] : null);
@@ -769,10 +769,10 @@ async function fetchAndRenderCongestionChart() {
         const latestSg = sgPts[sgPts.length - 1];
         const latestJb = jbPts[jbPts.length - 1];
         if (statSg && latestSg) {
-            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>SG → JB</strong>&nbsp;Latest: <strong>${fmtMin(latestSg.mins)} min</strong> at ${latestSg.label}${nextSg ? ` &rarr; <strong>${nextSg.mins.toFixed(1)}</strong> forecast at ${clockOf(nextSg.at)}` : ''}`;
+            statSg.innerHTML = `<span class="lc-dot sg"></span><strong>To Johor</strong>&nbsp;Latest: <strong>${fmtMin(latestSg.mins)} min</strong> at ${latestSg.label}${nextSg ? ` &rarr; <strong>${nextSg.mins.toFixed(1)}</strong> forecast at ${clockOf(nextSg.at)}` : ''}`;
         }
         if (statJb && latestJb) {
-            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>JB → SG</strong>&nbsp;Latest: <strong>${fmtMin(latestJb.mins)} min</strong> at ${latestJb.label}${nextJb ? ` &rarr; <strong>${nextJb.mins.toFixed(1)}</strong> forecast at ${clockOf(nextJb.at)}` : ''}`;
+            statJb.innerHTML = `<span class="lc-dot jb"></span><strong>To Singapore</strong>&nbsp;Latest: <strong>${fmtMin(latestJb.mins)} min</strong> at ${latestJb.label}${nextJb ? ` &rarr; <strong>${nextJb.mins.toFixed(1)}</strong> forecast at ${clockOf(nextJb.at)}` : ''}`;
         }
 
     } catch (err) {
@@ -794,8 +794,8 @@ const FORECAST_MAX_SLOTS = 66;        // 5.5 h in 5-min chart slots
 const FORECAST_TIMEOUT_MS = 60000;    // the first curve call can take ~20 s while the models fit
 const BASELINE_REFRESH_MS = 3600000;  // the profile is refitted once per SGT day
 const FORECAST_DIRECTIONS = [
-    { key: 'SG_TO_MY', label: 'SG → JB', cls: 'sg', color: '#00f2fe', series: 'mandai_to_shell_jb' },
-    { key: 'MY_TO_SG', label: 'JB → SG', cls: 'jb', color: '#ff9f1c', series: 'jb_to_woodlands' }
+    { key: 'SG_TO_MY', label: 'To Johor', cls: 'sg', color: '#00f2fe', series: 'mandai_to_shell_jb' },
+    { key: 'MY_TO_SG', label: 'To Singapore', cls: 'jb', color: '#ff9f1c', series: 'jb_to_woodlands' }
 ];
 
 const FORECAST_ERRORS = {

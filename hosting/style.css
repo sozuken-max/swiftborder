@@ -2588,6 +2588,21 @@ a.fc-card:focus-visible {
     }
 }
 
+@media (max-width: 400px) {
+    .summary-dir {
+        font-size: 0.92rem;
+        white-space: nowrap;
+        padding-right: 1.9rem;
+    }
+
+    .summary-go {
+        top: 0.7rem;
+        right: 0.7rem;
+        width: 1.7rem;
+        height: 1.7rem;
+    }
+}
+
 @media (max-width: 360px) {
     .summary-num {
         font-size: 2.3rem;
