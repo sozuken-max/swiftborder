@@ -48,37 +48,25 @@
                     <span class="summary-updated">Google Maps &middot; <strong id="last-updated">Loading&hellip;</strong></span>
                 </div>
 
-                <!-- Each card opens the live view (cameras + trend graph) -->
+                <!-- One card per direction: minutes, macro trend, colour = congestion. Tap opens the live view. -->
                 <div class="summary-grid" id="transit-breakdowns">
-                    <a class="summary-card sg" id="row-sg" href="#live" aria-label="SG to JB: open live cameras and trend">
-                        <span class="summary-dir"><span class="lc-dot sg"></span>SG &rarr; JB</span>
-                        <span class="summary-route">Mandai &rarr; Shell JB</span>
+                    <a class="summary-card" id="row-sg" href="#live" aria-label="SG &rarr; JB: open live cameras and trend">
+                        <span class="summary-dir">SG &rarr; JB</span>
                         <span class="summary-time"><span class="summary-num" id="sg-time">&mdash;</span><span class="summary-unit">min</span></span>
-                        <span class="summary-sub" id="sg-sub">Loading&hellip;</span>
-                        <span class="summary-badges">
-                            <span class="status-indicator-badge normal" id="sg-status">Loading&hellip;</span>
-                            <span class="time-trend stable" id="sg-trend">&#9644; Stable</span>
-                        </span>
-                        <span class="summary-next" id="sg-next"></span>
-                        <span class="summary-cta">Cameras &amp; trend &rsaquo;</span>
+                        <span class="summary-trend steady" id="sg-trend"><span class="trend-arrow" aria-hidden="true"></span><span class="trend-text">&hellip;</span></span>
+                        <span class="summary-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
                     </a>
 
-                    <a class="summary-card jb" id="row-jb" href="#live" aria-label="JB to SG: open live cameras and trend">
-                        <span class="summary-dir"><span class="lc-dot jb"></span>JB &rarr; SG</span>
-                        <span class="summary-route">JB &rarr; Woodlands</span>
+                    <a class="summary-card" id="row-jb" href="#live" aria-label="JB &rarr; SG: open live cameras and trend">
+                        <span class="summary-dir">JB &rarr; SG</span>
                         <span class="summary-time"><span class="summary-num" id="jb-time">&mdash;</span><span class="summary-unit">min</span></span>
-                        <span class="summary-sub" id="jb-sub">Loading&hellip;</span>
-                        <span class="summary-badges">
-                            <span class="status-indicator-badge normal" id="jb-status">Loading&hellip;</span>
-                            <span class="time-trend stable" id="jb-trend">&#9644; Stable</span>
-                        </span>
-                        <span class="summary-next" id="jb-next"></span>
-                        <span class="summary-cta">Cameras &amp; trend &rsaquo;</span>
+                        <span class="summary-trend steady" id="jb-trend"><span class="trend-arrow" aria-hidden="true"></span><span class="trend-text">&hellip;</span></span>
+                        <span class="summary-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
                     </a>
                 </div>
 
                 <div class="summary-foot">
-                    <span>Google Maps travel time, every 5 min.</span>
+                    <span class="legend-levels"><i class="lv normal"></i>Smooth <i class="lv warning"></i>Building <i class="lv danger"></i>Heavy</span>
                     <button class="refresh-btn" id="refresh-dashboard">&#128260; Refresh</button>
                 </div>
 

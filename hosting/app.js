@@ -14,19 +14,23 @@ const checkpointMeta = {
 
 // Direction config — keys map to the series names in traffic-24h.json.
 const DIRECTIONS = [
-    { key: 'sg', series: 'mandai_to_shell_jb', fcKey: 'SG_TO_MY', timeId: 'sg-time', subId: 'sg-sub', trendId: 'sg-trend', statusId: 'sg-status', nextId: 'sg-next' },
-    { key: 'jb', series: 'jb_to_woodlands', fcKey: 'MY_TO_SG', timeId: 'jb-time', subId: 'jb-sub', trendId: 'jb-trend', statusId: 'jb-status', nextId: 'jb-next' }
+    { key: 'sg', label: 'SG to JB', series: 'mandai_to_shell_jb', cardId: 'row-sg', timeId: 'sg-time', trendId: 'sg-trend' },
+    { key: 'jb', label: 'JB to SG', series: 'jb_to_woodlands', cardId: 'row-jb', timeId: 'jb-time', trendId: 'jb-trend' }
 ];
 
 // ── Trend / status tuning ──────────────────────────────────────────────────
-const TREND_WINDOW_MIN = 60;   // trailing window, minutes
+const TREND_WINDOW_MIN = 60;   // trailing window for the congestion level, minutes
 const RECENT_POINTS = 3;       // "now" = mean of the last N samples
-const TREND_STABLE_PCT = 10;   // recent mean within +/-10% of the 1h mean => stable
-const TREND_MIN_POINTS = 6;    // fewer samples than this => report stable, limited data
 const STALE_AFTER_MIN = 20;    // newest sample older than this => label the card stale
 const BASELINE_PCTILE = 0.20;  // 20th percentile of the 24h series = free-flow reference
 const STATUS_WARN_RATIO = 1.25; // recent mean / baseline
 const STATUS_DANGER_RATIO = 1.75;
+// Summary-card trend is macro: the last 30 min against the 60 min before it,
+// so one noisy 5-min sample cannot flip the arrow.
+const MACRO_RECENT_MIN = 30;
+const MACRO_PRIOR_MIN = 60;
+const MACRO_MIN_POINTS = 3;     // per half; fewer => steady
+const MACRO_STABLE_PCT = 10;
 
 // ── Global State ───────────────────────────────────────────────────────────
 let currentCheckpoint = 'woodlands';
@@ -413,38 +417,17 @@ function mean(values) {
     return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-// Current conditions for one direction over the trailing window.
-// Trend = mean of the most recent RECENT_POINTS samples vs the mean of the
-// whole window. Outside +/- TREND_STABLE_PCT it is increasing / decreasing.
+// Current conditions for one direction over the trailing window. recentMean
+// (the last RECENT_POINTS samples) feeds the congestion colour.
 function analyseDirection(allPts, windowStart, anchor) {
     const win = allPts.filter(p => p.t >= windowStart && p.t <= anchor);
     if (!win.length) return { ok: false };
 
     const mins = win.map(p => p.mins);
-    const windowMean = mean(mins);
-    const recent = mins.slice(-RECENT_POINTS);
-    const recentMean = mean(recent);
-
-    const pct = windowMean > 0 ? ((recentMean - windowMean) / windowMean) * 100 : 0;
-    const thin = win.length < TREND_MIN_POINTS;
-    const trend = thin ? 'stable'
-        : pct > TREND_STABLE_PCT ? 'up'
-            : pct < -TREND_STABLE_PCT ? 'down'
-                : 'stable';
-
     return {
         ok: true,
-        p25: percentile(mins, 0.25),
-        p75: percentile(mins, 0.75),
-        median: percentile(mins, 0.50),
-        recentMean,
-        recentCount: recent.length,
-        windowMean,
+        recentMean: mean(mins.slice(-RECENT_POINTS)),
         count: win.length,
-        latestAt: win[win.length - 1].t,
-        pct,
-        trend,
-        thin,
         // 24h free-flow reference for this direction, used for the congestion label
         baseline: percentile(allPts.map(p => p.mins), BASELINE_PCTILE)
     };
@@ -461,24 +444,7 @@ function congestionLevel(r) {
     return { text: 'Moving Smoothly', cls: 'normal', ratio };
 }
 
-function renderTrend(el, r) {
-    if (!el) return;
-    if (!r.ok) { el.textContent = '- no data'; el.className = 'time-trend stable'; return; }
-    if (r.thin) { el.textContent = '▬ Stable (limited data)'; el.className = 'time-trend stable'; return; }
-    const sign = r.pct >= 0 ? '+' : '';
-    const pctTxt = `${sign}${r.pct.toFixed(0)}% vs 1h avg`;
-    if (r.trend === 'up') { el.textContent = `▲ Increasing ${pctTxt}`; el.className = 'time-trend up'; }
-    else if (r.trend === 'down') { el.textContent = `▼ Decreasing ${pctTxt}`; el.className = 'time-trend down'; }
-    else { el.textContent = `▬ Stable ${pctTxt}`; el.className = 'time-trend stable'; }
-}
-
 // ── Dashboard UI ───────────────────────────────────────────────────────────
-function setDirStatus(el, level) {
-    if (!el) return;
-    el.textContent = level.text;
-    el.className = `status-indicator-badge ${level.cls}`;
-}
-
 // Whole minutes, the way the summary quotes Google's travel time. Every "now"
 // figure on the page (summary, forecast cards, chart footer) goes through this,
 // so they agree with each other and with the newest sample in traffic-24h.json.
@@ -489,6 +455,41 @@ function fmtMin(m) {
 // The summary headline is the newest Google Maps sample for each direction:
 // duration_in_traffic from the Distance Matrix fetcher, as written to traffic-24h.json.
 // Status and trend use the trailing hour so one noisy sample does not flip them.
+function macroTrend(pts, anchor) {
+    const recentStart = anchor - MACRO_RECENT_MIN * 60000;
+    const priorStart = recentStart - MACRO_PRIOR_MIN * 60000;
+    const recent = pts.filter(p => p.t > recentStart && p.t <= anchor).map(p => p.mins);
+    const prior = pts.filter(p => p.t > priorStart && p.t <= recentStart).map(p => p.mins);
+    if (recent.length < MACRO_MIN_POINTS || prior.length < MACRO_MIN_POINTS) return { dir: 'steady', pct: 0 };
+    const pct = ((mean(recent) - mean(prior)) / mean(prior)) * 100;
+    return { dir: pct > MACRO_STABLE_PCT ? 'up' : pct < -MACRO_STABLE_PCT ? 'down' : 'steady', pct };
+}
+
+const TREND_TEXT = { up: 'Rising', down: 'Easing', steady: 'Steady' };
+
+function renderSummaryCard(d, { mins, level, trend }) {
+    const card = document.getElementById(d.cardId);
+    const timeEl = document.getElementById(d.timeId);
+    const trendEl = document.getElementById(d.trendId);
+    if (timeEl) timeEl.textContent = mins == null ? '—' : fmtMin(mins);
+    if (card) {
+        card.classList.remove('normal', 'warning', 'danger', 'nodata');
+        card.classList.add(level ? level.cls : 'nodata');
+        const what = mins == null ? 'no data' : `${fmtMin(mins)} minutes, ${level.text.toLowerCase()}, ${TREND_TEXT[trend.dir].toLowerCase()}`;
+        card.setAttribute('aria-label', `${d.label}: ${what}. Open live cameras and trend.`);
+    }
+    if (trendEl) {
+        const dir = trend ? trend.dir : 'steady';
+        trendEl.className = `summary-trend ${dir}`;
+        trendEl.querySelector('.trend-text').textContent = mins == null ? 'No data' : TREND_TEXT[dir];
+        trendEl.title = trend && mins != null ? `Last 30 min vs the hour before: ${trend.pct >= 0 ? '+' : ''}${trend.pct.toFixed(0)}%` : '';
+    }
+}
+
+// The summary headline is the newest Google Maps sample for each direction:
+// duration_in_traffic from the Distance Matrix fetcher, as written to traffic-24h.json.
+// Colour is the congestion level of the last few samples against the direction's own
+// 24h free-flow baseline; the arrow is the macro trend.
 async function updateDashboardUI() {
     const lastUpdated = document.getElementById('last-updated');
 
@@ -507,26 +508,9 @@ async function updateDashboardUI() {
 
         DIRECTIONS.forEach(d => {
             const r = analyseDirection(byKey[d.key], windowStart, anchor);
-            const timeEl = document.getElementById(d.timeId);
-            const subEl = document.getElementById(d.subId);
-            const trendEl = document.getElementById(d.trendId);
-            const statusEl = document.getElementById(d.statusId);
-
-            if (!r.ok) {
-                if (timeEl) timeEl.textContent = '—';
-                if (subEl) subEl.textContent = 'No samples in the last hour';
-                setDirStatus(statusEl, { text: 'No Data', cls: 'warning' });
-                renderTrend(trendEl, r);
-                return;
-            }
-
+            if (!r.ok) { renderSummaryCard(d, { mins: null }); return; }
             const latest = byKey[d.key].filter(p => p.t <= anchor).pop();
-            if (timeEl) timeEl.textContent = fmtMin(latest.mins);
-            if (subEl) {
-                subEl.textContent = `at ${sgtClock(latest.t)} SGT · 1h range ${fmtMin(r.p25)}–${fmtMin(r.p75)} min`;
-            }
-            setDirStatus(statusEl, congestionLevel(r));
-            renderTrend(trendEl, r);
+            renderSummaryCard(d, { mins: latest.mins, level: congestionLevel(r), trend: macroTrend(byKey[d.key], anchor) });
         });
 
         if (lastUpdated) {
@@ -535,26 +519,9 @@ async function updateDashboardUI() {
         }
     } catch (err) {
         console.error('Traffic summary error:', err);
-        DIRECTIONS.forEach(d => {
-            const timeEl = document.getElementById(d.timeId);
-            const subEl = document.getElementById(d.subId);
-            if (timeEl) timeEl.textContent = '—';
-            if (subEl) subEl.textContent = 'Live data unavailable';
-            setDirStatus(document.getElementById(d.statusId), { text: 'Unavailable', cls: 'danger' });
-            renderTrend(document.getElementById(d.trendId), { ok: false });
-        });
+        DIRECTIONS.forEach(d => renderSummaryCard(d, { mins: null }));
         if (lastUpdated) lastUpdated.textContent = 'Feed unavailable';
     }
-}
-
-// Nearest forecast point under each summary card. Empty until forecast-api answers.
-function renderSummaryNext() {
-    DIRECTIONS.forEach(d => {
-        const el = document.getElementById(d.nextId);
-        if (!el) return;
-        const f = forecastView?.dirs[d.fcKey]?.points[0];
-        el.innerHTML = f ? `Forecast <strong>${fmtMin(f.mins)} min</strong> at ${sgtClock(f.at)}` : '';
-    });
 }
 
 // ── Live Travel Time Chart ─────────────────────────────────────────────────
@@ -1014,16 +981,9 @@ function renderForecastCards() {
         const now = obs.length ? obs[obs.length - 1].mins : null;
         const delta = now == null ? null : f.mins - now;
 
-        // Label the forecast against this direction's own 24h free-flow level.
+        // Colour the forecast by this direction's own 24h free-flow level, as on the summary cards.
         const baseline = obs.length ? percentile(obs.map(p => p.mins), BASELINE_PCTILE) : null;
         const level = congestionLevel({ ok: baseline != null, baseline, recentMean: f.mins });
-
-        // Same stable band as the Traffic Summary card.
-        const pct = now > 0 ? (delta / now) * 100 : 0;
-        const trend = delta == null ? null
-            : pct > TREND_STABLE_PCT ? { cls: 'up', txt: `▲ Rising ${pct.toFixed(0)}%` }
-                : pct < -TREND_STABLE_PCT ? { cls: 'down', txt: `▼ Easing ${Math.abs(pct).toFixed(0)}%` }
-                    : { cls: 'stable', txt: '▬ Steady' };
 
         const nowLine = delta == null ? '' :
             `<div class="fc-now">Now <strong>${fmtMin(now)}</strong> min <span class="fc-delta">(${delta >= 0 ? '+' : ''}${delta.toFixed(1)})</span></div>`;
@@ -1031,21 +991,15 @@ function renderForecastCards() {
 
         return `
             <a class="fc-card ${d.cls}" href="#live" aria-label="${d.label}: open live cameras and trend">
-                <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}<span class="fc-card-cta">Cameras &amp; trend &rsaquo;</span></div>
+                <div class="fc-card-head"><span class="lc-dot ${d.cls}"></span>${d.label}<span class="summary-go fc-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
                 <div class="fc-main">
-                    <span class="fc-value">${f.mins.toFixed(1)}</span>
+                    <span class="fc-value lv-text ${level.cls}">${f.mins.toFixed(1)}</span>
                     <span class="fc-when">min at ${sgtClock(f.at)} SGT${lead}</span>
                 </div>
                 ${nowLine}
-                <div class="fc-badges">
-                    <span class="status-indicator-badge ${level.cls}">${level.text}</span>
-                    ${trend ? `<span class="time-trend ${trend.cls}">${trend.txt} vs now</span>` : ''}
-                </div>
                 ${forecastCompare(d, view, spanH)}
             </a>`;
     }).join('');
-
-    renderSummaryNext();
 
     const origin = FORECAST_DIRECTIONS.map(d => forecastView.dirs[d.key].originAt).filter(Number.isFinite).sort().pop();
     const updatedEl = document.getElementById('fc-updated');
@@ -1089,7 +1043,6 @@ async function fetchForecast() {
                 : err.message;
         if (chartForecast) { chartForecast = null; fetchAndRenderCongestionChart(); } // drop a stale extension
         forecastView = null;
-        renderSummaryNext();
         cards.innerHTML = '';
         setForecastStatus(`Forecast unavailable: ${msg}`);
         if (updatedEl) updatedEl.textContent = 'Unavailable';

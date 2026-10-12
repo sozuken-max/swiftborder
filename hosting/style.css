@@ -2249,6 +2249,14 @@ h4 {
 }
 
 /* ── Traffic summary: one tappable card per direction ───────────────────── */
+/* Card colour = congestion level (normal / warning / danger); arrow = macro trend. */
+:root {
+    --lv-normal: #2ecc71;
+    --lv-warning: #f5b324;
+    --lv-danger: #ff5a5a;
+    --lv-none: #94a3b8;
+}
+
 .summary-head {
     display: flex;
     align-items: baseline;
@@ -2274,76 +2282,59 @@ h4 {
 .summary-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .summary-card {
+    --lv: var(--lv-none);
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.35rem;
-    padding: 1.1rem 1.25rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-top: 3px solid var(--text-muted);
-    border-radius: 16px;
-    transition: var(--transition-normal);
+    gap: 0.5rem;
+    padding: 1rem 1.1rem 1.1rem;
     min-width: 0;
+    background: linear-gradient(160deg, color-mix(in srgb, var(--lv) 16%, transparent), color-mix(in srgb, var(--lv) 4%, transparent));
+    border: 1px solid color-mix(in srgb, var(--lv) 35%, transparent);
+    border-radius: 18px;
+    transition: transform var(--transition-fast), border-color var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
 }
 
-.summary-card.sg {
-    border-top-color: #00f2fe;
-}
-
-.summary-card.jb {
-    border-top-color: #ff9f1c;
-}
+.summary-card.normal { --lv: var(--lv-normal); }
+.summary-card.warning { --lv: var(--lv-warning); }
+.summary-card.danger { --lv: var(--lv-danger); }
 
 .summary-card:hover,
 .summary-card:focus-visible {
-    background: var(--bg-card-hover);
-    border-color: rgba(0, 242, 254, 0.3);
+    border-color: var(--lv);
     outline: none;
 }
 
+.summary-card:active {
+    transform: scale(0.98);
+}
+
 .summary-dir {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
     font-family: var(--font-heading);
     font-weight: 700;
-    font-size: 1.05rem;
+    font-size: 1rem;
     color: var(--text-white);
-}
-
-.summary-route,
-.summary-sub,
-.summary-next {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.summary-next strong {
-    color: var(--text-main);
-}
-
-.summary-next:empty {
-    display: none;
+    padding-right: 2.2rem; /* room for the chevron */
 }
 
 .summary-time {
     display: flex;
     align-items: baseline;
-    gap: 0.35rem;
-    margin-top: 0.2rem;
+    gap: 0.3rem;
 }
 
 .summary-num {
     font-family: var(--font-heading);
-    font-size: 3rem;
+    font-size: 3.2rem;
     font-weight: 800;
     line-height: 1;
-    color: var(--text-white);
+    color: var(--lv);
 }
 
 .summary-unit {
@@ -2352,39 +2343,80 @@ h4 {
     color: var(--text-muted);
 }
 
-.summary-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-top: 0.2rem;
-}
-
-.summary-badges .status-indicator-badge {
-    font-size: 0.68rem;
-    padding: 0.25rem 0.6rem;
-    white-space: nowrap;
-}
-
-.summary-badges .time-trend {
-    font-size: 0.7rem;
-    white-space: nowrap;
-}
-
-.summary-cta,
-.fc-card-cta {
-    font-size: 0.75rem;
+/* Macro trend: arrow + one word */
+.summary-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
     font-weight: 600;
-    color: var(--primary);
+    color: var(--text-main);
 }
 
-.summary-cta {
-    margin-top: 0.3rem;
+.trend-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    line-height: 1;
+    background: rgba(255, 255, 255, 0.08);
 }
 
-.fc-card-cta {
+.summary-trend.up .trend-arrow::before { content: "\2191"; }
+.summary-trend.down .trend-arrow::before { content: "\2193"; }
+.summary-trend.steady .trend-arrow::before { content: "\2192"; }
+
+.summary-trend.up .trend-arrow {
+    color: var(--lv-danger);
+    background: color-mix(in srgb, var(--lv-danger) 18%, transparent);
+}
+
+.summary-trend.down .trend-arrow {
+    color: var(--lv-normal);
+    background: color-mix(in srgb, var(--lv-normal) 18%, transparent);
+}
+
+/* Tap affordance: chevron in a circle, top right of the card */
+.summary-go {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.summary-go svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: var(--text-white);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.fc-card-head {
+    position: relative;
+}
+
+.summary-go.fc-go {
+    position: static;
     margin-left: auto;
-    font-family: var(--font-body);
+    width: 1.7rem;
+    height: 1.7rem;
 }
+
+.lv-text.normal { color: var(--lv-normal); }
+.lv-text.warning { color: var(--lv-warning); }
+.lv-text.danger { color: var(--lv-danger); }
 
 .summary-foot {
     display: flex;
@@ -2394,6 +2426,26 @@ h4 {
     font-size: 0.78rem;
     color: var(--text-muted);
 }
+
+.legend-levels {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.legend-levels .lv {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    margin-left: 0.4rem;
+}
+
+.legend-levels .lv:first-child { margin-left: 0; }
+.legend-levels .lv.normal { background: var(--lv-normal); }
+.legend-levels .lv.warning { background: var(--lv-warning); }
+.legend-levels .lv.danger { background: var(--lv-danger); }
 
 a.fc-card {
     transition: var(--transition-normal);
@@ -2493,11 +2545,11 @@ a.fc-card:focus-visible {
     }
 
     .summary-card {
-        padding: 0.85rem 0.8rem;
+        padding: 0.85rem 0.85rem 0.95rem;
     }
 
     .summary-num {
-        font-size: 2.4rem;
+        font-size: 2.8rem;
     }
 
     .dashboard-card {
@@ -2527,10 +2579,6 @@ a.fc-card:focus-visible {
         display: none;
     }
 
-    .summary-badges .time-trend {
-        white-space: normal;
-    }
-
     .lc-stat {
         display: block;
     }
@@ -2542,11 +2590,7 @@ a.fc-card:focus-visible {
 
 @media (max-width: 360px) {
     .summary-num {
-        font-size: 2rem;
-    }
-
-    .summary-route {
-        display: none;
+        font-size: 2.3rem;
     }
 }
 

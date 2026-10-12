@@ -10,6 +10,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
   - The Toll & Compliance Calculator section, its toll table and its CSS are removed.
   - Camera capture times are formatted in `Asia/Singapore`; before this they used the browser's timezone and were labelled SGT anyway.
   - Not deployed; Hosting deploy stays manual ([ADR 0002](docs/adr/0002-firebase-hosting-source.md)).
+- `hosting/`: the summary cards show only the direction, the minutes, a trend arrow and a chevron. The card is tinted green, amber or red by congestion level, which is unchanged: the last three samples against the direction's 24 h 20th-percentile baseline, at 1.25x and 1.75x. The arrow is now a macro trend, the mean of the last 30 min against the 60 min before it, ±10% for Rising / Easing, and Steady when either half has fewer than three samples. It used to be the last three samples against the hour mean. The route line, range text, status and trend pills, next-forecast line and "Cameras & trend" text are gone, and a colour legend sits under the cards. The forecast cards lose their status and trend pills; the forecast value takes the level colour and a chevron replaces the link text. On 12 Oct 14:40 SGT: SG → JB 27 min, heavy, steady (-4%); JB → SG 44 min, heavy, rising (+20%).
 
 ## 2026-10-11
 
