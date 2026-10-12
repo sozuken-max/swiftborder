@@ -28,5 +28,6 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SWIFTBORDER_92B45 }}
           projectId: swiftborder-92b45
-          # main -> live channel; PRs -> temporary preview URL commented on the PR
-          channelId: ${{ github.event_name == 'pull_request' && '' || 'live' }}
+          # main -> live; PRs -> '' (preview channel). Keep 'live' first: '' is falsy,
+          # so `cond && '' || 'live'` would always deploy live.
+          channelId: ${{ github.event_name != 'pull_request' && 'live' || '' }}
