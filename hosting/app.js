@@ -19,12 +19,12 @@ const DIRECTIONS = [
 ];
 
 // ── Trend / status tuning ──────────────────────────────────────────────────
-const TREND_WINDOW_MIN = 60;   // trailing window for the congestion level, minutes
-const RECENT_POINTS = 3;       // "now" = mean of the last N samples
+const TREND_WINDOW_MIN = 60;   // no sample in this trailing window => the card shows no data
 const STALE_AFTER_MIN = 20;    // newest sample older than this => label the card stale
-const BASELINE_PCTILE = 0.20;  // 20th percentile of the 24h series = free-flow reference
-const STATUS_WARN_RATIO = 1.25; // recent mean / baseline
-const STATUS_DANGER_RATIO = 1.75;
+// Congestion colour: fixed minute cut-offs, the same for both directions, applied
+// to the number shown (whole minutes): under 30 green, 30-50 amber, over 50 red.
+const LEVEL_WARN_MIN = 30;
+const LEVEL_DANGER_MIN = 50;
 // Summary-card trend is macro: the last 30 min against the 60 min before it,
 // so one noisy 5-min sample cannot flip the arrow.
 const MACRO_RECENT_MIN = 30;
@@ -405,43 +405,17 @@ function seriesPoints(data, name) {
         .sort((a, b) => a.t - b.t);
 }
 
-function percentile(values, q) {
-    if (!values.length) return null;
-    const s = [...values].sort((a, b) => a - b);
-    const pos = q * (s.length - 1);
-    const lo = Math.floor(pos), hi = Math.ceil(pos);
-    return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (pos - lo); // linear interpolation
-}
-
 function mean(values) {
     return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-// Current conditions for one direction over the trailing window. recentMean
-// (the last RECENT_POINTS samples) feeds the congestion colour.
-function analyseDirection(allPts, windowStart, anchor) {
-    const win = allPts.filter(p => p.t >= windowStart && p.t <= anchor);
-    if (!win.length) return { ok: false };
-
-    const mins = win.map(p => p.mins);
-    return {
-        ok: true,
-        recentMean: mean(mins.slice(-RECENT_POINTS)),
-        count: win.length,
-        // 24h free-flow reference for this direction, used for the congestion label
-        baseline: percentile(allPts.map(p => p.mins), BASELINE_PCTILE)
-    };
-}
-
-// Congestion label is per direction: current level against that direction's
-// own 24h free-flow baseline. JB -> SG runs far slower than SG -> JB, so a
-// single shared threshold would mislabel one of them.
-function congestionLevel(r) {
-    if (!r.ok || !r.baseline) return { text: 'No Data', cls: 'warning' };
-    const ratio = r.recentMean / r.baseline;
-    if (ratio >= STATUS_DANGER_RATIO) return { text: 'Heavy Congestion', cls: 'danger', ratio };
-    if (ratio >= STATUS_WARN_RATIO) return { text: 'Building Up', cls: 'warning', ratio };
-    return { text: 'Moving Smoothly', cls: 'normal', ratio };
+// Colour for a travel time, on the rounded value so the colour matches the digits shown.
+function congestionLevel(mins) {
+    if (mins == null) return { text: 'No Data', cls: 'nodata' };
+    const m = Math.round(mins);
+    if (m > LEVEL_DANGER_MIN) return { text: 'Heavy Congestion', cls: 'danger' };
+    if (m >= LEVEL_WARN_MIN) return { text: 'Building Up', cls: 'warning' };
+    return { text: 'Moving Smoothly', cls: 'normal' };
 }
 
 // ── Dashboard UI ───────────────────────────────────────────────────────────
@@ -488,8 +462,7 @@ function renderSummaryCard(d, { mins, level, trend }) {
 
 // The summary headline is the newest Google Maps sample for each direction:
 // duration_in_traffic from the Distance Matrix fetcher, as written to traffic-24h.json.
-// Colour is the congestion level of the last few samples against the direction's own
-// 24h free-flow baseline; the arrow is the macro trend.
+// Colour is that same number against the fixed cut-offs; the arrow is the macro trend.
 async function updateDashboardUI() {
     const lastUpdated = document.getElementById('last-updated');
 
@@ -507,10 +480,9 @@ async function updateDashboardUI() {
         const windowStart = anchor - TREND_WINDOW_MIN * 60000;
 
         DIRECTIONS.forEach(d => {
-            const r = analyseDirection(byKey[d.key], windowStart, anchor);
-            if (!r.ok) { renderSummaryCard(d, { mins: null }); return; }
             const latest = byKey[d.key].filter(p => p.t <= anchor).pop();
-            renderSummaryCard(d, { mins: latest.mins, level: congestionLevel(r), trend: macroTrend(byKey[d.key], anchor) });
+            if (!latest || latest.t < windowStart) { renderSummaryCard(d, { mins: null }); return; }
+            renderSummaryCard(d, { mins: latest.mins, level: congestionLevel(latest.mins), trend: macroTrend(byKey[d.key], anchor) });
         });
 
         if (lastUpdated) {
@@ -981,9 +953,8 @@ function renderForecastCards() {
         const now = obs.length ? obs[obs.length - 1].mins : null;
         const delta = now == null ? null : f.mins - now;
 
-        // Colour the forecast by this direction's own 24h free-flow level, as on the summary cards.
-        const baseline = obs.length ? percentile(obs.map(p => p.mins), BASELINE_PCTILE) : null;
-        const level = congestionLevel({ ok: baseline != null, baseline, recentMean: f.mins });
+        // Same cut-offs as the summary cards.
+        const level = congestionLevel(f.mins);
 
         const nowLine = delta == null ? '' :
             `<div class="fc-now">Now <strong>${fmtMin(now)}</strong> min <span class="fc-delta">(${delta >= 0 ? '+' : ''}${delta.toFixed(1)})</span></div>`;
