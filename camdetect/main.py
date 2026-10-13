@@ -353,9 +353,16 @@ def _get_local_session():
                     # The arena keeps its high-water mark: ~625 MB peak RSS with it, ~380 MB without,
                     # at the same latency (1920x1080 frame, 4 vCPU).
                     options.enable_cpu_mem_arena = False
-                    _local_session = ort.InferenceSession(
-                        LOCAL_MODEL_PATH, options, providers=["CPUExecutionProvider"]
-                    )
+                    # gpu.Dockerfile installs onnxruntime-gpu, which offers CUDA; the CPU image does not,
+                    # so the same code runs on both services.
+                    providers = ["CPUExecutionProvider"]
+                    if "CUDAExecutionProvider" in ort.get_available_providers():
+                        providers.insert(0, "CUDAExecutionProvider")
+                    if len(providers) > 1:
+                        ort.preload_dlls()  # load the pip-installed CUDA/cuDNN libraries
+                    _local_session = ort.InferenceSession(LOCAL_MODEL_PATH, options, providers=providers)
+                    # onnxruntime drops to CPU if CUDA fails to start; this line shows which one ran.
+                    print(f"local model providers: {_local_session.get_providers()}", flush=True)
                 except Exception as exc:  # missing file, bad graph, or runtime not installed
                     raise LocalModelUnavailable(str(exc)) from exc
     return _local_session

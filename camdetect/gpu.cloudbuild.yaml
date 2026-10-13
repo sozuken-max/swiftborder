@@ -1,0 +1,11 @@
+# Manual build for the swiftbackend-gpu test service (no trigger). Run from the repo root:
+#   gcloud builds submit camdetect --config=camdetect/gpu.cloudbuild.yaml --project=swiftborder
+# Builds gpu.Dockerfile and pushes it; the deploy is a separate gcloud run deploy (docs/gpu-backend-test.md).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -f, gpu.Dockerfile, --tag=$_IMAGE, .]
+images: [$_IMAGE]
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/swiftborder/cloud-run-source-deploy/swiftbackend-gpu:latest
+options:
+  machineType: E2_HIGHCPU_8

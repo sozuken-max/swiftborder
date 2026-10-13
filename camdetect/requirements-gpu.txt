@@ -1,0 +1,6 @@
+# swiftbackend-gpu image (gpu.Dockerfile): requirements.txt with the CUDA build of onnxruntime.
+functions-framework==3.10.2
+requests==2.34.2
+Pillow==12.3.0
+onnxruntime-gpu[cuda,cudnn]==1.29.0
+numpy==2.4.6
