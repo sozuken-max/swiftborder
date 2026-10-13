@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-13
+
+- `gmapfetcher/`: source of Cloud Run `gmap-woodlands-fetcher` (`index.js`, `package.json`, v1.1.0) copied from the console Source tab, with a README. No build trigger yet; nothing deploys from this folder automatically.
+
 ## 2026-10-12
 
 - `hosting/`: the page opens on the traffic summary. The navbar is one slim sticky row (on phones the nav links and NUS-ISS badge are hidden), and the 7rem top padding, page title and Causeway/Tuas tabs above the summary are gone. Two tappable cards show SG → JB and JB → SG. Each card's headline is the newest Google Maps `duration_in_traffic` sample in `traffic-24h.json`, in whole minutes, with its SGT time and the trailing-hour range; it used to be the trailing-hour interquartile range. The forecast cards' "Now" and the chart footer use the same rounding, so all three agree. On 12 Oct 14:30 SGT the feed held 1,654 s and 2,364 s, and the page showed 28 and 39 min. No Tuas content appears on the summary.

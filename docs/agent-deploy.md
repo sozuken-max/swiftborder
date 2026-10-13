@@ -18,7 +18,7 @@ Read [AGENTS.md](../AGENTS.md) first. Do not invent services, env vars, or metri
 | `eval/` | Read-only harnesses: `layer_b.py` (30 min production models), `joined.py`, `layer_a.py`, offline XGB/LSTM, significance, report manifest. | A deploy path. Nothing writes to Cloud Run, BigQuery or `model_registry`. |
 | `.github/workflows/tests.yml` | Fast test suites on push and PR, including `forecastapi`. | A deploy path; it has no secrets and no service-account key. |
 | `forecastapi/cloudbuild.yaml` | Tests (including the harness equivalence test), build, a no-traffic candidate deploy, a smoke test, then traffic promotion for Cloud Run `forecast-api` in `asia-southeast1`, when a `^main$` trigger sees a `forecastapi/**` change. The service fits local models (ADR 0004). | A deploy of `swiftbackend`. It does not run on this branch, and the service does not exist until that `main` build. |
-| `docs/` | Report drafts, inventory, roadmap | The Maps fetcher, the backfill job, or the forecast SQL |
+| `docs/` | Report drafts, inventory, roadmap | The backfill job or the forecast SQL |
 
 Direction names in `camdetect` are `SG-MY` and `MY-SG`. The BigQuery congestion view maps `to_JB` / `to_Woodlands` onto `SG_TO_MY` / `MY_TO_SG`. Any join has to translate those names. Do not assume they already match.
 
@@ -33,7 +33,7 @@ Re-query [inventory.md](inventory.md) before you edit a service.
 | Live resource | Region | In git? |
 | --- | --- | --- |
 | Cloud Run `swiftbackend` | `europe-west1` | Source is `camdetect/` on `main`. Deploy is an **inline** Cloud Build trigger (`76bbca35-c1b4-4836-9f34-d7adda53ea17`), push to `^main$`, **pytest** then a docker build of [camdetect/Dockerfile](../camdetect/Dockerfile), function target `detect`. Config is [camdetect/cloudbuild.yaml](../camdetect/cloudbuild.yaml) (trigger switched from inline on 2026-10-08). **Included files** are runtime paths only (`main.py`, `requirements.txt`, Dockerfile, yaml/json/toml under `camdetect/`). Tests, dev requirements, `README.md`, and the rest of the repo do not start this build. Details: [camdetect/README.md](../camdetect/README.md). |
-| Cloud Run `gmap-woodlands-fetcher` | `asia-southeast1` | No |
+| Cloud Run `gmap-woodlands-fetcher` | `asia-southeast1` | Source copied from the console into [gmapfetcher/](../gmapfetcher/) on 2026-10-13. No build trigger; still deployed from the console or by hand. |
 | Cloud Scheduler `Gmap-Woodlands` | `asia-southeast1` | No. It calls the fetcher every 5 minutes. |
 | Cloud Run job `traffic-backfill` | `asia-southeast1` | No |
 | Views and models under `traffic_prediction`, plus the weather and congestion views | BigQuery | **SQL in** [sql/](../sql/); not applied by Cloud Build |
