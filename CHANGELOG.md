@@ -4,6 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-13
 
+- `gmapfetcher/` 1.2.0: built for a 10-minute fetch (Scheduler `Gmap-Woodlands` moves from `*/5` to `*/10` in the console) to halve Distance Matrix calls. BigQuery `causeway.travel_times` gets real rows only; `v_bins_10min` and `forecast-api` are unchanged. `traffic-24h.json` adds a linear midpoint between real points 10 min apart and a 4th point field, `interpolated`. Offline 5-minute eval (`eval/timeseries_xgb.py`) sees 10-minute spacing from the switch onward.
 - `gmapfetcher/`: Cloud Build trigger `33e4b77e-dbce-426e-a701-de234ec16d60` (Cloud Run **Connect to repo**) now deploys `gmap-woodlands-fetcher` from `main` when `gmapfetcher/**` changes. First build `9f1684b1` from `5ed2f4d` succeeded and the 12:30 / 12:35 SGT runs wrote `OK` rows. `package.json` pins `engines.node` to 22; that first build used Node 24 because no version was set.
 - `gmapfetcher/`: source of Cloud Run `gmap-woodlands-fetcher` (`index.js`, `package.json`, v1.1.0) copied from the console Source tab, with a README. No build trigger yet; nothing deploys from this folder automatically.
 

@@ -3,7 +3,7 @@
 Source of the Cloud Run service `gmap-woodlands-fetcher` (`asia-southeast1`), copied from the
 console **Source** tab on 2026-10-13. Node.js 22, function entry point `fetchTravelTimes`.
 
-Every run (Cloud Scheduler `Gmap-Woodlands`, every 5 minutes):
+Every run (Cloud Scheduler `Gmap-Woodlands`, every 10 minutes since 2026-10-13; every 5 before):
 
 1. Calls the Google Maps Distance Matrix API (`traffic_model: best_guess`) for two Woodlands routes:
    `mandai_to_shell_jb` (`SG_TO_MY`) and `jb_to_woodlands` (`MY_TO_SG`).
@@ -11,6 +11,23 @@ Every run (Cloud Scheduler `Gmap-Woodlands`, every 5 minutes):
    non-`OK` `status`).
 3. Rebuilds the last-24 h snapshot `gs://swiftborder-public/traffic-24h.json` that `hosting/` reads.
    A snapshot failure does not fail the run.
+
+## 10-minute fetch, 5-minute snapshot
+
+To halve Distance Matrix calls, the fetcher runs every 10 minutes. BigQuery gets **real rows
+only**. `traffic_prediction.v_bins_10min` (read by `forecast-api` and the eval harness) already
+averages into 10-minute bins, so each bin simply holds one observation instead of two.
+
+The JSON snapshot keeps the website's 5-minute grid: between two real points exactly 10 minutes
+apart, `snapshot.js` adds the straight-line midpoint (duration rounded to whole seconds, speed to
+2 dp). Each point is `[datetime_sgt, duration_in_traffic_sec, speed_kmh, interpolated]`; the newest
+point is always real. Older 5-minute history and longer gaps are left as they are.
+
+Interpolated rows are deliberately **not** written to BigQuery: a 12:05 midpoint is computed from
+the 12:10 reading, so it would leak a later observation into the 12:00 bin and change that bin
+after `forecast-api` had already read it.
+
+Tests: `npm test` (Node's built-in runner, no install needed for `test/snapshot.test.js`).
 
 ## Configuration (names only; values live in Cloud Run)
 

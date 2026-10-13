@@ -2,6 +2,7 @@ import { http } from '@google-cloud/functions-framework';
 import { Client } from '@googlemaps/google-maps-services-js';
 import { BigQuery } from '@google-cloud/bigquery';
 import { Storage } from '@google-cloud/storage';
+import { fillMidpoints } from './snapshot.js';
 
 const MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const BQ_DATASET = process.env.BQ_DATASET || 'causeway';
@@ -138,11 +139,12 @@ async function writeSnapshot(observedAt) {
     if (!series[row.route_id]) continue;
     series[row.route_id].points.push([row.t, row.sec, row.speed_kmh]);
   }
+  for (const s of Object.values(series)) s.points = fillMidpoints(s.points);
 
   const payload = {
     updated_at_sgt: toSgtParts(observedAt).datetime,
     window_hours: 24,
-    point_format: ['datetime_sgt', 'duration_in_traffic_sec', 'speed_kmh'],
+    point_format: ['datetime_sgt', 'duration_in_traffic_sec', 'speed_kmh', 'interpolated'],
     series,
   };
 
