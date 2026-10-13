@@ -3,6 +3,9 @@
   "version": "1.1.0",
   "type": "module",
   "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "start": "functions-framework --target=fetchTravelTimes"
   },

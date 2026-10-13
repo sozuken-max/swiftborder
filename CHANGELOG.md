@@ -4,6 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-13
 
+- `gmapfetcher/`: Cloud Build trigger `33e4b77e-dbce-426e-a701-de234ec16d60` (Cloud Run **Connect to repo**) now deploys `gmap-woodlands-fetcher` from `main` when `gmapfetcher/**` changes. First build `9f1684b1` from `5ed2f4d` succeeded and the 12:30 / 12:35 SGT runs wrote `OK` rows. `package.json` pins `engines.node` to 22; that first build used Node 24 because no version was set.
 - `gmapfetcher/`: source of Cloud Run `gmap-woodlands-fetcher` (`index.js`, `package.json`, v1.1.0) copied from the console Source tab, with a README. No build trigger yet; nothing deploys from this folder automatically.
 
 ## 2026-10-12

@@ -33,7 +33,7 @@ Re-query [inventory.md](inventory.md) before you edit a service.
 | Live resource | Region | In git? |
 | --- | --- | --- |
 | Cloud Run `swiftbackend` | `europe-west1` | Source is `camdetect/` on `main`. Deploy is an **inline** Cloud Build trigger (`76bbca35-c1b4-4836-9f34-d7adda53ea17`), push to `^main$`, **pytest** then a docker build of [camdetect/Dockerfile](../camdetect/Dockerfile), function target `detect`. Config is [camdetect/cloudbuild.yaml](../camdetect/cloudbuild.yaml) (trigger switched from inline on 2026-10-08). **Included files** are runtime paths only (`main.py`, `requirements.txt`, Dockerfile, yaml/json/toml under `camdetect/`). Tests, dev requirements, `README.md`, and the rest of the repo do not start this build. Details: [camdetect/README.md](../camdetect/README.md). |
-| Cloud Run `gmap-woodlands-fetcher` | `asia-southeast1` | Source copied from the console into [gmapfetcher/](../gmapfetcher/) on 2026-10-13. No build trigger; still deployed from the console or by hand. |
+| Cloud Run `gmap-woodlands-fetcher` | `asia-southeast1` | Source is [gmapfetcher/](../gmapfetcher/) on `main`. Deploy is Cloud Build trigger `rmgpgab-gmap-woodlands-fetcher-…-szsd` (`33e4b77e-dbce-426e-a701-de234ec16d60`), push to `^main$`, included files `gmapfetcher/**`, inline buildpacks build, no test step. Created 2026-10-13 by Cloud Run **Connect to repo**. Details: [gmapfetcher/README.md](../gmapfetcher/README.md). |
 | Cloud Scheduler `Gmap-Woodlands` | `asia-southeast1` | No. It calls the fetcher every 5 minutes. |
 | Cloud Run job `traffic-backfill` | `asia-southeast1` | No |
 | Views and models under `traffic_prediction`, plus the weather and congestion views | BigQuery | **SQL in** [sql/](../sql/); not applied by Cloud Build |
