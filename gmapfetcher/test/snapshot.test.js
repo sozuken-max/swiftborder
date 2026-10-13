@@ -14,6 +14,29 @@ test('adds a midpoint between real points 10 min apart', () => {
   ]);
 });
 
+test('accepts 9 and 11 min gaps, interpolating at +5 min', () => {
+  const late = fillMidpoints([
+    ['2026-10-13T12:00', 1000, 20],
+    ['2026-10-13T12:11', 2100, 9],
+  ]);
+  assert.deepEqual(late[1], ['2026-10-13T12:05', 1500, 15, true]);
+  const early = fillMidpoints([
+    ['2026-10-13T12:00', 900, 20],
+    ['2026-10-13T12:09', 1800, 11],
+  ]);
+  assert.deepEqual(early[1], ['2026-10-13T12:05', 1400, 15, true]);
+});
+
+test('no midpoint for 8 or 12 min gaps', () => {
+  for (const end of ['12:08', '12:12']) {
+    const out = fillMidpoints([
+      ['2026-10-13T12:00', 1000, 20],
+      [`2026-10-13T${end}`, 1200, 18],
+    ]);
+    assert.equal(out.length, 2);
+  }
+});
+
 test('leaves 5-min history and longer gaps alone', () => {
   const out = fillMidpoints([
     ['2026-10-13T11:50', 1000, 20],

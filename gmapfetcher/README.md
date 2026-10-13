@@ -18,8 +18,9 @@ To halve Distance Matrix calls, the fetcher runs every 10 minutes. BigQuery gets
 only**. `traffic_prediction.v_bins_10min` (read by `forecast-api` and the eval harness) already
 averages into 10-minute bins, so each bin simply holds one observation instead of two.
 
-The JSON snapshot keeps the website's 5-minute grid: between two real points exactly 10 minutes
-apart, `snapshot.js` adds the straight-line midpoint (duration rounded to whole seconds, speed to
+The JSON snapshot keeps the website's 5-minute grid: between two real points 9-11 minutes apart
+(10 min with a 1-minute margin), `snapshot.js` adds the straight-line value 5 minutes after the
+earlier point (duration rounded to whole seconds, speed to
 2 dp). Each point is `[datetime_sgt, duration_in_traffic_sec, speed_kmh, interpolated]`; the newest
 point is always real. Older 5-minute history and longer gaps are left as they are.
 
