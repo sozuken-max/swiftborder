@@ -787,8 +787,10 @@ async function fetchPaneDetection(pane, dateTime) {
 
     try {
         // format=directional colours the boxes by direction; counts ride on the headers.
+        // line=1 draws the dividing line that splits the two directions (off by default).
         const url = new URL(BACKEND_URL);
         url.searchParams.set('format', 'directional');
+        url.searchParams.set('line', '1');
         url.searchParams.set('camera_id', pane.camera);
         url.searchParams.set('model', AI_MODEL);
         url.searchParams.set('date_time', dateTime);
