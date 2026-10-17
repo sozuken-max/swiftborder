@@ -20,7 +20,11 @@ Evaluation harnesses for Layer A and Layer B. Nothing here deploys `swiftbackend
 | [`ensemble.py`](ensemble.py) | Ensembles and hybrids of Layer B models: served (registry), equal mean, rolling LAD stack, rolling selection, fuzzy-gated stack; error by regime; optional 60-min XGB + deep pool |
 | [`significance.py`](significance.py) | Diebold–Mariano test on loss differences (HAC variance, i.e. corrected for autocorrelation, with at least one day of lags; HLN small-sample correction), moving day-block bootstrap CIs within direction, Holm correction across comparisons |
 | [`layer_a.py`](layer_a.py) | Layer A box scorer: mAP, precision/recall, count error (overall and per direction), day/night. Needs a COCO or YOLO export |
-| [`score_layer_a_local.py`](score_layer_a_local.py) | Rescore the 15 captioned frames with `model=local` from a local frame directory. Writes `runs/layer_a_count/local_rescore.json` |
+| [`layer_a_count_lib.py`](layer_a_count_lib.py) | Shared MAE/day-night helpers and run provenance for the 15-frame count set |
+| [`download_layer_a_frames.py`](download_layer_a_frames.py) | Download GCS originals listed in `artifact_counts.json` (needs `google-cloud-storage`, or use `gsutil` per [`runs/layer_a_count/REPORT.md`](runs/layer_a_count/REPORT.md)) |
+| [`score_layer_a_local.py`](score_layer_a_local.py) | Rescore with in-container ONNX (`model=local` settings). Writes `runs/layer_a_count/local_rescore.json` |
+| [`score_layer_a_swiftbackend.py`](score_layer_a_swiftbackend.py) | Rescore with live `swiftbackend` `model=v6` (15 billed calls). Writes `runs/layer_a_count/roboflow_v6_conf02.json` |
+| [`build_layer_a_artifact_summary.py`](build_layer_a_artifact_summary.py) | Recompute artifact-page MAE table → `runs/layer_a_count/artifact_summary.json` |
 | [`backfill_camera_counts.py`](backfill_camera_counts.py) | Camera 2701 counts per 10-min bin via `camdetect.detect_frame` (**billed Roboflow**) |
 | [`generate_comparison_plots.py`](generate_comparison_plots.py) | One run folder with offline + BQML + joined components and figures |
 | [`bq_replica.py`](bq_replica.py) | Local replicas of BQML `lin_h30` / `xgb_h30` (same features, settings and 12 Sep training rows); `joined.py` scores them frozen and daily-refit |

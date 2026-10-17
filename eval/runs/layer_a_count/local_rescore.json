@@ -1,4 +1,17 @@
 {
+  "run": {
+    "generated_at_utc": "2026-10-17T02:40:02Z",
+    "git_commit": "0d0a2c7ce0f902b850bd154a06f46fd6771ae20f",
+    "artifact_path": "eval\\runs\\layer_a_count\\artifact_counts.json",
+    "n_images": 15,
+    "scorer": "score_layer_a_local.py",
+    "frames_dir": "eval\\runs\\layer_a_count\\frames",
+    "onnx_path": "D:\\Git Repositories\\swiftborder\\camdetect\\models\\yolo26s_v6_boxfix.onnx",
+    "onnx_sha256": "dc43db2fe30ab8cf08b6d7056bd7d20d0f111f0a5ec577a51ed86cb593f65fe8",
+    "onnxruntime_version": "1.29.0",
+    "local_default_confidence": 0.2,
+    "local_max_overlap": 0.6
+  },
   "summary": {
     "live": {
       "min_confidence": 0.2,
@@ -8,16 +21,14 @@
         "mae": 1.87,
         "bias": 1.33,
         "exact": 5,
+        "within_2": 11,
         "n": 15
       },
       "veh": {
         "mae": 1.67,
         "bias": 1.53,
         "exact": 7,
-        "n": 15
-      },
-      "cars_vs_artifact_trained_s": {
-        "exact": 7,
+        "within_2": 11,
         "n": 15
       },
       "cars_day_night": {
@@ -25,14 +36,20 @@
           "mae": 2.86,
           "bias": 2.86,
           "exact": 1,
+          "within_2": 3,
           "n": 7
         },
         "night": {
           "mae": 1.0,
           "bias": 0.0,
           "exact": 4,
+          "within_2": 8,
           "n": 8
         }
+      },
+      "cars_vs_artifact_trained_s": {
+        "exact": 7,
+        "n": 15
       }
     },
     "artifact_conf_overlap_off": {
@@ -43,16 +60,14 @@
         "mae": 1.8,
         "bias": 1.27,
         "exact": 6,
+        "within_2": 10,
         "n": 15
       },
       "veh": {
         "mae": 1.53,
         "bias": 1.27,
         "exact": 6,
-        "n": 15
-      },
-      "cars_vs_artifact_trained_s": {
-        "exact": 14,
+        "within_2": 12,
         "n": 15
       },
       "cars_day_night": {
@@ -60,14 +75,20 @@
           "mae": 2.14,
           "bias": 2.14,
           "exact": 2,
+          "within_2": 5,
           "n": 7
         },
         "night": {
           "mae": 1.5,
           "bias": 0.5,
           "exact": 4,
+          "within_2": 5,
           "n": 8
         }
+      },
+      "cars_vs_artifact_trained_s": {
+        "exact": 14,
+        "n": 15
       }
     },
     "artifact_conf_overlap_on": {
@@ -78,16 +99,14 @@
         "mae": 1.13,
         "bias": -0.33,
         "exact": 7,
+        "within_2": 13,
         "n": 15
       },
       "veh": {
         "mae": 1.27,
         "bias": -0.73,
         "exact": 6,
-        "n": 15
-      },
-      "cars_vs_artifact_trained_s": {
-        "exact": 6,
+        "within_2": 13,
         "n": 15
       },
       "cars_day_night": {
@@ -95,14 +114,20 @@
           "mae": 1.0,
           "bias": -0.43,
           "exact": 4,
+          "within_2": 6,
           "n": 7
         },
         "night": {
           "mae": 1.25,
           "bias": -0.25,
           "exact": 3,
+          "within_2": 7,
           "n": 8
         }
+      },
+      "cars_vs_artifact_trained_s": {
+        "exact": 6,
+        "n": 15
       }
     }
   },
@@ -130,6 +155,7 @@
             "SG-MY": 4,
             "MY-SG": 1
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_off": {
@@ -143,6 +169,7 @@
             "SG-MY": 4,
             "MY-SG": 1
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -156,6 +183,7 @@
             "SG-MY": 4,
             "MY-SG": 1
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 0
         }
       }
@@ -184,6 +212,7 @@
             "SG-MY": 80,
             "MY-SG": 7
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 9
         },
         "artifact_conf_overlap_off": {
@@ -198,6 +227,7 @@
             "SG-MY": 79,
             "MY-SG": 7
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -212,6 +242,7 @@
             "SG-MY": 73,
             "MY-SG": 7
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 6
         }
       }
@@ -240,6 +271,7 @@
             "SG-MY": 17,
             "MY-SG": 25
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 3
         },
         "artifact_conf_overlap_off": {
@@ -254,6 +286,7 @@
             "SG-MY": 15,
             "MY-SG": 24
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -268,6 +301,7 @@
             "SG-MY": 15,
             "MY-SG": 23
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 1
         }
       }
@@ -296,6 +330,7 @@
             "MY-SG": 6,
             "SG-MY": 9
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 2
         },
         "artifact_conf_overlap_off": {
@@ -310,6 +345,7 @@
             "MY-SG": 7,
             "SG-MY": 9
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -324,6 +360,7 @@
             "MY-SG": 6,
             "SG-MY": 9
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 1
         }
       }
@@ -352,6 +389,7 @@
             "MY-SG": 8,
             "SG-MY": 4
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 1
         },
         "artifact_conf_overlap_off": {
@@ -366,6 +404,7 @@
             "MY-SG": 7,
             "SG-MY": 5
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -380,6 +419,7 @@
             "MY-SG": 7,
             "SG-MY": 4
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 1
         }
       }
@@ -407,6 +447,7 @@
             "SG-MY": 21,
             "MY-SG": 44
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 11
         },
         "artifact_conf_overlap_off": {
@@ -420,6 +461,7 @@
             "SG-MY": 23,
             "MY-SG": 47
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -433,6 +475,7 @@
             "SG-MY": 21,
             "MY-SG": 45
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 4
         }
       }
@@ -461,6 +504,7 @@
             "SG-MY": 38,
             "MY-SG": 34
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 7
         },
         "artifact_conf_overlap_off": {
@@ -475,6 +519,7 @@
             "SG-MY": 38,
             "MY-SG": 35
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -489,6 +534,7 @@
             "SG-MY": 37,
             "MY-SG": 34
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 2
         }
       }
@@ -514,6 +560,7 @@
           "by_direction": {
             "SG-MY": 1
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_off": {
@@ -525,6 +572,7 @@
           "by_direction": {
             "SG-MY": 1
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -536,6 +584,7 @@
           "by_direction": {
             "SG-MY": 1
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 0
         }
       }
@@ -564,6 +613,7 @@
             "SG-MY": 9,
             "MY-SG": 7
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 1
         },
         "artifact_conf_overlap_off": {
@@ -578,6 +628,7 @@
             "SG-MY": 9,
             "MY-SG": 6
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -592,6 +643,7 @@
             "SG-MY": 9,
             "MY-SG": 6
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 0
         }
       }
@@ -620,6 +672,7 @@
             "MY-SG": 7,
             "SG-MY": 38
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 12
         },
         "artifact_conf_overlap_off": {
@@ -634,6 +687,7 @@
             "MY-SG": 8,
             "SG-MY": 38
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -648,6 +702,7 @@
             "MY-SG": 7,
             "SG-MY": 36
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 3
         }
       }
@@ -676,6 +731,7 @@
             "SG-MY": 90,
             "MY-SG": 5
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 23
         },
         "artifact_conf_overlap_off": {
@@ -690,6 +746,7 @@
             "SG-MY": 88,
             "MY-SG": 5
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -704,6 +761,7 @@
             "SG-MY": 81,
             "MY-SG": 5
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 7
         }
       }
@@ -731,6 +789,7 @@
             "MY-SG": 1,
             "SG-MY": 2
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 1
         },
         "artifact_conf_overlap_off": {
@@ -745,6 +804,7 @@
             "SG-MY": 2,
             "MY-SG": 1
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -759,6 +819,7 @@
             "SG-MY": 2,
             "MY-SG": 1
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 0
         }
       }
@@ -787,6 +848,7 @@
             "SG-MY": 23,
             "MY-SG": 28
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 6
         },
         "artifact_conf_overlap_off": {
@@ -801,6 +863,7 @@
             "SG-MY": 23,
             "MY-SG": 28
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -815,6 +878,7 @@
             "SG-MY": 21,
             "MY-SG": 26
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 4
         }
       }
@@ -843,6 +907,7 @@
             "SG-MY": 22,
             "MY-SG": 7
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 4
         },
         "artifact_conf_overlap_off": {
@@ -857,6 +922,7 @@
             "SG-MY": 18,
             "MY-SG": 6
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -871,6 +937,7 @@
             "SG-MY": 18,
             "MY-SG": 6
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 0
         }
       }
@@ -898,6 +965,7 @@
             "MY-SG": 6,
             "SG-MY": 25
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 2
         },
         "artifact_conf_overlap_off": {
@@ -911,6 +979,7 @@
             "MY-SG": 6,
             "SG-MY": 25
           },
+          "max_overlap": null,
           "overlap_suppressed": 0
         },
         "artifact_conf_overlap_on": {
@@ -924,6 +993,7 @@
             "MY-SG": 6,
             "SG-MY": 24
           },
+          "max_overlap": 0.6,
           "overlap_suppressed": 1
         }
       }

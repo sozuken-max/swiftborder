@@ -1,11 +1,57 @@
 {
+  "run": {
+    "generated_at_utc": "2026-10-17T02:40:22Z",
+    "git_commit": "0d0a2c7ce0f902b850bd154a06f46fd6771ae20f",
+    "artifact_path": "eval\\runs\\layer_a_count\\artifact_counts.json",
+    "n_images": 15,
+    "scorer": "score_layer_a_swiftbackend.py",
+    "swiftbackend_url": "https://swiftbackend-vyenkfblbq-ew.a.run.app/",
+    "swiftbackend_revision": "swiftbackend-00044-4l9",
+    "model": "v6",
+    "min_confidence": 0.2,
+    "max_overlap": null,
+    "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic"
+  },
   "model": "roboflow_v6",
   "min_confidence": 0.2,
   "max_overlap": null,
   "n": 15,
+  "summary": {
+    "cars": {
+      "mae": 4.4,
+      "bias": -2.53,
+      "exact": 2,
+      "within_2": 9,
+      "n": 15
+    },
+    "veh": {
+      "mae": 6.07,
+      "bias": 0.2,
+      "exact": 0,
+      "within_2": 5,
+      "n": 15
+    },
+    "cars_day_night": {
+      "day": {
+        "mae": 6.57,
+        "bias": -5.14,
+        "exact": 1,
+        "within_2": 3,
+        "n": 7
+      },
+      "night": {
+        "mae": 2.5,
+        "bias": -0.25,
+        "exact": 1,
+        "within_2": 6,
+        "n": 8
+      }
+    }
+  },
   "frames": [
     {
       "t": "2025-07-01T03:15:41",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T031541.jpg",
       "gt": {
         "cars": 3,
         "veh": 5
@@ -22,10 +68,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/06/8e8a4b97-d682-40ee-b6a9-17b4bc8854dd.jpg"
     },
     {
       "t": "2025-07-01T10:46:09",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T104609.jpg",
       "gt": {
         "cars": 75,
         "veh": 80
@@ -37,16 +85,18 @@
       "cars": 71,
       "veh": 73,
       "by_class": {
-        "bus": 2,
-        "car": 71
+        "car": 71,
+        "bus": 2
       },
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/235998c9-ffab-422f-850b-c284674f6a66.jpg"
     },
     {
       "t": "2025-07-01T17:16:15",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T171615.jpg",
       "gt": {
         "cars": 33,
         "veh": 36
@@ -63,10 +113,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/23a325c9-7a70-424d-b26c-eaf295cf864d.jpg"
     },
     {
       "t": "2025-07-07T00:45:49",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250707T004549.jpg",
       "gt": {
         "cars": 9,
         "veh": 14
@@ -84,10 +136,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/612339b4-8855-45c7-9973-8f6b09bef2a3.jpg"
     },
     {
       "t": "2025-07-11T04:55:32",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250711T045532.jpg",
       "gt": {
         "cars": 8,
         "veh": 12
@@ -105,10 +159,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/2e6ac41f-217e-441a-ba12-f961c3f2e98c.jpg"
     },
     {
       "t": "2025-07-14T00:15:42",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250714T001542.jpg",
       "gt": {
         "cars": 66,
         "veh": 66
@@ -125,10 +181,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/7eaa82d5-c4a7-4e88-9772-249c754fb8f3.jpg"
     },
     {
       "t": "2025-07-14T10:55:53",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250714T105553.jpg",
       "gt": {
         "cars": 56,
         "veh": 72
@@ -140,17 +198,19 @@
       "cars": 57,
       "veh": 64,
       "by_class": {
-        "bus": 1,
         "car": 57,
-        "truck": 6
+        "truck": 6,
+        "bus": 1
       },
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/a4373f3d-2e5e-442f-a934-60db65e0b43a.jpg"
     },
     {
       "t": "2025-07-15T01:46:08",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250715T014608.jpg",
       "gt": {
         "cars": 0,
         "veh": 1
@@ -167,10 +227,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/f96b6c7d-d2a9-4ab6-bdb1-e0a143d93a65.jpg"
     },
     {
       "t": "2025-07-15T14:45:41",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250715T144541.jpg",
       "gt": {
         "cars": 10,
         "veh": 15
@@ -182,17 +244,19 @@
       "cars": 9,
       "veh": 14,
       "by_class": {
-        "bus": 2,
         "car": 9,
-        "truck": 3
+        "truck": 3,
+        "bus": 2
       },
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/764579a4-75e5-4cf2-a7c5-53c2c9d7b73c.jpg"
     },
     {
       "t": "2025-07-18T18:26:05",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250718T182605.jpg",
       "gt": {
         "cars": 39,
         "veh": 45
@@ -210,10 +274,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/aa07e6b4-0fa5-4c03-99e9-4a8c09f2c694.jpg"
     },
     {
       "t": "2025-07-19T09:35:42",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250719T093542.jpg",
       "gt": {
         "cars": 87,
         "veh": 91
@@ -225,17 +291,19 @@
       "cars": 58,
       "veh": 61,
       "by_class": {
-        "bus": 2,
         "car": 58,
-        "truck": 1
+        "truck": 1,
+        "bus": 2
       },
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/44552e5a-1a1c-4dd3-8df4-495e1290c614.jpg"
     },
     {
       "t": "2025-07-20T02:16:38",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250720T021638.jpg",
       "gt": {
         "cars": 1,
         "veh": 3
@@ -252,10 +320,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/fb3c747e-754f-4a8d-bc3f-ef6439ac5ae6.jpg"
     },
     {
       "t": "2025-07-22T07:46:52",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250722T074652.jpg",
       "gt": {
         "cars": 24,
         "veh": 51
@@ -273,10 +343,12 @@
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/f4fa0d10-f6d5-489e-adcc-2476a25fa568.jpg"
     },
     {
       "t": "2025-07-22T19:57:03",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250722T195703.jpg",
       "gt": {
         "cars": 15,
         "veh": 26
@@ -288,17 +360,19 @@
       "cars": 14,
       "veh": 21,
       "by_class": {
-        "bus": 1,
         "car": 14,
+        "bus": 1,
         "truck": 6
       },
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/07/ee24c56b-fd4e-4b5d-b864-9d8e41cd1feb.jpg"
     },
     {
       "t": "2025-09-01T19:06:18",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-09/2701_20250901T190618.jpg",
       "gt": {
         "cars": 25,
         "veh": 29
@@ -310,41 +384,14 @@
       "cars": 28,
       "veh": 29,
       "by_class": {
-        "bus": 1,
-        "car": 28
+        "car": 28,
+        "bus": 1
       },
       "min_confidence": 0.2,
       "max_overlap": null,
       "workflow_id": "vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic",
+      "overlap_suppressed": 0,
       "source_image": "https://images.data.gov.sg/api/traffic-images/2025/09/efc26406-85d1-4858-9aee-435e7beb5f45.jpg"
     }
-  ],
-  "summary": {
-    "cars": {
-      "mae": 4.4,
-      "bias": -2.53,
-      "exact": 2,
-      "n": 15
-    },
-    "veh": {
-      "mae": 6.27,
-      "bias": -6.13,
-      "exact": 3,
-      "n": 15
-    },
-    "cars_day_night": {
-      "day": {
-        "mae": 6.57,
-        "bias": -5.14,
-        "exact": 1,
-        "n": 7
-      },
-      "night": {
-        "mae": 2.5,
-        "bias": -0.25,
-        "exact": 1,
-        "n": 8
-      }
-    }
-  }
+  ]
 }
