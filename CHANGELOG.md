@@ -4,6 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-17
 
+- Counts-for-Maps substitution on every callable forecast-api model, trained on September 2026 only and scored on the October overlap (1-4 Oct, 534 rows per direction). Learned counts models are a regression versus the Maps-input refit (paired interval entirely above +0.5 min). Persistence and the profile do not emit a duration from counts. Report: `eval/runs/20261017T081758Z_counts-substitute/`. No deploy.
 - Live `forecast-api` revision `forecast-api-00021-qud` (Cloud Build `24ec59b4`, commit `4a23f43`) serves `mix[fcm_mlp+xgb]` for both directions at 30 minutes. `?list=models` shows that id callable. `?model=served` returned 503 (no recent bin).
 - `forecast-api` 30-minute `served` is `mix[fcm_mlp+xgb]` in both directions: `0.5 * fcm_mlp + 0.5 * xgb[maps]`, the same functions as `eval/layer_b_fcm_xgb_mix.py`. Lowest measured September Maps MAE (section 8: 2.134 min; backtest `backtest-20261010T080013Z-6a139c3f`: 2.132 min), chosen after that window was scored. Not a pre-registered Holm result, not a 24-hour forecast, and not a crossing-time error. `xgb[maps]` stays callable. `fcm_mlp` alone stays a "Not served" card.
 - `eval/test-reports/runs/` adds `threshold_sweep.csv` / `.png`: car recall, precision, count MAE and count ratio at confidence 0.10-0.50 for YOLO-S and YOLO-M on the valid and test splits, parsed from the notebook output.
