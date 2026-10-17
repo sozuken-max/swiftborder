@@ -34,7 +34,7 @@ Every number on this page is computed from those three JSON files. The narrative
 | COCO YOLO-S @1280 | 0.10 | Same COCO weights at 1280 px input. |
 | Roboflow v6 | 0.30 | Roboflow workflow v6 (the `swiftbackend` default). Note: the page scored it at 0.30; the service serves it at 0.2 (see below). |
 | YOLO-S trained (freeze) | 0.30 | YOLO26s fine-tuned on Roboflow dataset v6 with `freeze=10` (Colab `v6_yolo26s_boxfix`). Same weights as `models/yolo26s_v6_boxfix.onnx`, served as `model=local`. |
-| YOLO-M trained (freeze) | 0.25 | YOLO-M fine-tuned the same way. Not in git and not served, so it cannot be rescored. |
+| YOLO-M trained (freeze) | 0.25 | YOLO-M fine-tuned the same way. Weights in [`runs/yolo26m/`](runs/yolo26m/); not served and not rescored. |
 
 ## Scoreboard: cars
 
@@ -151,7 +151,7 @@ YOLO-S (freeze) at the page's setting (conf 0.30, overlap off) matches the page'
 
 ## Box metrics (test split)
 
-From the full-comparison cell of [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) (run 10 Oct 2026, Tesla T4). A prediction counts as correct when it overlaps a labelled box of the same class at IoU 0.5 or more; labelled polygons are reduced to their enclosing box. AP50 is threshold-free. This is the notebook's own scorer, not [`eval/layer_a.py`](../layer_a.py), and there is no mAP50-95 on this split. The notebook's car count MAE at each detector's best threshold equals the scoreboard above (17.40, 11.60, 3.53, 1.73, 1.87), which is how these frames are matched to that run.
+From the full-comparison cell of [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) (run 10 Oct 2026, Tesla T4). A prediction counts as correct when it overlaps a labelled box of the same class at IoU 0.5 or more; labelled polygons are reduced to their enclosing box. AP50 is threshold-free. This is the notebook's own scorer, not [`eval/layer_a.py`](../layer_a.py), and it does not compute mAP50-95; Ultralytics' own evaluation of the two fine-tuned models on this split is under [Model weights and run files](#model-weights-and-run-files). The notebook's car count MAE at each detector's best threshold equals the scoreboard above (17.40, 11.60, 3.53, 1.73, 1.87), which is how these frames are matched to that run.
 
 | Detector | AP50 car | AP50 bus | AP50 truck | mAP50 (3 classes) | AP50 any vehicle | Time per image |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -191,22 +191,20 @@ python test-reports/speed_benchmark.py --model models/yolo26s_v6_boxfix.onnx --f
 
 The `swiftbackend` Cloud Run service is CPU-only. The earlier local measurement of the full `model=local` handler is about 0.5 s per frame ([CHANGELOG](../../CHANGELOG.md)).
 
-## Model weights
+## Model weights and run files
 
-Trained weights live in the team Drive folder `swiftborder_runs`, not in git. Only the YOLO26s export is in the repo, as ONNX.
+The training runs, both checkpoints, the Ultralytics test-split evaluations and the full-size comparison outputs are in [`runs/`](runs/README.md), regrouped from the team Drive folder `swiftborder_runs`.
 
-| Detector | Where | Files |
+| Detector | Weights | Notes |
 | --- | --- | --- |
-| YOLO-S trained (freeze), Colab run `v6_yolo26s_boxfix` | [Drive `swiftborder_runs/v6_yolo26s_boxfix`](https://drive.google.com/drive/folders/127Ydbf_xvRVQhocb4xrkfTFeMfuAs3Px) | `weights/best.pt` (20,389,957 bytes; sha256 in the [camdetect README](../../camdetect/README.md#in-container-model-modellocal)), `weights/last.pt`, `results.csv`, `results.png`, `confusion_matrix.png`, `BoxR_curve.png`. ONNX export in git: [`models/yolo26s_v6_boxfix.onnx`](../../camdetect/models/yolo26s_v6_boxfix.onnx) |
-| YOLO-M trained (freeze), Colab run `v6_yolo26m_boxfix` | [Drive `swiftborder_runs/v6_yolo26m_boxfix`](https://drive.google.com/drive/folders/1okUFdqub62EdRuy01FwhcyR0wXVLnNWV) | `weights/best.pt` (44,104,281 bytes), `weights/last.pt`, `results.csv`, `BoxR_curve.png`, validation batch images. Not exported, not served |
-| COCO YOLO-S @640 / @1280 | Ultralytics release | stock `yolo26s.pt`, downloaded by Ultralytics; no fine-tuning |
-| Roboflow v6 | Roboflow (hosted) | Workflow `vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic`. Weight download needs a Roboflow Core plan |
-
-`swiftborder_runs` also holds `test_predictions/` (the annotated images in Appendix B, one folder per detector plus `ground_truth`) and the validation runs `val_yolo26s_valid_boxfix` and `val_yolo26m_test_boxfix`.
+| YOLO-S trained (freeze) | [`runs/yolo26s/training/weights/best.pt`](runs/yolo26s/training/weights/best.pt), and the served ONNX export [`camdetect/models/yolo26s_v6_boxfix.onnx`](../../camdetect/models/yolo26s_v6_boxfix.onnx) | Ultralytics on the test split: mAP50 0.836, mAP50-95 0.562 |
+| YOLO-M trained (freeze) | [`runs/yolo26m/training/weights/best.pt`](runs/yolo26m/training/weights/best.pt) | Not exported, not served. Test split: mAP50 0.872, mAP50-95 0.583 |
+| COCO YOLO-S @640 / @1280 | stock `yolo26s.pt`, downloaded by Ultralytics | No fine-tuning |
+| Roboflow v6 | Hosted by Roboflow; weight download needs a Core plan | Raw API replies in [`runs/comparison_5_detectors/roboflow_v6/api_responses/`](runs/comparison_5_detectors/roboflow_v6/api_responses/) |
 
 ## What this does not show
 
-- **Box metrics are the notebook's.** AP50, recall and precision come from the Colab scorer above. [`eval/layer_a.py`](../../eval/layer_a.py) has not been run on this split, there is no mAP50-95 here, and the box labels are in Roboflow, not in git.
+- **Box metrics are the notebooks'.** AP50, recall and precision come from the Colab scorer above, and mAP50-95 only from Ultralytics for the two fine-tuned models. [`eval/layer_a.py`](../layer_a.py) has not been run on this split, and the box labels are in Roboflow, not in git.
 - **No direction score.** There are no direction labels, so per-direction count error is not measured.
 - **Small sample.** 15 frames from July and September 2025, one camera. One frame (19 Jul 09:35) dominates the baselines' error.
 - **Counts are not crossing time.** A good count is an input to Layer B, not a forecast result.
