@@ -75,11 +75,13 @@ def test_cut_weather_drops_late_rows():
 
 
 def test_promote_target_choice(tmp_path, monkeypatch):
-    import promote_report_run as prr
+    import harness.promote_report_run as prr
+    import harness.run_artifacts as ra
 
     assert prr.TARGETS == ("report", "report-confirm", "parity-bqml")
     seen = {}
-    monkeypatch.setattr(prr, "RUNS_ROOT", tmp_path)
+
+    monkeypatch.setattr(ra, "RUNS_ROOT", tmp_path)
     (tmp_path / "r1").mkdir()
     monkeypatch.setattr(prr, "promote", lambda source, dest, allow_dirty=False: seen.update(dest=dest))
     assert prr.main(["r1", "--target", "report-confirm"]) == 0
@@ -99,7 +101,9 @@ def test_confirmation_run_flags_parse(monkeypatch):
     def stop(**kwargs):
         raise RuntimeError(f"reached run dir creation with {kwargs['components']}")
 
-    monkeypatch.setattr(gcp, "create_run_dir", stop)
+    import harness.generate_comparison_plots as gcp_impl
+
+    monkeypatch.setattr(gcp_impl, "create_run_dir", stop)
     with pytest.raises(RuntimeError, match=r"\['joined', 'ensemble'\]"):
         gcp.main(["--data-cutoff", CUT, "--skip-offline", "--joined", "--joined-start", "2026-10-01",
                   "--joined-end", "2026-10-19", "--ensemble"])

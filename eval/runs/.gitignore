@@ -24,3 +24,6 @@ replay-*/*
 !layer_a_eval/**
 !layer_a_count/
 !layer_a_count/**
+# Section 8 mix backtest with harness.significance CIs (2026-10-17).
+!backtest-20261017T094617Z-d001a839/
+!backtest-20261017T094617Z-d001a839/**

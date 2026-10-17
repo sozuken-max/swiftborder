@@ -42,11 +42,11 @@ Section 4 already scored LSTM(64), GRU(64), and the patch Transformer on the off
 
 The next matrix adds three things the section 3 table does not have, on that same split:
 
-- Window features already sketched in [`eval/timeseries_xgb.py`](../../eval/timeseries_xgb.py): lags; lags plus a causal first difference and a 60-minute rolling mean; lags plus a per-window z-score Daubechies **db2** wavelet at level 2 (level 3 optional; **db4 is not the default**). Window mean and standard deviation stay as columns. `use_dwt` is false for the promoted model.
+- Window features already sketched in [`eval/timeseries/timeseries_xgb.py`](../../eval/timeseries/timeseries_xgb.py): lags; lags plus a causal first difference and a 60-minute rolling mean; lags plus a per-window z-score Daubechies **db2** wavelet at level 2 (level 3 optional; **db4 is not the default**). Window mean and standard deviation stay as columns. `use_dwt` is false for the promoted model.
 - Feature-importance agreement between XGBoost and a new Random Forest, on the training rows.
 - A Layer A block crossed with those feature blocks: none, `camfc`, `mpfc`, `camfc+mpfc`.
 
-Unpromoted A/B/C point estimates from a local `python timeseries_xgb.py` are in [eval/README.md](../../eval/README.md). They are not in `eval/runs/report/run.json`. This plan does not copy them into [evaluation.md](../evaluation.md).
+Unpromoted A/B/C point estimates from a local `python run.py timeseries_xgb` are in [eval/README.md](../../eval/README.md). They are not in `eval/runs/report/run.json`. This plan does not copy them into [evaluation.md](../evaluation.md).
 
 ## Protocol the harness must keep
 

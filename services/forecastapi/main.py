@@ -443,6 +443,75 @@ def query_selection(chosen, horizon=30):
     }
 
 
+SERVE_FALLBACK_LEARNED_30 = (mix_bridge.MIX_ID, "xgb[maps]", "persistence")
+
+
+def query_default_served(directions, horizon=30):
+    """Bare ``GET``: try the served mix chain, then the calendar profile when bins are stale."""
+    now = _serving_now()
+    latest = fetch_latest(directions, now)
+    origins = servable_origins(latest, now)
+    profile = fitted_profile()
+    shift = datetime.timedelta(minutes=int(horizon))
+    rows, meta, baseline = [], {}, {}
+    for direction in directions:
+        sub = origins[origins["direction"] == direction]
+        used_mid = None
+        value = None
+        target_value = None
+        components = None
+        origin = sub["bin_ts"].iloc[0] if not sub.empty else pd.Timestamp(now).floor("10min")
+        if origin.tzinfo is None:
+            origin = origin.tz_localize("UTC")
+        chain = SERVE_FALLBACK_LEARNED_30 if horizon == 30 else (curve_model(direction, horizon),)
+        if not sub.empty:
+            for mid in chain:
+                try:
+                    value, target_value, meta[mid] = _predict_one(mid, sub, horizon, profile, now, latest)
+                    if value is not None and math.isfinite(float(value)):
+                        used_mid = mid
+                        components = mix_bridge.COMPONENTS if mid == mix_bridge.MIX_ID else None
+                        origin = sub["bin_ts"].iloc[0]
+                        break
+                except (NoRecentForecast, RuntimeError, lm.NoProfileHistory):
+                    continue
+                except Exception:
+                    logger.exception("default served fallback failed for %s", mid)
+                    continue
+        if used_mid is None:
+            if horizon != 30:
+                raise NoRecentForecast(direction)
+            target_value = float(profile.predict([direction], [origin + shift])[0])
+            value = target_value
+            used_mid = "profile"
+        row = {
+            "direction": direction,
+            "forecast_min": value,
+            "forecast_for": _iso(origin + shift),
+            "origin_ts": _iso(origin),
+            **_model_fields(used_mid, components),
+        }
+        if used_mid != mix_bridge.MIX_ID:
+            row["fallback_from"] = "served"
+        rows.append(row)
+        baseline[direction] = (
+            {"forecast_min": round(target_value, 1)} if target_value is not None
+            else {"forecast_min": None, "unavailable": "no profile history before the serving day"}
+        )
+    return {
+        "source": "local model",
+        "rows": rows,
+        "meta": meta,
+        "baseline": {
+            "model": "profile",
+            "status": "baseline",
+            "label": BASELINE_LABEL,
+            "version": profile_version(now),
+            "directions": baseline,
+        },
+    }
+
+
 def _predict_one(mid, sub, horizon, profile, now, latest_bins=None):
     """(forecast, profile baseline at the same target, meta) for one origin row and horizon."""
     origin = sub["bin_ts"].iloc[0]
@@ -501,16 +570,25 @@ def forecast_curve(directions, hours):
     out, meta = {}, {}
     for direction in directions:
         sub = origins[origins["direction"] == direction]
-        if sub.empty:
-            raise NoRecentForecast(direction)
-        origin = sub["bin_ts"].iloc[0]
+        profile_only = sub.empty
+        origin = pd.Timestamp(now).floor("10min") if profile_only else sub["bin_ts"].iloc[0]
+        if origin.tzinfo is None:
+            origin = origin.tz_localize("UTC")
         points = []
         for h in horizons:
             mid = curve_model(direction, h)
-            # one fit per (model, horizon): key the metadata by both so no fit's metadata is overwritten
             meta_key = "%s@%dmin" % (mid, h)
-            value, base, meta[meta_key] = _predict_one(mid, sub, h, profile, now, latest)
-            meta[meta_key] = dict(meta[meta_key], model=mid, horizon_min=h)
+            if profile_only:
+                mid = "profile"
+                meta_key = "%s@%dmin" % (mid, h)
+                target = origin + datetime.timedelta(minutes=h)
+                value = float(profile.predict([direction], [target])[0])
+                base = value
+                meta[meta_key] = {"model": mid, "horizon_min": h}
+            else:
+                # one fit per (model, horizon): key the metadata by both so no fit's metadata is overwritten
+                value, base, meta[meta_key] = _predict_one(mid, sub, h, profile, now, latest)
+                meta[meta_key] = dict(meta[meta_key], model=mid, horizon_min=h)
             target = origin + datetime.timedelta(minutes=h)
             point = {
                 "horizon_min": h,
@@ -1147,6 +1225,8 @@ def _direction_payload(row, requested_model, horizon):
         "origin_closed_at": _iso(origin + BIN),
         **_model_fields(str(point_model), row.get("components")),
     }
+    if row.get("fallback_from"):
+        payload["fallback_from"] = row["fallback_from"]
     return direction, payload
 
 
@@ -1349,7 +1429,12 @@ def _handle(request):
     if payload is None:
         _cache.pop(cache_key, None)  # absent, or a cached target bin has started
         try:
-            result = query_selection(chosen, horizon) if chosen else query_forecast(model_id, directions, horizon)
+            if model_raw is None and model_id == "served" and not overrides:
+                result = query_default_served(directions, horizon)
+            elif chosen:
+                result = query_selection(chosen, horizon)
+            else:
+                result = query_forecast(model_id, directions, horizon)
             fresh = _assemble(model_id, version_id, horizon, directions, result)
         except NoRecentForecast:
             return _error("No recent forecast for the requested direction", 503)

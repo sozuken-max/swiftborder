@@ -4,35 +4,44 @@ Evaluation harnesses for Layer A and Layer B. Nothing here deploys `swiftbackend
 
 **What the numbers mean:** error on the Google Maps `duration_in_traffic` series (skill vs persistence on that series), not independent wait time, and not "we beat Google".
 
-## Modules
+## Layout
 
-| Module | Role |
-| --- | --- |
-| [`layer_b.py`](layer_b.py) | Production models at 30 min on a **fixed** window after training (default 13 Sep 00:00 SGT to the latest labelled bin): persistence, `lin_h30`, `xgb_h30`, ensemble; slices by direction, time of day, day type, day/night; refuses models trained inside the window |
-| [`joined.py`](joined.py) | Offline joined-feature experiment at 30 min: rolling daily folds; Maps vs + weather vs + camera; ridge, XGBoost, ensemble; persistence and Maps-typical baselines |
-| [`features.py`](features.py) | Causal 10-min feature table: `v_training_set` logic in pandas (parity-checked against the live view), rainfall, 2-h forecast, camera counts |
-| [`timeseries_xgb.py`](timeseries_xgb.py) | Offline 60-min sklearn XGBoost, `jb_to_woodlands` only (JB → SG); causal inputs, raw labels, split on target time. `python timeseries_xgb.py` scores the window ablation below |
-| [`timeseries_lstm.py`](timeseries_lstm.py), [`train_lstm.py`](train_lstm.py) | Recurrent architectures and a tuning CLI on the same rows as offline XGB (seeded by `LSTMTrainConfig.seed`) |
-| [`timeseries_transformer.py`](timeseries_transformer.py) | Patch Transformer encoder (6 × 30-min patches, pre-LN, flatten head, about 19k weights) |
-| [`deep_forecast.py`](deep_forecast.py) | Scored deep component: LSTM, GRU, patch Transformer (+ raw-target ablation), one training protocol, 3 seeds, DM/Holm vs persistence and XGB ([assessment](../docs/deep-learning-assessment.md)) |
-| [`fuzzy_traffic.py`](fuzzy_traffic.py) | Light / moderate / heavy at 60 min, both directions: fuzzy partition, learned fuzzy rule base, XGB → fuzzy level hybrid; accuracy, macro-F1, severe errors, RPS; DM on 0/1 loss |
-| [`camera_forecast.py`](camera_forecast.py) | Layer A queue forecast for Layer B: camera-2701 profile learned from the Mar-Apr detections (cached read-only pull), CV-chosen Fourier ridge; `camfc_*` features and the Maps-profile control used by `joined.py` |
-| [`ensemble.py`](ensemble.py) | Ensembles and hybrids of Layer B models: served (registry), equal mean, rolling LAD stack, rolling selection, fuzzy-gated stack; error by regime; optional 60-min XGB + deep pool |
-| [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py), [`layer_b_timesfm.py`](layer_b_timesfm.py), [`layer_b_fcm_xgb_mix.py`](layer_b_fcm_xgb_mix.py) | Exploratory Layer B modules (FCM+MLP, TimesFM 2.5, 50/50 mix); not deployed on `forecast-api` ([docs](../docs/layer-b-mix-module.md)) |
-| [`significance.py`](significance.py) | Diebold–Mariano test on loss differences (HAC variance, i.e. corrected for autocorrelation, with at least one day of lags; HLN small-sample correction), moving day-block bootstrap CIs within direction, Holm correction across comparisons |
-| [`layer_a.py`](layer_a.py) | Layer A box scorer: mAP, precision/recall, count error (overall and per direction), day/night. Needs a COCO or YOLO export |
-| [`layer_a_count_lib.py`](layer_a_count_lib.py) | Shared MAE/day-night helpers and run provenance for the 15-frame count set |
-| [`download_layer_a_frames.py`](download_layer_a_frames.py) | Download GCS originals listed in `artifact_counts.json` (needs `google-cloud-storage`, or use `gsutil` per [`runs/layer_a_count/REPORT.md`](runs/layer_a_count/REPORT.md)) |
-| [`score_layer_a_local.py`](score_layer_a_local.py) | Rescore with in-container ONNX (`model=local` settings). Writes `runs/layer_a_count/local_rescore.json` |
-| [`score_layer_a_swiftbackend.py`](score_layer_a_swiftbackend.py) | Rescore with live `swiftbackend` `model=v6` (15 billed calls). Writes `runs/layer_a_count/roboflow_v6_conf02.json` |
-| [`build_layer_a_artifact_summary.py`](build_layer_a_artifact_summary.py) | Recompute artifact-page MAE table → `runs/layer_a_count/artifact_summary.json` |
-| [`backfill_camera_counts.py`](backfill_camera_counts.py) | Camera 2701 counts per 10-min bin via `camdetect.detect_frame` (**billed Roboflow**) |
-| [`generate_comparison_plots.py`](generate_comparison_plots.py) | One run folder with offline + BQML + joined components and figures |
-| [`bq_replica.py`](bq_replica.py) | Local replicas of BQML `lin_h30` / `xgb_h30` (same features, settings and 12 Sep training rows); `joined.py` scores them frozen and daily-refit |
-| [`bqml_parity.py`](bqml_parity.py) | One-off: BQML vs local replica on the same rows (`--bqml-only --bqml-parity`, promoted to `runs/parity-bqml/`) |
-| [`replay_series.py`](replay_series.py) | Write figure CSVs from an existing `run.json` (no fit, no BigQuery); refuses `runs/report/` |
-| [`run_artifacts.py`](run_artifacts.py), [`promote_report_run.py`](promote_report_run.py) | Schema-v2 `run.json` (provenance, windows, metrics, significance), validation, promotion to `runs/report/` |
-| [`plots.py`](plots.py), [`metrics.py`](metrics.py) | Figures and MAE/RMSE helpers. Each PNG is written with a same-stem CSV of the plotted series |
+Code lives in topic packages under `eval/`. The root keeps [`run.py`](run.py) (CLI dispatcher), [`_flat_imports.py`](_flat_imports.py) (legacy `import joined` names for tests), and the two warehouse entrypoints Cloud Build copies into `forecast-api` ([`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py), [`layer_b_fcm_xgb_mix.py`](layer_b_fcm_xgb_mix.py)).
+
+```text
+eval/
+  run.py                 # python run.py <name> [args...]
+  harness/               # run.json, promotion, significance, report driver
+  lb/                    # Layer B scoring (joined, features, ensemble, …)
+  timeseries/            # 60-min offline XGB, LSTM, Transformer, deep_forecast
+  la/                    # Layer A scorer, rescoring, camera backfill
+  studies/               # horizon study, layer_a_eval, counts_substitute, …
+  warehouse/             # FCM+MLP, TimesFM, mix (implementations; two shims at root for deploy)
+  tests/  data/  runs/  notebooks/  test-reports/
+```
+
+Run any harness from `eval/`:
+
+```bash
+python run.py joined --start 2026-09-13 --end 2026-09-30
+python -m lb.joined --start 2026-09-13 --end 2026-09-30   # same
+python run.py --help                                      # lists module names
+```
+
+### Packages (selected modules)
+
+| Package | Module | Role |
+| --- | --- | --- |
+| `lb` | `layer_b` | Production models at 30 min on a **fixed** window: persistence, `lin_h30`, `xgb_h30`, ensemble; slices by direction, time of day, day type, day/night |
+| `lb` | `joined` | Offline joined-feature experiment at 30 min: rolling daily folds; Maps vs + weather vs + camera |
+| `lb` | `features` | Causal 10-min feature table (`v_training_set` parity), rainfall, forecast, camera counts |
+| `lb` | `fuzzy_traffic`, `ensemble`, `camera_forecast`, `bq_replica`, `bqml_parity` | Fuzzy classifier, ensembles/hybrids, camera profile features, local BQML replicas |
+| `timeseries` | `timeseries_xgb`, `deep_forecast`, … | 60-min offline models and deep sequence scoring |
+| `harness` | `generate_comparison_plots`, `promote_report_run`, `replay_series` | Full report run, promotion to `runs/report/`, CSV replay from `run.json` |
+| `harness` | `significance`, `metrics`, `plots`, `run_artifacts` | DM/Holm, MAE/RMSE, figures + CSV sidecars, schema-v2 manifests |
+| `la` | `layer_a`, `score_layer_a_*`, `backfill_camera_counts`, … | Box/count scorer, rescoring, Roboflow backfill |
+| `studies` | `horizon_study`, `layer_a_eval`, `counts_substitute`, `camera_current` | Exploratory studies (not the promoted report run) |
+| `warehouse` | `layer_b_fcm_mlp`, `layer_b_timesfm`, `layer_b_fcm_xgb_mix` | Exploratory Layer B warehouse jobs ([mix docs](../docs/layer-b-mix-module.md)) |
 
 ## Setup and tests
 
@@ -56,9 +65,9 @@ python ../data/weather/filter_station_history.py
 python ../data/weather/filter_area_forecast.py
 # all components into one run folder, then validate and promote
 pip install -r requirements-notebook.txt   # TensorFlow for --deep
-python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined --deep --fuzzy --ensemble
-python promote_report_run.py --check
-python promote_report_run.py <run_id>
+python run.py generate_comparison_plots --bqml --window-end "2026-09-30 23:50" --joined --deep --fuzzy --ensemble
+python run.py promote_report_run --check
+python run.py promote_report_run <run_id>
 ```
 
 `--ensemble` needs `--bqml` and `--joined` (it reuses their out-of-sample rows) and adds the 60-minute pool when `--deep` is given. The offline component reads the cached `data/causeway_gdata.csv`. Add `--refresh-bq` only when that cache is missing: it re-downloads `travel_times`, which now has rows past the report cut, so the offline split and its numbers will differ from the promoted run. The BQML window is pinned by `--window-end` either way. Promotion refuses a run made from a dirty tree unless `--allow-dirty` is given; do not use that for the report.
@@ -68,7 +77,7 @@ Each figure PNG has a CSV of the same stem beside it (`offline/holdout-sample.pn
 The committed snapshot in [`runs/report/`](runs/report/) stays as cited. Its numbers are unchanged. Figure CSVs for that snapshot were replayed from its `run.json` (no model fit, no BigQuery) into [`runs/replay-20261003T035807Z/`](runs/replay-20261003T035807Z/) (any `runs/replay-<run_id>/*/*.csv` is tracked by git). Do not refit the snapshot to add them. Re-running `generate_comparison_plots.py` with the same flags and the cached `data/causeway_gdata.csv` reproduces these numbers on this machine: the runs from `b89bc4e`, `eb435dd` and `b3b6562` (the last two span the wavelet code, which is off by default) gave identical metrics, decisions and per-seed deep MAEs on the same TensorFlow build. A re-run would still be a **new** run: new run id and `code_sha256` (the plot writers changed the code), so it would need re-promoting and every doc reference updating. The team chose not to. The numbers can move only if the inputs move: `--refresh-bq` pulls `travel_times` rows past the cached export, a different TensorFlow build or CPU can change deep rows in the last digits, and the 2026-10-19 cutoff applies to the next, longer window, not to this pinned 13–30 Sep one. Series for every figure except `offline/holdout-sample` are already in `run.json` (MAE, bootstrap CIs, seeds, profile curves, confusion counts, fuzzy cuts). Replay them with no model fit and no BigQuery:
 
 ```bash
-python replay_series.py path/to/run_dir --output-dir path/to/csv_dir
+python run.py replay_series path/to/run_dir --output-dir path/to/csv_dir
 ```
 
 That command writes the CSVs only and refuses `runs/report/`. Omit `--output-dir` to write next to the source `run.json` when that directory is not the snapshot. Older schema-v2 promotions (`20260930T202959Z`, `20260930T194805Z`, `20260930T191544Z`, `20260930T175104Z`) replay the same way from the `run.json` in the commit that promoted them. `20260926T073406Z` is schema v1 and is not replayable. The hold-out tail (timestamps, actual minutes, and the XGB and persistence traces) was never stored, so `offline/holdout-sample` is absent from the replay and that one CSV needs a new run.
@@ -78,11 +87,11 @@ That command writes the CSVs only and refuses `runs/report/`. Omit `--output-dir
 Individual harnesses:
 
 ```bash
-python layer_b.py                                   # print tables (read-only BigQuery)
-python layer_b.py --plots --window-end "2026-09-30 23:50"
-python joined.py --start 2026-09-13 --end 2026-09-30
-python features.py --build --parity                 # feature table + parity with the live view
-python layer_a.py --coco <export>/_annotations.coco.json --predictions preds.json --frame-times times.csv
+python run.py layer_b                                   # print tables (read-only BigQuery)
+python run.py layer_b --plots --window-end "2026-09-30 23:50"
+python run.py joined --start 2026-09-13 --end 2026-09-30
+python run.py features --build --parity                 # feature table + parity with the live view
+python run.py layer_a --coco <export>/_annotations.coco.json --predictions preds.json --frame-times times.csv
 ```
 
 ## Window-feature ablation (offline XGB)
@@ -101,8 +110,8 @@ The rolling mean uses 12 bins (60 minutes), the same span as `keep_lags` and the
 
 ```bash
 cd eval
-python timeseries_xgb.py
-python timeseries_xgb.py --dwt-level 3 --json-out runs/wavelet-ablation.json
+python run.py timeseries_xgb
+python run.py timeseries_xgb --dwt-level 3 --json-out runs/wavelet-ablation.json
 ```
 
 The cache is `data/causeway_gdata.csv` (gitignored). The command prints MAE and RMSE in minutes against persistence. Significance follows [`significance.py`](significance.py): Diebold-Mariano, day-block bootstrap, Holm. Below 10 day-blocks the decision is **insufficient data** and the command reports point estimates only (no p-values). Leave those estimates out of `docs/evaluation.md` and `runs/report/` unless a promoted run produced them.

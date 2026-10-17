@@ -155,7 +155,7 @@ def test_score_routes_aligns_rows_by_route_then_time():
 
 
 def test_fuzzy_component_writes_valid_manifest_block(tmp_path, monkeypatch):
-    import run_artifacts as ra
+    import harness.run_artifacts as ra
 
     cache = tmp_path / "cache.csv"
     _export().to_csv(cache, index=False)

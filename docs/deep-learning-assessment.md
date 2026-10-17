@@ -8,10 +8,10 @@
 
 ## What was built
 
-All models use the same rows as offline XGBoost and one training protocol ([`eval/deep_forecast.py`](../eval/deep_forecast.py)), so differences come from the architecture:
+All models use the same rows as offline XGBoost and one training protocol ([`eval/timeseries/deep_forecast.py`](../eval/timeseries/deep_forecast.py)), so differences come from the architecture:
 
-- **LSTM(64)** and **GRU(64)** ([`timeseries_lstm.py`](../eval/timeseries_lstm.py)).
-- **Patch Transformer** ([`timeseries_transformer.py`](../eval/timeseries_transformer.py)), designed for a short, single, smooth series with about 5.7k training windows:
+- **LSTM(64)** and **GRU(64)** ([`eval/timeseries/timeseries_lstm.py`](../eval/timeseries/timeseries_lstm.py)).
+- **Patch Transformer** ([`eval/timeseries/timeseries_transformer.py`](../eval/timeseries/timeseries_transformer.py)), designed for a short, single, smooth series with about 5.7k training windows:
   - **Patching.** Six 30-minute patches replace 36 five-minute tokens, which gives each token local shape and keeps attention small (PatchTST, Nie et al. 2023).
   - **Pre-LayerNorm blocks.** These train stably without warm-up.
   - **Flatten head.** It keeps position information that average pooling would discard.
@@ -48,6 +48,6 @@ The next feature matrix (wavelet and trend columns, XGBoost and Random Forest im
 
 ## Cheaper options first
 
-- LightGBM or tuned XGBoost on the joined feature table (`features.py`).
+- LightGBM or tuned XGBoost on the joined feature table (`eval/lb/features.py`).
 - Multi-horizon XGBoost on both directions before any 24-hour claim.
 - Quantile regression for prediction intervals, which a traveller-facing forecast needs more than a small MAE gain.

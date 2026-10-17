@@ -13,6 +13,7 @@ pytest.importorskip("sklearn")
 from sklearn.neural_network import MLPRegressor  # noqa: E402
 
 import layer_b_fcm_mlp as m  # noqa: E402 - after the optional-dependency checks
+import warehouse.layer_b_fcm_mlp as _fcm_impl  # noqa: E402 - monkeypatch utc_now on the implementation module
 
 UTC = dt.timezone.utc
 README_PAYLOAD = {  # camdetect/README.md format=json example, with directions available
@@ -606,7 +607,7 @@ def test_main_exit_codes(monkeypatch, capsys, trained):
     assert m.main(["train", "--start", "2026-09-01", "--end", "2999-01-01"], warehouse_factory=factory) == m.EXIT_CONFIG
     assert m.main(["run-cycle"], warehouse_factory=factory) == m.EXIT_NO_FORECAST
     wh = _cycle_warehouse(trained)
-    monkeypatch.setattr(m, "utc_now", lambda: NOW)
+    monkeypatch.setattr(_fcm_impl, "utc_now", lambda: NOW)
     assert m.main(["run-cycle", "--dry-run"], warehouse_factory=lambda c: wh) == m.EXIT_OK
 
 
@@ -614,7 +615,7 @@ def test_main_train_registers(monkeypatch, capsys, trained):
     _, grid, series, _, _, _ = trained
     wh = FakeWarehouse(bins=rows_from_series(grid, series), fail={"layer_a"})
     monkeypatch.setattr(m.Config, "from_env", classmethod(lambda cls, env=None: cls(**{**FAST, "ensemble_size": 1})))
-    monkeypatch.setattr(m, "utc_now", lambda: NOW)
+    monkeypatch.setattr(_fcm_impl, "utc_now", lambda: NOW)
     code = m.main(["train", "--lookback-days", "22", "--validation-days", "4", "--test-days", "0", "--register", "--write-eval"],
                   warehouse_factory=lambda c: wh)
     assert code == m.EXIT_OK

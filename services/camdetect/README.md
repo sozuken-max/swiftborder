@@ -108,7 +108,7 @@ The orders fail in opposite ways:
 
 On 16 live frames (CAM 2701 and 2702, 10 Oct 04:58-14:58 SGT), `local-conf` counted 0-4 more
 vehicles per frame and never fewer. Busy CAM 2701 frames differed most: 133 vs 136, 98 vs 102.
-Which order is closer to the truth needs labelled frames (`eval/layer_a.py`). Neither order is
+Which order is closer to the truth needs labelled frames (`eval/la/layer_a.py`). Neither order is
 scored yet.
 
 On by default for `local` (`LOCAL_MAX_OVERLAP` 0.6, `LOCAL_SIZE_RATIO` 3). Off by

@@ -1,7 +1,7 @@
 flowchart LR
   EXP["Held-out frames<br/>Roboflow export COCO or YOLO<br/>test split only"]
   CAND["Candidate detectors<br/>pretrained YOLO<br/>fine-tuned YOLO<br/>optional ResNet"]
-  HARNESS["Scorer PRESENT<br/>eval/layer_a.py<br/>mAP50 mAP50-95 P R<br/>count error by direction<br/>day vs night"]
+  HARNESS["Scorer PRESENT<br/>eval/la/layer_a.py<br/>mAP50 mAP50-95 P R<br/>count error by direction<br/>day vs night"]
   SERVE["Production serve today<br/>Roboflow via swiftbackend"]
   EXP --> CAND --> HARNESS
   HARNESS -.->|"record scores before promote"| SERVE

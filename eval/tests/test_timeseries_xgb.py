@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -227,7 +229,9 @@ def test_backtest_actual_window_matches_the_supervised_rows():
     days = tsx.backtest_days(split)
     scores = tsx.score_forecast_days(model, features, split, days[:1], config)
     day_rows = split.test[split.test["target_ts"].dt.strftime("%Y-%m-%d") == days[0]]
-    expected = tsx.mae_minutes(day_rows["y"], model.predict(day_rows[split.feature_cols]))
+    fc_actual = model.predict(day_rows[split.feature_cols])
+    keep = ~np.isnan(np.asarray(fc_actual, dtype=float))
+    expected = tsx.mae_minutes(day_rows["y"].to_numpy()[keep], np.asarray(fc_actual)[keep])
     got = scores[(scores["method"] == "XGB actual window")]["MAE_min"].iloc[0]
     assert got == pytest.approx(expected)
     persist = scores[scores["method"] == f"Persistence T-{config.horizon_minutes}"]["MAE_min"].iloc[0]

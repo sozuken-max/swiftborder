@@ -18,7 +18,7 @@ All reported metrics are pinned to the **17 Oct 2026 final-report freeze** (`mai
 | Category | Where |
 | --- | --- |
 | Supervised learning | Roboflow-labelled YOLO26s/m; regression of future Maps duration (BQML, XGBoost, ridge, MLP); traffic-level classification; ResNet18 + BiGRU congestion sequence classifier ([eval/cnn_rnn_congestion/](eval/cnn_rnn_congestion/README.md)) |
-| Unsupervised learning & fuzzy logic | Fuzzy C-Means clustering on historical traffic profiles (`eval/layer_b_fcm_mlp.py`); Mamdani light / moderate / heavy partition and learned Wang–Mendel fuzzy rule base (`eval/fuzzy_traffic.py`) |
+| Unsupervised learning & fuzzy logic | Fuzzy C-Means clustering on historical traffic profiles (`eval/layer_b_fcm_mlp.py`); Mamdani light / moderate / heavy partition and learned Wang–Mendel fuzzy rule base (`eval/lb/fuzzy_traffic.py`) |
 | Machine learning / deep learning | YOLO26s ONNX (`services/camdetect`); `lin_h30`, `xgb_h30` & local replicas (`services/forecastapi`); offline XGBoost, LSTM, GRU, TCN and patch Transformer ([deep-learning assessment](docs/deep-learning-assessment.md)) |
 | Intelligent sensing | LTA camera frames -> directional occupancy with camera 2701 & 2702 dividing lines (`services/camdetect/main.py`) and `traffic-backfill` Cloud Run Job (`services/camdetect/backfill_local_counts.py`) |
 | Hybrid / ensemble | Mean of `lin_h30` + `xgb_h30`; ridge + XGBoost; rolling LAD stack, rolling selection and fuzzy-gated stack; XGBoost forecast defuzzified into traffic levels; 50/50 `fcm_mlp` + `xgb[maps]` mix ([docs/layer-b-mix-module.md](docs/layer-b-mix-module.md)). All scored against single models |

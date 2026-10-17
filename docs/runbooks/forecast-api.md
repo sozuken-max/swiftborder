@@ -13,8 +13,8 @@ What it is not:
 
 ## How a forecast is made
 
-1. **Latest inputs and the availability contract.** Each uncached request reads the last 3 hours of **closed** `v_bins_10min` bins. A bin `[t, t+10)` counts as closed once `t + 10 min + INGEST_GRACE` (60 s, env `INGEST_GRACE_SECONDS`) has passed; the harness treats a bin as known at `t + 10`. The features (lags, rolling means, `after_gap`) are built in Python with the harness's time-based rules (`local_models.features_from_bins`, a copy of `eval/features.maps_features`). They are not read from `v_training_set`, whose positional LAG/LEAD shift by a bin after a skipped bin. The origin is the newest closed bin. It is served only while its target bin `[t+30, t+40)` has not started, and only when no gap of more than 25 minutes lies in the six bins before it (`after_gap = 0`, as in the scored rows). Otherwise that direction answers **503**; a 200 never carries an expired forecast. With current ingestion the target is 9–19 minutes ahead of the request. One missed fetch still leaves an earlier origin servable, with less lead. Responses are cached for 5 minutes, and a cached answer is dropped as soon as its target bin starts.
-2. **Model.** Each model is fitted in the process and cached until the SGT day changes. The rows and settings are those of the harness fold for that day ([`eval/joined.py`](../../eval/joined.py)):
+1. **Latest inputs and the availability contract.** Each uncached request reads the last 3 hours of **closed** `v_bins_10min` bins. A bin `[t, t+10)` counts as closed once `t + 10 min + INGEST_GRACE` (60 s, env `INGEST_GRACE_SECONDS`) has passed; the harness treats a bin as known at `t + 10`. The features (lags, rolling means, `after_gap`) are built in Python with the harness's time-based rules (`local_models.features_from_bins`, a copy of `eval/lb/features.maps_features`). They are not read from `v_training_set`, whose positional LAG/LEAD shift by a bin after a skipped bin. The origin is the newest closed bin. For an **explicit** `?model=` (including `?model=served`), a direction is served only while its target bin `[t+30, t+40)` has not started, and only when no gap of more than 25 minutes lies in the six bins before it (`after_gap = 0`, as in the scored rows). Otherwise that direction answers **503**; a 200 never carries an expired forecast. A **bare** `GET` (no `model` parameter) and `?curve=forecast` use the same origin when it exists, but when it does not—or when the mix, `xgb[maps]`, and persistence cannot emit a finite value—they fall through to the calendar profile for that direction (`status: baseline`). The response names the model that answered and may set `fallback_from` to the skipped default (`served`). Profile fallback is not cached under the mix version key. With current ingestion the target is 9–19 minutes ahead of the request when a Maps origin is used. One missed fetch still leaves an earlier origin servable, with less lead. Responses are cached for 5 minutes, and a cached answer is dropped as soon as its target bin starts.
+2. **Model.** Each model is fitted in the process and cached until the SGT day changes. The rows and settings are those of the harness fold for that day ([`eval/lb/joined.py`](../../eval/lb/joined.py)):
 
 | `model` | Harness column | Training rows | Settings |
 | --- | --- | --- | --- |
@@ -29,7 +29,7 @@ What it is not:
 
 `eval/tests/test_forecastapi_models.py` asserts that the service and the harness use the same feature lists and settings, and that a service fit predicts exactly what the harness predicts on the same rows. It runs in GitHub Actions and in the Cloud Build `Test` step.
 
-**`served` at 30 minutes** is `mix[fcm_mlp+xgb]` for both `SG_TO_MY` and `MY_TO_SG`: half `fcm_mlp` and half daily-refit `xgb[maps]`, the same mix as `eval/layer_b_fcm_xgb_mix.py`. It is the lowest measured September Maps MAE (section 8: 2.134 min; backtest `backtest-20261010T080013Z-6a139c3f`: 2.132 min), formed after that window was scored. It is not a pre-registered Holm result, not a 24-hour forecast, and not a crossing-time MAE. The response keeps `"model": "served"` at the top level. Each direction's `model` is `mix[fcm_mlp+xgb]`, with `components` listing the two halves at weight 0.5. `version` is `mix-equal-20261010T080013Z`. The point `status` is `exploratory`. Horizons from 60 minutes onward stay exploratory (`xgb[maps]` at 60 minutes, `xgb[maps+prof]` from 90 minutes). `xgb[maps]` remains a callable id. `fcm_mlp` alone is a "Not served" card.
+**`served` at 30 minutes** is `mix[fcm_mlp+xgb]` for both `SG_TO_MY` and `MY_TO_SG` when a servable Maps origin exists: half `fcm_mlp` and half daily-refit `xgb[maps]`, the same mix as `eval/layer_b_fcm_xgb_mix.py`. It is the lowest measured September Maps MAE (section 8: 2.134 min; backtest `backtest-20261017T094617Z-d001a839`: 2.132 min), formed after that window was scored. It is not a pre-registered Holm result, not a 24-hour forecast, and not a crossing-time MAE. The response keeps `"model": "served"` at the top level when the caller did not override `model`. Each direction's `model` is the id that produced the value (`mix[fcm_mlp+xgb]` when the mix wins, or `profile` / `xgb[maps]` / `persistence` after fallback). A mix point includes `components` listing the two halves at weight 0.5. `version` is `mix-equal-20261010T080013Z` (the serve artifact id; unchanged while weights stay 0.5/0.5). Mix points use `status: exploratory`; profile fallback uses `baseline`. Horizons from 60 minutes onward stay exploratory (`xgb[maps]` at 60 minutes, `xgb[maps+prof]` from 90 minutes). `xgb[maps]` remains a callable id. `fcm_mlp` alone is a "Not served" card.
 
 ## Request
 
@@ -63,9 +63,9 @@ What it is not:
 
 ## Model cards
 
-`GET /?list=cards` and `GET /?view=cards` return a JSON array. Each object has `id` (the `model` query value, except the two code-only cards below), `name`, `summary`, `kind` (`single` or `mix`), `callable`, `default_for` (or null), and `members` on a mix. A single model omits `members`. `callable` matches the allow-list above. `timesfm` and `fcm_mlp` are cards only: `eval/layer_b_timesfm.py` and `eval/layer_b_fcm_mlp.py` are not called by this service, and both summaries start with "Not served."
+`GET /?list=cards` and `GET /?view=cards` return a JSON array. Each object has `id` (the `model` query value, except the two code-only cards below), `name`, `summary`, `kind` (`single` or `mix`), `callable`, `default_for` (or null), and `members` on a mix. A single model omits `members`. `callable` matches the allow-list above. `timesfm` and `fcm_mlp` are cards only: [`eval/warehouse/layer_b_timesfm.py`](../../eval/warehouse/layer_b_timesfm.py) and the deploy shim [`eval/layer_b_fcm_mlp.py`](../../eval/layer_b_fcm_mlp.py) are not called by this service, and both summaries start with "Not served."
 
-The Hosting chart's Typical line is `profile` (`?baseline=profile`), the calendar profile. `served` at 30 minutes is the registry choice, with no weights.
+The Hosting chart's Typical line is `profile` (`?baseline=profile`), the calendar profile. `served` at 30 minutes is the equal mix when Maps bins are servable.
 
 ```json
 [
@@ -75,7 +75,7 @@ The Hosting chart's Typical line is `profile` (`?baseline=profile`), the calenda
     "kind": "mix",
     "callable": true,
     "default_for": "request with no model parameter; public curve (?curve=forecast)",
-    "members": ["lin_bq[frozen]", "persistence", "xgb[maps]", "xgb[maps+prof]", "profile"]
+    "members": ["fcm_mlp", "xgb[maps]"]
   }
 ]
 ```
@@ -86,29 +86,30 @@ The shape below is the code in this tree. Live revision `forecast-api-00009-hax`
 
 ```json
 {
-  "model": "served", "version": "registry-2026-09-12-local-replica", "horizon_min": 30,
+  "model": "served", "version": "mix-equal-20261010T080013Z", "horizon_min": 30,
   "source": "local model", "label": "maps_duration_in_traffic_min", "target_offset_min": [30, 40],
   "commit": "<git sha>",
   "directions": {
-    "SG_TO_MY": {"forecast_min": 19.9, "model": "lin_bq[frozen]",
+    "SG_TO_MY": {"forecast_min": 19.9, "model": "mix[fcm_mlp+xgb]", "status": "exploratory",
+                 "components": [{"model": "fcm_mlp", "weight": 0.5}, {"model": "xgb[maps]", "weight": 0.5}],
                  "origin_ts": "2026-10-03T16:40:00Z", "origin_closed_at": "2026-10-03T16:50:00Z",
                  "forecast_for": "2026-10-03T17:10:00Z", "forecast_window_end": "2026-10-03T17:20:00Z",
                  "observation_age_min": 10.8, "lead_min": 9.2},
-    "MY_TO_SG": {"forecast_min": 35.5, "model": "persistence", "...": "same timing fields"}
+    "MY_TO_SG": {"forecast_min": 35.5, "model": "mix[fcm_mlp+xgb]", "status": "exploratory", "...": "same timing fields"}
   },
-  "model_meta": {"lin_bq[frozen]": {"eval_id": "lin_bq[frozen]", "version": "bqml-replica-2026-09-12", "training_rows": 1406, "seeds": []},
-                 "persistence": {"eval_id": "persistence", "version": "latest-bin"}}
+  "model_meta": {"fcm_mlp": {"eval_id": "fcm_mlp", "version": "labels_before=...", "training_rows": 0},
+                 "xgb[maps]": {"eval_id": "xgb[maps]", "version": "labels_before=...", "training_rows": 0}}
 }
 ```
 
-Top-level `model` is the id the caller asked for. `directions.<d>.model`, and `model` on each `?curve=forecast` point, is the id that produced that value. Those differ for `served`, because the two directions use different models, and along the curve, because the id changes with lead time. A single-model value omits `components`. A blend (nothing in `served` or the forecast curve is a blend today) adds `components` on that direction or curve point: a list of `{model, weight}` whose weights sum to 1. The service copies those weights; it does not invent or rescale them. A blend value would look like `"model": "mean[models]"` with `"components"` naming `lin_bq[frozen]` and `persistence` at weight 0.5 each.
+Top-level `model` is the id the caller asked for. `directions.<d>.model`, and `model` on each `?curve=forecast` point, is the id that produced that value. Those differ for `served`, because the two directions can fall back independently, and along the curve, because the id changes with lead time. A single-model value omits `components`. The 30-minute `served` mix adds `components` on that direction or curve point: `{model, weight}` entries that sum to 1. The service copies those weights; it does not invent or rescale them. When the default falls back, `fallback_from` may be `served` and `model` becomes `profile`, `xgb[maps]`, or `persistence`.
 
 | Status | When |
 | --- | --- |
 | 400 | Unknown model (in `model` or an override), a catalog id that is not callable (`model is not deployed`), stale `version`, `version` with an override, an override for a direction not requested, bad `direction` or `horizon_min`, `list` other than `models` or `horizon-study` |
 | 405 | Method other than `GET` / `OPTIONS` |
 | 502 | BigQuery read or fit failed (`{"error": "Forecast query failed"}`; details stay in the log) |
-| 503 | No servable origin for a requested direction: ingestion stale (the newest closed bin's target has started), or within an hour after a gap of more than 25 minutes. A data condition, not a failed deploy |
+| 503 | No servable origin for an **explicit** model on a direction (ingestion stale, gap, or no profile history when the profile is required). A bare `GET` / `?curve=forecast` uses profile fallback when possible instead of 503. A data condition, not a failed deploy |
 
 **Timing fields.** `forecast_for` / `forecast_window_end` bound the target bin; the forecast is its mean Maps duration. `origin_closed_at` is when the newest observation bin closed. `observation_age_min` and `lead_min` are measured when the response is sent, including from the cache. The example is a local run against live BigQuery at 2026-10-03 17:00:17 UTC: the 16:50 bin had not cleared its grace minute, so the origin was 16:40.
 
@@ -133,7 +134,7 @@ The source is [docs/horizon-study.md](../horizon-study.md): an exploratory study
 - **`baseline`** (in every forecast response): the calendar profile at the same target bin, per direction. It carries `"status": "baseline"` and the label *"Baseline: typical for this day and time (calendar profile), not a forecast"*. It is a per-direction Fourier (K = 8) × weekend ridge, refitted each SGT day on every closed bin before 00:00 SGT, so it ignores current traffic.
 - **`study`** (when the summary is bundled): the study MAE at this horizon for the model used, the profile and persistence, with `vs_profile` differences and decisions.
 - **`?baseline=profile&hours=N`:** the profile for the next `N` hours in 10-minute bins (`bin_start`, `forecast_min`) per direction. It needs no latest-bin read.
-- **`?list=horizon-study`:** `forecastapi/horizon_study.json`, written by `cd eval; python horizon_study.py --publish`. Re-run and commit it after the study changes; the service only reads it.
+- **`?list=horizon-study`:** `forecastapi/horizon_study.json`, written by `cd eval; python run.py horizon_study --publish`. Re-run and commit it after the study changes; the service only reads it.
 
 Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:50 UTC):
 
