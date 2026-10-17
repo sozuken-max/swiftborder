@@ -80,5 +80,5 @@ Cloud region layout / multi-region consolidation is **not** what this module sco
 | Final report readiness & freeze record | [final-report-readiness.md](../final-report-readiness.md) (17 Oct 2026 submission freeze at `199c2e5`) |
 | Evidence appendix | [inventory.md](../inventory.md), a dated copy of project `swiftborder` |
 | Historical sequence of work | [roadmap.md](../roadmap.md) (superseded by the 17 Oct 2026 freeze) |
-| Final system | Runnable Layer A detection (`camdetect`, Cloud Run `swiftbackend` + `traffic-backfill` Job), Layer B local-model serving (`forecastapi`, Cloud Run `forecast-api`), Maps ingestion (`gmapfetcher`), Firebase web client (`hosting/`), and historical BQML (`v_forecast_recent`); evaluation harnesses in `eval/` and `eval/` |
+| Final system | Runnable Layer A detection (`services/camdetect`, Cloud Run `swiftbackend` + `traffic-backfill` Job), Layer B local-model serving (`services/forecastapi`, Cloud Run `forecast-api`), Maps ingestion (`services/gmapfetcher`), Firebase web client (`hosting/`), and historical BQML (`v_forecast_recent`); evaluation harnesses in `eval/` |
 | Peer review | Visible git footprint on the owned report sections |

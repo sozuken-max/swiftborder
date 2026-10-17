@@ -38,6 +38,8 @@ def test_feature_lists_and_settings_match_eval():
     assert tuple(lm.HORIZONS) == tuple(hs.DEFAULT_HORIZONS)
     assert lm.PROFILE_HARMONICS == hs.PROFILE_HARMONICS and lm.PROFILE_NOW_OFFSET == cf.NOW_OFFSET
     assert lm.PROFILE_ALPHA == cf.FourierProfile().alpha
+    served = (REPO / "services" / "forecastapi" / "main.py").read_text(encoding="utf-8")
+    assert 'SERVED_SELECTION = {"SG_TO_MY": mix_bridge.MIX_ID, "MY_TO_SG": mix_bridge.MIX_ID}' in served
 
 
 def _view(days=14, seed=0):

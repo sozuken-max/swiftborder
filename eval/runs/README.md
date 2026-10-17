@@ -18,7 +18,7 @@ Each harness run writes one folder `eval/runs/<run_id>/` with figures and a **sc
 | Key | Content |
 | --- | --- |
 | `schema_version` | `2` |
-| `provenance` | `git_sha`, `git_branch`, `git_dirty`, `code_sha256` (SHA-256 of `eval/*.py` and `sql/**/*.sql`), Python and key package versions, `platform` (OS, CPU), `environment` (every installed distribution and its hash) |
+| `provenance` | `git_sha`, `git_branch`, `git_dirty`, `code_sha256` (SHA-256 of `eval/*.py` and `data/sql/**/*.sql`; frozen snapshots hashed `sql/**/*.sql` and are not recomputed — see `PATH_RELOCATION` in `run_artifacts.py`), Python and key package versions, `platform` (OS, CPU), `environment` (every installed distribution and its hash) |
 | `components` | Any of `offline`, `bqml`, `joined`, `layer_a` |
 | `<component>.dataset` | Source table or file, repo-relative cache path with SHA-256 and size, row counts, observed time range |
 | `<component>.window` | Test window `start` / `end` (and timezone / basis); BQML also records model training times |
@@ -27,7 +27,7 @@ Each harness run writes one folder `eval/runs/<run_id>/` with figures and a **sc
 | `<component>.artifacts` | Figure paths relative to the run folder |
 | `multiplicity` | Sensitivity check: every decision recomputed with one run-wide Holm family; `changed` lists the rows whose decision flips |
 
-`promote_report_run.py` refuses a run that fails validation (missing keys, empty metrics, absent figures, absolute paths) or whose `code_sha256` differs from the current `eval/` and `sql/` sources. It also refuses a run from a dirty working tree unless `--allow-dirty` is passed. That override is recorded in `report/SOURCE_RUN.json` and in the `report/README.md` banner.
+`promote_report_run.py` refuses a run that fails validation (missing keys, empty metrics, absent figures, absolute paths) or whose `code_sha256` differs from the current `eval/*.py` and `data/sql/**/*.sql` sources. A promoted snapshot keeps the hash it was given; the relocation map does not rewrite it. It also refuses a run from a dirty working tree unless `--allow-dirty` is passed. That override is recorded in `report/SOURCE_RUN.json` and in the `report/README.md` banner.
 
 ```bash
 cd eval

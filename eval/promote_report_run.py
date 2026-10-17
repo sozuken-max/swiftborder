@@ -3,7 +3,7 @@
 
 Refuses a run whose ``run.json`` fails ``run_artifacts.validate_manifest`` (schema v2, windows,
 metrics, significance rows, artifact files, no absolute paths), and a run whose
-``provenance.code_sha256`` differs from the current eval/sql sources. Refuses a run made from a dirty
+``provenance.code_sha256`` differs from the current eval/*.py and data/sql sources. Refuses a run made from a dirty
 working tree unless ``--allow-dirty`` is given; the override is recorded in ``SOURCE_RUN.json``
 and the README banner, and ``provenance.code_sha256`` still identifies the exact code.
 """

@@ -2,8 +2,8 @@
 
 A **public** HTTP read of the Woodlands 30-minute forecast (the invoker IAM check has been disabled since 2026-10-03, so the Firebase page can call it from the browser) of Google Maps `duration_in_traffic`. It is served from **local models** that the service fits itself ([ADR 0004](../adr/0004-serve-local-models.md)). BigQuery ML (`lin_h30`, `xgb_h30`, `v_forecast_recent`) is no longer called.
 
-- **Code:** [`forecastapi/main.py`](../../services/forecastapi/main.py) and [`forecastapi/local_models.py`](../../services/forecastapi/local_models.py).
-- **CI/CD:** [`forecastapi/cloudbuild.yaml`](../../services/forecastapi/cloudbuild.yaml), run by trigger `forecast-api` (`949ff029`) on a push to `main` that touches `forecastapi/**`.
+- **Code:** [`services/forecastapi/main.py`](../../services/forecastapi/main.py) and [`services/forecastapi/local_models.py`](../../services/forecastapi/local_models.py).
+- **CI/CD:** [`services/forecastapi/cloudbuild.yaml`](../../services/forecastapi/cloudbuild.yaml), run by trigger `forecast-api` (`949ff029`) on a push to `main` that touches `services/forecastapi/**`.
 - **Not** `swiftbackend`, and not trigger `76bbca35`.
 
 What it is not:
@@ -29,7 +29,7 @@ What it is not:
 
 `eval/tests/test_forecastapi_models.py` asserts that the service and the harness use the same feature lists and settings, and that a service fit predicts exactly what the harness predicts on the same rows. It runs in GitHub Actions and in the Cloud Build `Test` step.
 
-**`served` today** is an interim choice until the frozen run: `SG_TO_MY` → `lin_bq[frozen]`, `MY_TO_SG` → `persistence`. That is the 12 Sep registry rebuilt from local replicas, not a weighted ensemble. The response keeps `"model": "served"` at the top level. Each direction's `model` is the id that produced that value (`lin_bq[frozen]` or `persistence`). After the frozen run (on or after 20 Oct), set `SERVED_SELECTION` by the ADR 0004 rule: per direction, a model that beats persistence in Run A and is confirmed in Run B, both significant under run-wide Holm, otherwise persistence. Then change `SELECTION_ID` and push to `main`.
+**`served` at 30 minutes** is `mix[fcm_mlp+xgb]` for both `SG_TO_MY` and `MY_TO_SG`: half `fcm_mlp` and half daily-refit `xgb[maps]`, the same mix as `eval/layer_b_fcm_xgb_mix.py`. It is the lowest measured September Maps MAE (section 8: 2.134 min; backtest `backtest-20261010T080013Z-6a139c3f`: 2.132 min), formed after that window was scored. It is not a pre-registered Holm result, not a 24-hour forecast, and not a crossing-time MAE. The response keeps `"model": "served"` at the top level. Each direction's `model` is `mix[fcm_mlp+xgb]`, with `components` listing the two halves at weight 0.5. `version` is `mix-equal-20261010T080013Z`. The point `status` is `exploratory`. Horizons from 60 minutes onward stay exploratory (`xgb[maps]` at 60 minutes, `xgb[maps+prof]` from 90 minutes). `xgb[maps]` remains a callable id. `fcm_mlp` alone is a "Not served" card.
 
 ## Request
 

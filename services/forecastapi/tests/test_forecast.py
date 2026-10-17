@@ -12,8 +12,26 @@ from werkzeug.wrappers import Request
 
 import local_models as lm
 import main
+import mix_bridge
 
 UTC = dt.timezone.utc
+
+
+@pytest.fixture(autouse=True)
+def _stub_mix_fit(monkeypatch):
+    """Curve and catalog tests must not train the MLP. Parity lives in test_mix_bridge.py."""
+
+    def fit_models(frame, day_start, cfg=None, protect_labels=True):
+        return {"diagnostics": {"xgb_rows": {"maps": 0}}, "cfg": None, "stub": True}
+
+    def predict_value(fitted, history, latest, direction, origin_ts, cfg=None):
+        return 12.5, {
+            "fcm_mlp": 12.0, "xgb_maps": 13.0, "mix": 12.5,
+            "training_rows": 0, "eval_id": "mix:fcm_mlp+xgb[maps]",
+        }
+
+    monkeypatch.setattr(mix_bridge, "fit_models", fit_models)
+    monkeypatch.setattr(mix_bridge, "predict_value", predict_value)
 
 
 def _request(method="GET", query=None, body=None):
@@ -136,7 +154,13 @@ def test_model_cards_match_the_allow_list(monkeypatch):
     assert len(by_id) == len(payload)
     served = by_id["served"]
     assert served["kind"] == "mix" and served["callable"] is True
-    assert {"lin_bq[frozen]", "persistence"} <= set(served["members"])
+    assert set(served["members"]) == {mix_bridge.MIX_ID, "xgb[maps]", "xgb[maps+prof]", "profile"}
+    assert main.SERVED_SELECTION == {"SG_TO_MY": mix_bridge.MIX_ID, "MY_TO_SG": mix_bridge.MIX_ID}
+    mix = by_id[mix_bridge.MIX_ID]
+    assert mix["callable"] is True and mix["kind"] == "mix"
+    assert mix["members"] == ["fcm_mlp", "xgb[maps]"]
+    assert "not a pre-registered holm" in mix["summary"].lower()
+    assert "24-hour" in mix["summary"] and "crossing-time" in mix["summary"]
     assert "components" not in served
     assert any(card["kind"] == "mix" for card in payload)
     single = by_id["persistence"]
@@ -251,12 +275,12 @@ def test_served_uses_the_selection_per_direction(monkeypatch):
     assert status == 200 and payload["source"] == "local model"
     for d, mid in main.SERVED_SELECTION.items():
         assert payload["directions"][d]["model"] == mid
-        assert "components" not in payload["directions"][d]
+        assert payload["directions"][d]["components"] == mix_bridge.COMPONENTS
     assert set(payload["model_meta"]) == set(main.SERVED_SELECTION.values())
     # 03:50 closes at 04:00 (+ grace): the newest servable origin is 03:40
     my = payload["directions"]["MY_TO_SG"]
     assert my["origin_ts"] == "2026-10-03T03:40:00Z" and my["forecast_for"] == "2026-10-03T04:10:00Z"
-    assert my["forecast_min"] == round(_dur(bins, "MY_TO_SG", "2026-10-03 03:40"), 1)
+    assert my["forecast_min"] == 12.5  # mix fit is stubbed in this file; parity is test_mix_bridge.py
 
 
 def test_an_open_bin_is_never_an_origin(monkeypatch):
@@ -471,7 +495,7 @@ def test_thirty_minutes_stays_evaluated_and_carries_the_baseline(monkeypatch):
     now = {"t": dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)}
     _fake_bigquery(monkeypatch, bins, now)
     payload, status, _ = _json(main.forecast(_request(query={})))
-    assert status == 200 and payload["status"] == "evaluated" and payload["target_offset_min"] == [30, 40]
+    assert status == 200 and payload["status"] == "exploratory" and payload["target_offset_min"] == [30, 40]
     assert payload["directions"]["SG_TO_MY"]["model"] == main.SERVED_SELECTION["SG_TO_MY"]
     assert payload["baseline"]["status"] == "baseline"
 
@@ -549,7 +573,7 @@ def test_forecast_curve_default_is_30_to_120_minutes(monkeypatch):
         pts = block["points"]
         assert [p["horizon_min"] for p in pts] == [30, 60, 90, 120]
         assert [p["forecast_for"] for p in pts] == ["2026-10-03T04:10:00Z", "2026-10-03T04:40:00Z", "2026-10-03T05:10:00Z", "2026-10-03T05:40:00Z"]
-        assert pts[0]["model"] == main.SERVED_SELECTION[d] and pts[0]["status"] == "evaluated"
+        assert pts[0]["model"] == main.SERVED_SELECTION[d] and pts[0]["status"] == "exploratory"
         assert pts[1]["model"] == "xgb[maps]" and pts[2]["model"] == "xgb[maps+prof]" and pts[1]["status"] == "exploratory"
         assert all("components" not in p for p in pts)
         assert [p["lead_min"] for p in pts] == [10.0, 40.0, 70.0, 100.0]
@@ -626,10 +650,11 @@ def test_mixed_selection_labels_each_direction(monkeypatch):
     _fake_bigquery(monkeypatch, bins, now)
     payload, status, _ = _json(main.forecast(_request(query={"model": "served", "model_my_to_sg": "profile"})))
     assert status == 200 and payload["status"] == "mixed"
-    assert payload["directions"]["SG_TO_MY"]["status"] == "evaluated"
+    assert payload["directions"]["SG_TO_MY"]["status"] == "exploratory"
     assert payload["directions"]["MY_TO_SG"]["status"] == "baseline"
     payload, _, _ = _json(main.forecast(_request(query={"model": "served"})))
-    assert payload["status"] == "evaluated" and {r["status"] for r in payload["directions"].values()} == {"evaluated"}
+    assert payload["status"] == "exploratory"
+    assert {r["status"] for r in payload["directions"].values()} == {"exploratory"}
 
 
 def test_expired_cache_entries_are_evicted_on_put(monkeypatch):
@@ -785,11 +810,10 @@ def test_served_points_name_the_model_that_produced_them(monkeypatch):
     monkeypatch.setattr(main, "query_forecast", fake)
     payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
     assert status == 200 and payload["model"] == "served"
-    assert payload["directions"]["SG_TO_MY"]["model"] == "lin_bq[frozen]"
-    assert payload["directions"]["MY_TO_SG"]["model"] == "persistence"
-    assert payload["directions"]["SG_TO_MY"]["model"] != payload["directions"]["MY_TO_SG"]["model"]
-    for row in payload["directions"].values():
-        assert "components" not in row
+    assert payload["directions"]["SG_TO_MY"]["model"] == mix_bridge.MIX_ID
+    assert payload["directions"]["MY_TO_SG"]["model"] == mix_bridge.MIX_ID
+    assert payload["version"] == "mix-equal-20261010T080013Z"
+    assert payload["status"] == "exploratory"
 
 
 def test_blend_point_lists_components_and_weights(monkeypatch):
@@ -847,15 +871,15 @@ def test_curve_points_name_the_model_at_each_lead(monkeypatch):
     monkeypatch.setattr(main, "servable_origins", lambda bins, now: frame)
     monkeypatch.setattr(main, "fitted_profile", lambda: object())
 
-    def predict(mid, sub, horizon, profile, now):
+    def predict(mid, sub, horizon, profile, now, latest_bins=None):
         return float(horizon), 12.0, {"eval_id": mid, "version": "fixture"}
 
     monkeypatch.setattr(main, "_predict_one", predict)
     payload = main.forecast_curve(list(main.DIRECTIONS), 2)
     sg = payload["directions"]["SG_TO_MY"]["points"]
     my = payload["directions"]["MY_TO_SG"]["points"]
-    assert [p["model"] for p in sg] == ["lin_bq[frozen]", "xgb[maps]", "xgb[maps+prof]", "xgb[maps+prof]"]
-    assert [p["model"] for p in my] == ["persistence", "xgb[maps]", "xgb[maps+prof]", "xgb[maps+prof]"]
+    assert [p["model"] for p in sg] == [mix_bridge.MIX_ID, "xgb[maps]", "xgb[maps+prof]", "xgb[maps+prof]"]
+    assert [p["model"] for p in my] == [mix_bridge.MIX_ID, "xgb[maps]", "xgb[maps+prof]", "xgb[maps+prof]"]
     assert all("components" not in p for p in sg + my)
 
 

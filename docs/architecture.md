@@ -9,14 +9,14 @@
 
 ## Techniques
 
-The module asks the system to demonstrate at least three of these. All four are present; ensembles are scored offline. The live `forecast-api` serves local models, currently `lin_bq[frozen]` for SG_TO_MY and persistence for MY_TO_SG.
+The module asks the system to demonstrate at least three of these. All four are present. The 30-minute `forecast-api` default in this tree is `mix[fcm_mlp+xgb]` (equal mix of a Fuzzy C-Means MLP and `xgb[maps]`) for both directions. The live revision is the one recorded in [inventory.md](inventory.md).
 
 | Category | In this design |
 | --- | --- |
 | Supervised learning | Roboflow vehicle labels; BigQuery ML and offline regression of later Maps duration (`y_30`, 60-min offline) |
 | Machine learning / deep learning | YOLO served through Roboflow; `lin_h30` (linear regression), `xgb_h30` (boosted tree), offline XGBoost; LSTM, GRU and a patch Transformer are scored offline |
 | Intelligent sensing | LTA frame to directional occupancy (`swiftbackend` counts). Dividing lines in `camdetect` cover cameras 2701 and 2702 (2702 added 11 Oct; `cam2701.local_counts` and the 15-frame test report cover 2701). **Also:** Colab CNN-RNN research maps pixels to duration bands (not served) |
-| Hybrid / ensemble | Mean of `lin_h30` and `xgb_h30`, and ridge+XGBoost in the joined experiment, scored against the single models in [evaluation.md](evaluation.md). Not in the serve path. CNN-RNN **residual** models add a learned correction on top of a time-of-day baseline (notebook only) |
+| Hybrid / ensemble | The 30-minute default is an equal mix of Fuzzy C-Means + MLP and `xgb[maps]` (`eval/layer_b_fcm_xgb_mix.py`). The older mean of `lin_h30` and `xgb_h30` is scored offline. CNN-RNN **residual** models add a learned correction on top of a time-of-day baseline (notebook only) |
 
 ## Roboflow / YOLO free tier
 
