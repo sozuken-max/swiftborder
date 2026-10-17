@@ -49,11 +49,11 @@ Or from the repo root: `scripts/run_tests.ps1 [-Slow] [-Coverage]` / `scripts/ru
 
 ```bash
 cd eval
-# weather CSVs for the joined experiment (see ../weather/README.md)
-python ../weather/fetch_rainfall_history.py --start-date 2026-09-05 --end-date 2026-09-30
-python ../weather/fetch_forecast_history.py --start-date 2026-09-05 --end-date 2026-09-30
-python ../weather/filter_station_history.py
-python ../weather/filter_area_forecast.py
+# weather CSVs for the joined experiment (see ../data/weather/README.md)
+python ../data/weather/fetch_rainfall_history.py --start-date 2026-09-05 --end-date 2026-09-30
+python ../data/weather/fetch_forecast_history.py --start-date 2026-09-05 --end-date 2026-09-30
+python ../data/weather/filter_station_history.py
+python ../data/weather/filter_area_forecast.py
 # all components into one run folder, then validate and promote
 pip install -r requirements-notebook.txt   # TensorFlow for --deep
 python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined --deep --fuzzy --ensemble

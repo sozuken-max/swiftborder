@@ -1,4 +1,4 @@
-"""forecastapi/local_models.py must stay identical to the harness models it serves (ADR 0004)."""
+"""services/forecastapi/local_models.py must stay identical to the harness models it serves (ADR 0004)."""
 
 import importlib.util
 from pathlib import Path
@@ -14,7 +14,7 @@ import horizon_study as hs
 import joined as jx
 
 REPO = Path(__file__).resolve().parents[2]
-_spec = importlib.util.spec_from_file_location("forecastapi_local_models", REPO / "forecastapi" / "local_models.py")
+_spec = importlib.util.spec_from_file_location("forecastapi_local_models", REPO / "services" / "forecastapi" / "local_models.py")
 lm = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(lm)
 

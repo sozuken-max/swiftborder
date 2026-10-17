@@ -31,12 +31,12 @@ A reviewer can read these six documents in order to verify system design, empiri
 
 | Topic | Document | Summary |
 | --- | --- | --- |
-| **Forecast API runbook** | [runbooks/forecast-api.md](runbooks/forecast-api.md) | Operating, verifying, and rolling back the `forecast-api` Cloud Run service ([component README](../forecastapi/README.md)) |
-| **Camera detection service** | [../camdetect/README.md](../camdetect/README.md) | `swiftbackend` HTTP contract, `traffic-backfill` Cloud Run Job, dividing-line geometry (2701 & 2702), and local ONNX weights |
-| **Maps ingestion service** | [../gmapfetcher/README.md](../gmapfetcher/README.md) | `gmap-woodlands-fetcher` Cloud Run service (`causeway.travel_times` + `traffic-24h.json` snapshot builder) |
-| **Weather ingestion (offline)** | [../weather/README.md](../weather/README.md) | data.gov.sg rainfall and 2-hour forecast fetchers; manual `load_bigquery.py` append to `rainfall` / `weatherforecast` |
+| **Forecast API runbook** | [runbooks/forecast-api.md](runbooks/forecast-api.md) | Operating, verifying, and rolling back the `forecast-api` Cloud Run service ([component README](../services/forecastapi/README.md)) |
+| **Camera detection service** | [../services/camdetect/README.md](../services/camdetect/README.md) | `swiftbackend` HTTP contract, `traffic-backfill` Cloud Run Job, dividing-line geometry (2701 & 2702), and local ONNX weights |
+| **Maps ingestion service** | [../services/gmapfetcher/README.md](../services/gmapfetcher/README.md) | `gmap-woodlands-fetcher` Cloud Run service (`causeway.travel_times` + `traffic-24h.json` snapshot builder) |
+| **Weather ingestion (offline)** | [../data/weather/README.md](../data/weather/README.md) | data.gov.sg rainfall and 2-hour forecast fetchers; manual `load_bigquery.py` append to `rainfall` / `weatherforecast` |
 | **Evaluation harness guide** | [../eval/README.md](../eval/README.md) | CLI commands, data layout ([`eval/data/`](../eval/data/README.md)), frozen run artifacts ([`eval/runs/`](../eval/runs/README.md)), and exploratory notebooks ([`eval/notebooks/`](../eval/notebooks/README.md)) |
-| **BigQuery SQL & DDL** | [../sql/README.md](../sql/README.md) | Checked-in BigQuery views, historical BQML model DDL, `model_registry`, and [re-export instructions](../sql/bigquery/EXPORT.md) |
+| **BigQuery SQL & DDL** | [../data/sql/README.md](../data/sql/README.md) | Checked-in BigQuery views, historical BQML model DDL, `model_registry`, and [re-export instructions](../data/sql/bigquery/EXPORT.md) |
 | **Diagram sources & prompts** | [diagrams/README.md](diagrams/README.md) | Canonical Mermaid sources (`*.mmd`), Nano Banana 2 prompt specs, and `sync_mermaid.py` checker |
 | **Local deploy to CI capture** | [agent-deploy.md](agent-deploy.md) | Playbook for capturing teammates' GCP deployments into git and wiring Cloud Build |
 | **ADR 0001** | [adr/0001-firebase-client-api-calls.md](adr/0001-firebase-client-api-calls.md) | Browser-direct public `forecast-api` calls with CORS allowlist and cost caps |

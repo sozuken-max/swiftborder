@@ -103,5 +103,5 @@ def settings() -> Dict[str, object]:
         "lin": {"model": "Ridge on standardised features, mean imputation", "l2": LIN_L2, "features": LIN_FEATURES},
         "xgb": {"params": XGB_PARAMS, "seeds": list(XGB_SEEDS), "features": XGB_FEATURES},
         "frozen_training": {"labels_observed_by_utc": BQML_TRAINED_AT.isoformat(), "excluded_days_sgt": list(BQML_VAL_DAYS)},
-        "source": "sql/bigquery/traffic_prediction/bqml_lin_h30.sql, bqml_xgb_h30.sql; bq show --model 2026-10-03",
+        "source": "data/sql/bigquery/traffic_prediction/bqml_lin_h30.sql, bqml_xgb_h30.sql; bq show --model 2026-10-03",
     }

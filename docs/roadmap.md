@@ -62,7 +62,7 @@ These choices are written down before any October label is scored, so the frozen
 
 **5. 60-minute offline and deep models: keep the 80/20 split (recommended).** At the cutoff it has about 9 day-blocks, so these decisions stay "insufficient data" by design, consistent with the rule above against inventing a split to clear the threshold. Point estimates are still reported. The alternative is rolling daily folds over 1–19 Oct (19 blocks). It would need new code and roughly 3 CPU hours for the deep models, and it counts only if adopted before the run.
 
-**Commands (on or after 20 Oct, from a clean tree).** First fetch weather to 19 Oct ([weather/README.md](../weather/README.md)). Then:
+**Commands (on or after 20 Oct, from a clean tree).** First fetch weather to 19 Oct ([weather/README.md](../data/weather/README.md)). Then:
 
 ```bash
 cd eval
@@ -128,7 +128,7 @@ Do not use removed legacy proposal/target PNGs in the deck. Say the horizon in p
 
 ### 3. Make the forecast re-runnable from git
 
-**In git (2026-09-26):** view DDL and BQML scripts under [sql/](../sql/). See [sql/README.md](../sql/README.md) for apply order.
+**In git (2026-09-26):** view DDL and BQML scripts under [sql/](../data/sql/). See [sql/README.md](../data/sql/README.md) for apply order.
 
 **Remaining:** Maps ingest and any training refresh automation. BQML files reconstruct training from `bq show --model`; confirm with a dry run in a dev dataset before overwriting production models.
 
@@ -181,8 +181,8 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 
 | Gap | Why it matters | What to do |
 | --- | --- | --- |
-| No `cloudbuild.yaml` in git | The `swiftbackend` trigger is inline in Cloud Build. It runs **pytest** before deploy; `includedFiles` is runtime paths only (not test-only files). | Treat the live trigger as the source of truth (`gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder`). Behavior is documented in [camdetect/README.md](../camdetect/README.md). History: [CHANGELOG.md](../CHANGELOG.md). Do not add a second trigger. |
-| Weather load is manual | `weather/load_bigquery.py` appends to `rainfall` / `weatherforecast` (snapshot first, refuses overlaps). Nothing schedules it, and the original pipeline that filled the tables to 31 Aug is still outside the repo. | Re-run fetchers plus the loader before a report refresh. Add a Cloud Run job or Scheduler only as an approved deploy. |
+| Trigger filters drift from git | `swiftbackend`, `forecast-api`, and `gmap-woodlands-fetcher` build from checked-in files under `services/`. A path move has to land in git and on the trigger together. | Read trigger id, region, filename, and included files from [inventory.md](inventory.md). Service index: [`services/README.md`](../services/README.md). Behavior: [`services/camdetect/README.md`](../services/camdetect/README.md). Do not add a second `swiftbackend` trigger. |
+| Weather load is manual | `data/weather/load_bigquery.py` appends to `rainfall` / `weatherforecast` (snapshot first, refuses overlaps). Nothing schedules it, and the original pipeline that filled the tables to 31 Aug is still outside the repo. | Re-run fetchers plus the loader before a report refresh. Add a Cloud Run job or Scheduler only as an approved deploy. |
 | Direction names differ | `camdetect` emits `SG-MY` / `MY-SG`. The congestion view expects `to_JB` / `to_Woodlands` and emits `SG_TO_MY` / `MY_TO_SG`. | Map them in the join (step 5). Do not treat the strings as already aligned. |
 | Camera 2701 line only | 2702 detections become `Unknown`. | Add a line only after it is calibrated on a real frame. |
 

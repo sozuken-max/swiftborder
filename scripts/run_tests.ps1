@@ -7,7 +7,7 @@
   `py -3.11`. Create the venv once:
 
     py -3.11 -m venv .venv
-    .venv\Scripts\pip install -r camdetect/requirements-dev.txt -r weather/requirements-dev.txt -r eval/requirements-dev.txt -r forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
+    .venv\Scripts\pip install -r services/camdetect/requirements-dev.txt -r data/weather/requirements-dev.txt -r eval/requirements-dev.txt -r services/forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
     # slow tests (TensorFlow):
     .venv\Scripts\pip install -r eval/requirements-notebook.txt
 
@@ -39,9 +39,18 @@ if (Test-Path $venvPy) { $py = @($venvPy) } else { $py = @('py', '-3.11') }
 # `powershell -File` passes "a,b" as one string; accept both forms.
 $Suite = @($Suite | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
+$suiteDirs = @{
+    'camdetect'   = 'services\camdetect'
+    'forecastapi' = 'services\forecastapi'
+    'weather'     = 'data\weather'
+    'eval'        = 'eval'
+    'repo'        = 'scripts'
+}
+
 $failed = @()
 foreach ($name in $Suite) {
-    $dir = if ($name -eq 'repo') { Join-Path $root 'scripts' } else { Join-Path $root $name }
+    $relDir = if ($suiteDirs.ContainsKey($name)) { $suiteDirs[$name] } else { $name }
+    $dir = Join-Path $root $relDir
     if (-not (Test-Path (Join-Path $dir 'tests'))) { Write-Host "skip $name (no tests/)"; continue }
     $pytestArgs = @('-m', 'pytest', '-q', '-p', 'no:cacheprovider')
     if ($Slow) { $pytestArgs += @('-m', 'slow or not slow') }

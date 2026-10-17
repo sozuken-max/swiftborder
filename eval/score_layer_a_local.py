@@ -21,7 +21,7 @@ from pathlib import Path
 
 EVAL_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = EVAL_ROOT.parent
-CAMDETECT = REPO_ROOT / "camdetect"
+CAMDETECT = REPO_ROOT / "services" / "camdetect"
 sys.path.insert(0, str(CAMDETECT))
 
 import main as camdetect  # noqa: E402

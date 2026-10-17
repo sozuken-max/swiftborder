@@ -259,7 +259,7 @@ def count_errors(gt, preds, names, *, confidence: float = 0.1, camera: Optional[
 
 
 def _direction_fn(camera: str):
-    sys.path.insert(0, str(REPO_ROOT / "camdetect"))
+    sys.path.insert(0, str(REPO_ROOT / "services" / "camdetect"))
     import main as camdetect  # noqa: E402
 
     def fn(box: Box, size):
@@ -308,7 +308,7 @@ def score(
 
 def predict_with_roboflow(gt: Dict[str, ImageRecord], images_dir: Path, camera: str) -> Dict[str, list]:
     """Billed: one Roboflow call per image via camdetect.detect_frame."""
-    sys.path.insert(0, str(REPO_ROOT / "camdetect"))
+    sys.path.insert(0, str(REPO_ROOT / "services" / "camdetect"))
     import main as camdetect  # noqa: E402
 
     out = {}

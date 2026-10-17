@@ -1,12 +1,12 @@
 # forecastapi
 
-Public HTTP read of the Woodlands 30-minute Maps-duration forecast, served from local models that the service fits itself, once per SGT day, on the same rows and settings as the evaluation harness ([ADR 0004](../docs/adr/0004-serve-local-models.md)). The response fields below are this tree. They are not on live revision `forecast-api-00009-hax` until this merges and the `forecast-api` trigger runs.
+Public HTTP read of the Woodlands 30-minute Maps-duration forecast, served from local models that the service fits itself, once per SGT day, on the same rows and settings as the evaluation harness ([ADR 0004](../../docs/adr/0004-serve-local-models.md)).
 
 - **Callable ids:** `served` (per-direction selection), `persistence`, `xgb[maps]`, `ridge[maps]`, `xgb_bq[daily]`, `lin_bq[daily]`, `xgb_bq[frozen]` and `lin_bq[frozen]`. Other ids in `GET /?list=models` are harness results and answer 400.
-- **CI/CD:** [cloudbuild.yaml](cloudbuild.yaml) runs tests, builds the image, deploys a no-traffic candidate, smoke-tests it, then promotes it (trigger `949ff029`, `main` only).
+- **CI/CD:** [cloudbuild.yaml](cloudbuild.yaml) runs tests (`services/forecastapi` + `eval/tests/test_forecastapi_models.py`), builds the image (`--path=services/forecastapi`), deploys a no-traffic candidate, smoke-tests it, then promotes it (trigger `949ff029`, `main` only; `services/forecastapi/README.md` and `services/forecastapi/tests/**` are ignored).
 - **Scope:** it is not `camdetect`, and it does not deploy `swiftbackend`.
 
-Runbook: [docs/runbooks/forecast-api.md](../docs/runbooks/forecast-api.md).
+Runbook: [docs/runbooks/forecast-api.md](../../docs/runbooks/forecast-api.md).
 
 ## Response
 

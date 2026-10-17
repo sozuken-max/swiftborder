@@ -2,7 +2,7 @@
 # Run the camdetect, weather, eval, and forecastapi test suites (and repo doc checks).
 #
 #   python3.11 -m venv .venv
-#   .venv/bin/pip install -r camdetect/requirements-dev.txt -r weather/requirements-dev.txt -r eval/requirements-dev.txt -r forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
+#   .venv/bin/pip install -r services/camdetect/requirements-dev.txt -r data/weather/requirements-dev.txt -r eval/requirements-dev.txt -r services/forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
 #   .venv/bin/pip install -r eval/requirements-notebook.txt   # only for --slow
 #
 # Usage: scripts/run_tests.sh [--slow] [--coverage] [suite ...]
@@ -31,7 +31,14 @@ if [[ ${#suites[@]} -eq 0 ]]; then suites=(camdetect weather eval forecastapi re
 
 failed=()
 for name in "${suites[@]}"; do
-  if [[ "$name" == "repo" ]]; then dir="$root/scripts"; else dir="$root/$name"; fi
+  case "$name" in
+    camdetect)   dir="$root/services/camdetect" ;;
+    forecastapi) dir="$root/services/forecastapi" ;;
+    weather)     dir="$root/data/weather" ;;
+    eval)        dir="$root/eval" ;;
+    repo)        dir="$root/scripts" ;;
+    *)           dir="$root/$name" ;;
+  esac
   [[ -d "$dir/tests" ]] || { echo "skip $name (no tests/)"; continue; }
   args=(-m pytest -q -p no:cacheprovider)
   [[ $slow -eq 1 ]] && args+=(-m "slow or not slow")

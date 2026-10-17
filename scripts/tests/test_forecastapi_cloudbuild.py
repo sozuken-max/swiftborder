@@ -1,4 +1,4 @@
-"""Static checks on forecastapi/cloudbuild.yaml (the CD path for Cloud Run forecast-api)."""
+"""Static checks on services/forecastapi/cloudbuild.yaml and the other Cloud Build configs."""
 
 import re
 from pathlib import Path
@@ -8,7 +8,7 @@ import pytest
 yaml = pytest.importorskip("yaml")
 
 REPO = Path(__file__).resolve().parents[2]
-CFG = yaml.safe_load((REPO / "forecastapi" / "cloudbuild.yaml").read_text(encoding="utf-8"))
+CFG = yaml.safe_load((REPO / "services" / "forecastapi" / "cloudbuild.yaml").read_text(encoding="utf-8"))
 
 
 def _step(step_id):
@@ -27,7 +27,7 @@ def test_images_are_pinned_by_digest():
 
 def test_tests_include_the_harness_equivalence_check():
     script = _step("Test")["args"][-1]
-    assert "pytest -q forecastapi" in script and "tests/test_forecastapi_models.py" in script
+    assert "pytest -q services/forecastapi" in script and "tests/test_forecastapi_models.py" in script
 
 
 def test_deploy_is_public_and_candidate_first():
@@ -65,3 +65,21 @@ def test_builder_ships_the_python_the_tests_use():
     step = _step("Buildpack")
     assert any(a.startswith("--builder=gcr.io/buildpacks/builder:google-22@sha256:") for a in step["args"])
     assert "GOOGLE_PYTHON_VERSION=3.11.x" in step["env"]
+
+
+def test_camdetect_backfill_and_gmapfetcher_cloudbuild_files_gate_on_tests():
+    cam_cfg = yaml.safe_load((REPO / "services" / "camdetect" / "cloudbuild.yaml").read_text(encoding="utf-8"))
+    assert [s["id"] for s in cam_cfg["steps"]] == ["Test", "Build", "Push", "Deploy"]
+    assert "pytest" in cam_cfg["steps"][0]["args"][-1]
+    assert "services/camdetect" in cam_cfg["steps"][1]["args"]
+
+    bf_cfg = yaml.safe_load((REPO / "services" / "camdetect" / "jobs" / "backfill.cloudbuild.yaml").read_text(encoding="utf-8"))
+    assert [s["id"] for s in bf_cfg["steps"]] == ["Test", "Build"]
+    assert "test_backfill_local_counts.py" in bf_cfg["steps"][0]["args"][-1]
+    assert "--file=services/camdetect/backfill.Dockerfile" in bf_cfg["steps"][1]["args"]
+
+    gm_cfg = yaml.safe_load((REPO / "services" / "gmapfetcher" / "cloudbuild.yaml").read_text(encoding="utf-8"))
+    assert [s["id"] for s in gm_cfg["steps"]] == ["Test", "Buildpack", "Deploy"]
+    assert "node --test" in gm_cfg["steps"][0]["args"][-1]
+    assert "--path=services/gmapfetcher" in gm_cfg["steps"][1]["args"]
+    assert gm_cfg["substitutions"]["_SERVICE_NAME"] == "gmap-woodlands-fetcher"

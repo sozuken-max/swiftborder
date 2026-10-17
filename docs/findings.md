@@ -103,7 +103,7 @@ Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `r
 
 **Two clocks for vision.** A demo of `swiftbackend` shows a live frame. A chart of `Cam2701` shows detections from 13 Mar–22 Apr 2026. The report should say which one a figure is.
 
-**Git and ingest.** The Maps fetcher is in [`gmapfetcher/`](../gmapfetcher/). Weather is loadable from git ([`weather/load_bigquery.py`](../weather/load_bigquery.py), manual, no schedule). Views, BQML and serve SQL are in [sql/](../sql/). The evaluation harnesses and the camera backfill are in the repo. The live Scheduler cadence is the inventory's, not an older README sentence.
+**Git and ingest.** The Maps fetcher is in [`gmapfetcher/`](../services/gmapfetcher/). Weather is loadable from git ([`weather/load_bigquery.py`](../data/weather/load_bigquery.py), manual, no schedule). Views, BQML and serve SQL are in [sql/](../data/sql/). The evaluation harnesses and the camera backfill are in the repo. The live Scheduler cadence is the inventory's, not an older README sentence.
 
 **Deep learning is scored and not served.** With about three weeks of 5-minute data, LSTM, GRU and a patch Transformer trail XGBoost by 0.5–0.7 min at 60 minutes. Reasons and the conditions for revisiting: [deep-learning-assessment.md](deep-learning-assessment.md).
 

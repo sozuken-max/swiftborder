@@ -109,7 +109,7 @@ def test_make_row_matches_the_bigquery_schema():
 
 
 def test_bigquery_schema_matches_the_checked_in_ddl():
-    ddl = (bf.HERE.parent / "sql" / "bigquery" / "cam2701" / "local_counts.sql").read_text()
+    ddl = (bf.HERE.parents[1] / "data" / "sql" / "bigquery" / "cam2701" / "local_counts.sql").read_text()
     for name, kind, mode in bf.BQ_SCHEMA:
         assert f"  {name} {kind}{' NOT NULL' if mode == 'REQUIRED' else ''}" in ddl, name
 

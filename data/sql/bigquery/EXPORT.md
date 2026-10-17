@@ -11,7 +11,7 @@ bq query --project_id=swiftborder --use_legacy_sql=false --format=json \
 
 Repeat for `swiftborder.weatherforecast` and `swiftborder.cam2701`.
 
-Replace `CREATE VIEW` with `CREATE OR REPLACE VIEW` when saving under `sql/bigquery/<dataset>/`.
+Replace `CREATE VIEW` with `CREATE OR REPLACE VIEW` when saving under `data/sql/bigquery/<dataset>/`.
 
 ## BQML models
 
@@ -20,7 +20,7 @@ bq show --format=prettyjson --model swiftborder:traffic_prediction.lin_h30
 bq show --format=prettyjson --model swiftborder:traffic_prediction.xgb_h30
 ```
 
-Update `sql/bigquery/traffic_prediction/bqml_*.sql` OPTIONS and feature lists to match `trainingOptions` and `featureColumns`. The original `CREATE MODEL ... AS SELECT` text is not always available via API; keep the training query documented in those files.
+Update `data/sql/bigquery/traffic_prediction/bqml_*.sql` OPTIONS and feature lists to match `trainingOptions` and `featureColumns`. The original `CREATE MODEL ... AS SELECT` text is not always available via API; keep the training query documented in those files.
 
 ## Serving registry
 

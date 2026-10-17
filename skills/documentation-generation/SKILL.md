@@ -35,7 +35,8 @@ Produce accurate, proposal-ready docs that match verified GCP/git state. Stay
 | `docs/agent-deploy.md` | How to export a teammate's live deploy into git and Cloud Build. |
 | `docs/inventory.md` | Evidence appendix. Dated copy of project `swiftborder`. Not the source of truth. |
 | `eval/README.md` | How to run Layer B harness; does not deploy `swiftbackend` |
-| `sql/README.md` | BigQuery view / BQML apply order and re-export notes |
+| `data/sql/README.md` | BigQuery view / BQML apply order and re-export notes |
+| `services/README.md` | Cloud Run directories, regions, runtime service accounts, trigger ids |
 | `docs/grading/nus-iss-practice-module.md` | Rubric. Report prose should be able to land in its four sections |
 | `docs/images/` | Deck PNGs (polished GCP-icon style) |
 

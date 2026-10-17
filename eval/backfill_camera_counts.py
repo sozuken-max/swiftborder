@@ -138,7 +138,7 @@ def lookup_frame(bin_sgt: dt.datetime, get: Callable = None) -> Frame:
 
 
 def _load_camdetect():
-    sys.path.insert(0, str(REPO_ROOT / "camdetect"))
+    sys.path.insert(0, str(REPO_ROOT / "services" / "camdetect"))
     import main as camdetect  # noqa: E402
 
     return camdetect

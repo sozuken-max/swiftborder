@@ -2,8 +2,8 @@
 
 A **public** HTTP read of the Woodlands 30-minute forecast (the invoker IAM check has been disabled since 2026-10-03, so the Firebase page can call it from the browser) of Google Maps `duration_in_traffic`. It is served from **local models** that the service fits itself ([ADR 0004](../adr/0004-serve-local-models.md)). BigQuery ML (`lin_h30`, `xgb_h30`, `v_forecast_recent`) is no longer called.
 
-- **Code:** [`forecastapi/main.py`](../../forecastapi/main.py) and [`forecastapi/local_models.py`](../../forecastapi/local_models.py).
-- **CI/CD:** [`forecastapi/cloudbuild.yaml`](../../forecastapi/cloudbuild.yaml), run by trigger `forecast-api` (`949ff029`) on a push to `main` that touches `forecastapi/**`.
+- **Code:** [`forecastapi/main.py`](../../services/forecastapi/main.py) and [`forecastapi/local_models.py`](../../services/forecastapi/local_models.py).
+- **CI/CD:** [`forecastapi/cloudbuild.yaml`](../../services/forecastapi/cloudbuild.yaml), run by trigger `forecast-api` (`949ff029`) on a push to `main` that touches `forecastapi/**`.
 - **Not** `swiftbackend`, and not trigger `76bbca35`.
 
 What it is not:

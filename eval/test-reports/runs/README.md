@@ -8,13 +8,13 @@ and regrouped by model. All of it was produced by
 on Roboflow dataset v6 (train 60 / valid 15 / test 15 images).
 
 Nothing here is used by the service. The served model is the ONNX export in
-[`camdetect/models/`](../../../camdetect/models/); nothing under `eval/` is in the Docker image.
+[`services/camdetect/models/`](../../../services/camdetect/models/); nothing under `eval/` is in the Docker image.
 
 ```
 runs/
 ├── yolo26s/                     YOLO26s fine-tuned (freeze=10): the served model, model=local
 │   ├── training/                was v6_yolo26s_boxfix/
-│   │   ├── weights/best.pt      checkpoint behind camdetect/models/yolo26s_v6_boxfix.onnx
+│   │   ├── weights/best.pt      checkpoint behind services/camdetect/models/yolo26s_v6_boxfix.onnx
 │   │   ├── args.yaml            training settings
 │   │   ├── results.csv/.png     loss and metrics per epoch
 │   │   ├── labels.jpg           label statistics of the training set
@@ -57,7 +57,7 @@ Both: AdamW, `lr0=0.001`, cosine LR, `freeze=10`, seed 0, labels converted from 
 first (the `boxfix` in the old names). Best epoch and its scores are read from `results.csv`. The
 `valid` split also picked the checkpoint, so these two columns are not held-out scores. The YOLO-S
 `best.pt` hash matches the checkpoint recorded for the served ONNX file in the
-[camdetect README](../../../camdetect/README.md#in-container-model-modellocal). `last.pt` (the final epoch) was left
+[camdetect README](../../../services/camdetect/README.md#in-container-model-modellocal). `last.pt` (the final epoch) was left
 on Drive.
 
 Per-epoch curves for both runs, in one table and one chart:

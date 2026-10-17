@@ -42,11 +42,12 @@ Tests: `npm test` (Node's built-in runner, no install needed for `test/snapshot.
 ## Deploy
 
 Cloud Build trigger `rmgpgab-gmap-woodlands-fetcher-asia-southeast1-sozuken-max-szsd`
-(`33e4b77e-dbce-426e-a701-de234ec16d60`, global), created on 2026-10-13 by the Cloud Run
-**Connect to repo** flow. Push to `^main$` with included files `gmapfetcher/**`; inline config:
-Google Cloud buildpacks on `gmapfetcher/`, function target `fetchTravelTimes`, then
-`gcloud run services update` with the new image. Env vars and other service settings carry over.
-There is no test step yet. `engines.node` in `package.json` pins Node.js 22; without it the
+(`33e4b77e-dbce-426e-a701-de234ec16d60`, global), created on 2026-10-13 and switched on 2026-10-17 to
+[`cloudbuild.yaml`](cloudbuild.yaml). Push to `^main$` with included files `services/gmapfetcher/**`
+(ignoring `README.md` and `test/**`):
+step `Test` runs `node --test`, `Buildpack` builds `--path=services/gmapfetcher` with function target
+`fetchTravelTimes`, and `Deploy` runs `gcloud run services update` with the new image. Env vars and
+other service settings carry over. `engines.node` in `package.json` pins Node.js 22; without it the
 buildpack picks the latest Node.
 
 First build `9f1684b1-e1d3-4a94-9e16-082aa3009bf9` (commit `5ed2f4d`) succeeded on
