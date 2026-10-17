@@ -1,6 +1,6 @@
 # CNN-RNN congestion research (camera 2701)
 
-Colab notebooks that ask whether **pixels** carry congestion information beyond the clock, and how well that lines up with **Google Maps** duration on the causeway. This is **not** part of the live MVP: nothing here deploys to Cloud Run, writes to BigQuery, or feeds `forecast-api`.
+Deepak's Colab notebooks. They ask whether **pixels** carry congestion information beyond the clock, and how well that lines up with **Google Maps** duration on the causeway. This is **not** Chad's Layer A detector comparison ([test-reports/](../test-reports/README.md)) and **not** part of the live MVP: nothing here deploys to Cloud Run, writes to BigQuery, or feeds `forecast-api`.
 
 ## Where this sits in SwiftBorder
 

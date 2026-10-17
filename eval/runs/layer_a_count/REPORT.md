@@ -2,7 +2,7 @@
 
 **Camera:** LTA 2701 (Woodlands checkpoint, SG side). **Metric:** image-level car and vehicle totals vs human-caption ground truth. Box AP50 on this same Roboflow v6 `test` split is in Chad's [camdetect/test-reports/](../../../camdetect/test-reports/README.md#box-metrics-test-split) (Colab IoU-0.5 scorer). This file does not recompute boxes. Directional count error and `eval/layer_a.py` are still not run.
 
-The write-up for the module report is that test report. This file is how the count JSON was produced and how to re-run it.
+The write-up for the module report is Chad's [camdetect/test-reports/](../../../camdetect/test-reports/README.md) (scoreboards, per-frame tables, annotated frames, box AP50). This file is how the count JSON was produced and how to re-run it. It does not replace that report.
 
 **Report run (rescored):** 2026-10-17 UTC (`local_rescore.json` / `roboflow_v6_conf02.json` → `run.git_commit` and `run.generated_at_utc`). **Live backend:** `swiftbackend-00044-4l9` (europe-west1).
 

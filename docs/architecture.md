@@ -137,7 +137,7 @@ What those facts allow the report to claim is in [findings.md](findings.md). Met
 
 ## Offline image-to-duration research (CNN-RNN)
 
-Checked in under [`camdetect/CNN_RNN_Congestion/`](../camdetect/CNN_RNN_Congestion/). This is a **third camera story**, parallel to production Layer A and to the scored count experiments in `eval/`.
+Deepak's Colab notebooks, checked in under [`camdetect/CNN_RNN_Congestion/`](../camdetect/CNN_RNN_Congestion/). This is a **third camera story**, parallel to production Layer A (Chad's detector and [test report](../camdetect/test-reports/README.md)) and to the scored count experiments in `eval/`.
 
 | Approach | Input | Output | Live? | Scored in `eval/`? |
 | --- | --- | --- | --- | --- |
