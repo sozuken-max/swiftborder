@@ -12,7 +12,9 @@ The unit tests for the service itself are in [`tests/`](../tests/) and are descr
 | [`eval/runs/layer_a_count/roboflow_v6_conf02.json`](../../eval/runs/layer_a_count/roboflow_v6_conf02.json) | Live `swiftbackend` `model=v6` at its served setting (confidence 0.2), 17 Oct 2026 |
 | [`images/`](images/) | The annotated prediction images from the comparison page, one folder per frame |
 | [`frames/`](frames/README.md) | The 15 test frames themselves (1920 x 1080 JPEG, unannotated) and a manifest |
-| [`speed_benchmark.py`](speed_benchmark.py) | The ONNX speed test (CPU or GPU), from the `Yolo_GPU_speed_test` Colab notebook |
+| [`speed_benchmark.py`](speed_benchmark.py) | The ONNX speed test (CPU or GPU), from the speed-test notebook |
+| [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) | Colab notebook with outputs: YOLO26s/m training on dataset v6, the five-detector comparison (box AP50, recall/precision sweep, count error) and the `test_predictions` export. Roboflow key removed; it reads the Colab secret `ROBOFLOW_API_KEY` |
+| [`notebooks/onnx_gpu_speed_test.ipynb`](notebooks/onnx_gpu_speed_test.ipynb) | Colab notebook with outputs: the recorded GPU speed run |
 
 Every number on this page is computed from those three JSON files. The narrative and how the result is used in the report are in [docs/evaluation.md](../../docs/evaluation.md#layer-a--vision) and [docs/findings.md](../../docs/findings.md).
 
@@ -149,7 +151,7 @@ YOLO-S (freeze) at the page's setting (conf 0.30, overlap off) matches the page'
 
 ## Box metrics (test split)
 
-From the comparison cell of the Colab notebook `Vehicle_detection_trial_with_yolo_m_test.ipynb` (run 10 Oct 2026, Tesla T4). A prediction counts as correct when it overlaps a labelled box of the same class at IoU 0.5 or more; labelled polygons are reduced to their enclosing box. AP50 is threshold-free. This is the notebook's own scorer, not [`eval/layer_a.py`](../../eval/layer_a.py), and there is no mAP50-95 on this split. The notebook's car count MAE at each detector's best threshold equals the scoreboard above (17.40, 11.60, 3.53, 1.73, 1.87), which is how these frames are matched to that run.
+From the full-comparison cell of [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) (run 10 Oct 2026, Tesla T4). A prediction counts as correct when it overlaps a labelled box of the same class at IoU 0.5 or more; labelled polygons are reduced to their enclosing box. AP50 is threshold-free. This is the notebook's own scorer, not [`eval/layer_a.py`](../../eval/layer_a.py), and there is no mAP50-95 on this split. The notebook's car count MAE at each detector's best threshold equals the scoreboard above (17.40, 11.60, 3.53, 1.73, 1.87), which is how these frames are matched to that run.
 
 | Detector | AP50 car | AP50 bus | AP50 truck | mAP50 (3 classes) | AP50 any vehicle | Time per image |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -177,7 +179,7 @@ The `Time per image` column is Ultralytics predict on a T4 at each model's input
 
 | Run | Hardware | onnxruntime | Frames | Preprocess avg | Inference avg (median) | Total avg | Images/s |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
-| Colab `Yolo_GPU_speed_test` | Colab GPU, `CUDAExecutionProvider` (card not logged) | 1.31.0 | 20 live frames, cameras 2701 and 2702 | 14.7 ms | 4.4 ms (4.4) | 19.2 ms | 52.1 |
+| Colab, [`onnx_gpu_speed_test.ipynb`](notebooks/onnx_gpu_speed_test.ipynb) | Colab GPU, `CUDAExecutionProvider` (card not logged) | 1.31.0 | 20 live frames, cameras 2701 and 2702 | 14.7 ms | 4.4 ms (4.4) | 19.2 ms | 52.1 |
 | This repo, 17 Oct 2026 | 4 vCPU Intel Xeon 2.10 GHz, `CPUExecutionProvider` | 1.29.0 | the 15 [`frames/`](frames/README.md) | 55.1 ms | 154.2 ms (159.6) | 209.3 ms | 4.8 |
 
 The Colab run downloaded the 20 most recent frames (every 10 minutes going back from an hour before the run) and did not save them, so that exact set cannot be recovered. To repeat the test on fixed images, run it on the committed test frames:
