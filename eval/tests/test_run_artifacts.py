@@ -4,8 +4,12 @@ from pathlib import Path
 
 import pytest
 
+import harness.promote_report_run as hpr
+import harness.run_artifacts as hra
 import run_artifacts as ra
 from promote_report_run import PromotionError, check_promotable, promote
+
+_REAL_CODE_FINGERPRINT = hra.code_fingerprint
 from run_artifacts import (
     create_run_dir,
     metric_row,
@@ -55,15 +59,16 @@ def _manifest(dirty: bool = False) -> dict:
 @pytest.fixture(autouse=True)
 def _tree_matches_fixture(monkeypatch):
     """Promotion compares the run's code hash with the tree; fixtures use 'f' * 64."""
-    import promote_report_run
-
-    monkeypatch.setattr(promote_report_run, "code_fingerprint", lambda: "f" * 64)
+    fixed = lambda paths=None: "f" * 64
+    monkeypatch.setattr(hpr, "code_fingerprint", fixed)
+    monkeypatch.setattr(hra, "code_fingerprint", fixed)
 
 
 def test_promote_refuses_when_code_changed_since_the_run(tmp_path, monkeypatch):
-    import promote_report_run
+    import harness.promote_report_run as prr
 
-    monkeypatch.setattr(promote_report_run, "code_fingerprint", lambda: "0" * 64)
+    monkeypatch.setattr(prr, "code_fingerprint", lambda: "0" * 64)
+    monkeypatch.setattr(ra, "code_fingerprint", lambda: "0" * 64)
     run_dir = _run_dir(tmp_path, _manifest())
     assert any("code changed since the run" in p for p in check_promotable(run_dir, allow_dirty=True))
 
@@ -137,29 +142,31 @@ def test_invalid_manifests_are_reported(tmp_path: Path, mutate, needle):
 
 
 def test_repo_relpath_and_fingerprint(tmp_path: Path):
-    f = ra.EVAL_ROOT / "run_artifacts.py"
+    f = ra.EVAL_ROOT / "harness" / "run_artifacts.py"
     fp = ra.file_fingerprint(f)
-    assert fp["path"] == "eval/run_artifacts.py"
+    assert fp["path"] == "eval/harness/run_artifacts.py"
     assert len(fp["sha256"]) == 64 and fp["bytes"] > 0
     with pytest.raises(ValueError):
         ra.repo_relpath(tmp_path / "outside.csv")
 
 
 def test_code_fingerprint_uses_data_sql_and_keeps_frozen_paths(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(ra, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(ra, "EVAL_ROOT", tmp_path / "eval")
-    monkeypatch.setattr(ra, "SQL_ROOT", tmp_path / "data" / "sql")
+    monkeypatch.setattr(hra, "code_fingerprint", _REAL_CODE_FINGERPRINT)
+    monkeypatch.setattr(hra, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(hra, "EVAL_ROOT", tmp_path / "eval")
+    monkeypatch.setattr(hra, "SQL_ROOT", tmp_path / "data" / "sql")
     (tmp_path / "eval").mkdir()
     (tmp_path / "sql").mkdir()
     (tmp_path / "sql" / "legacy.sql").write_text("select 1\n", encoding="utf-8")
     current = tmp_path / "data" / "sql"
     current.mkdir(parents=True)
     (current / "live.sql").write_text("select 2\n", encoding="utf-8")
-    first = ra.code_fingerprint()
+    sql_paths = lambda: sorted(current.rglob("*.sql"))
+    first = hra.code_fingerprint(sql_paths())
     (tmp_path / "sql" / "legacy.sql").write_text("select 9\n", encoding="utf-8")
-    assert ra.code_fingerprint() == first
+    assert hra.code_fingerprint(sql_paths()) == first
     (current / "live.sql").write_text("select 3\n", encoding="utf-8")
-    assert ra.code_fingerprint() != first
+    assert hra.code_fingerprint(sql_paths()) != first
     recorded = {row["from"] for row in ra.PATH_RELOCATION}
     assert "sql/**/*.sql" in recorded
     assert any(row.get("via") == "weather/data/..." for row in ra.PATH_RELOCATION)
@@ -169,15 +176,16 @@ def test_code_fingerprint_uses_data_sql_and_keeps_frozen_paths(tmp_path: Path, m
 
 
 def test_code_fingerprint_changes_with_content(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(ra, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(hra, "code_fingerprint", _REAL_CODE_FINGERPRINT)
+    monkeypatch.setattr(hra, "REPO_ROOT", tmp_path)
     a = tmp_path / "a.py"
     a.write_text("x = 1\n")
-    first = ra.code_fingerprint([a])
+    first = hra.code_fingerprint([a])
     a.write_bytes(b"x = 2\n")
-    lf = ra.code_fingerprint([a])
+    lf = hra.code_fingerprint([a])
     assert lf != first
     a.write_bytes(b"x = 2\r\n")  # a Windows checkout gives the same fingerprint
-    assert ra.code_fingerprint([a]) == lf
+    assert hra.code_fingerprint([a]) == lf
 
 
 def test_promote_copies_a_valid_run(tmp_path: Path):

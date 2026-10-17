@@ -1,5 +1,84 @@
 # Final-report readiness review
 
+## Re-review: 17 Oct 2026, HEAD c98b4d5 (22:09 SGT)
+
+**Verdict: acceptable to assemble the final report. Two new stale-prose items found; all previously listed open items remain open and unchanged.** This pass reads the full working tree at `c98b4d5` (the merge of `experiment/counts-for-maps` into `main`). It does not run experiments, query GCP resources beyond what is already in [inventory.md](inventory.md), or make any deployment. The team's no-new-runs constraint applies.
+
+### New findings (not present in the earlier c98b4d5 pass)
+
+| ID | File | Stale text | Correct text |
+| --- | --- | --- | --- |
+| **N1 — Medium** | [`README.md`](../README.md), Layer B table row | `the local lin_h30 replica for SG→MY, persistence for MY→SG` | `mix[fcm_mlp+xgb]` for both directions — what `SERVED_SELECTION` in [`forecastapi/main.py`](../services/forecastapi/main.py) says and what live revision `forecast-api-00021-qud` confirms |
+| **N2 — Medium** | [`docs/diagrams/architecture-detailed.mmd`](diagrams/architecture-detailed.mmd) line 17, and the matching embed in [`docs/architecture.md`](architecture.md) | `SG_TO_MY: lin_bq frozen` / `MY_TO_SG: persistence` on the API node | Both directions now `mix[fcm_mlp+xgb]`. The high-level Mermaid in `architecture.md` is already correct; only the detailed `.mmd` source and its embed in `architecture.md` are stale |
+| **N3 — Low** | [`docs/roadmap.md`](roadmap.md), "Already true" serving bullet | `lin_h30 replica for SG to MY and persistence for MY to SG` | Same as N1; the roadmap has not been updated to reflect the October mix promotion |
+
+**Resolution without a new experiment run:** update the three prose locations listed above and re-sync the detailed `.mmd` into `architecture.md` (run `python docs/diagrams/sync_mermaid.py`). The deck PNGs must also be regenerated once the `.mmd` is corrected — this is already an open item carried forward.
+
+### Previously open items — status unchanged
+
+- **Deck PNGs** — still not regenerated. `architecture-high-level.png` and `architecture-detailed.png` (both regenerated 4 Oct) are stale on: the `forecast-api` node labels (pre-mix selection), the Hosting node still labelled as outside git in the PNG, and the `gmap-woodlands-fetcher` source path. `eval-layer-a.png` and `eval-layer-b.png` should be checked against the current Mermaid. **Action before submission:** regenerate all four PNGs after correcting N2 above.
+- **Submission package** — recorded demo, slides, reflections, video, and Canvas submission archive. Out of repo scope; team responsibility.
+- **§8 vs §7c camera overlap sentence** — `fcm_mlp_layer_a` / `timesfm_layer_a` detections end 22 Apr; `local_counts` is the 6 Sep–4 Oct window. These are different windows and must not be collapsed into one sentence in the report.
+- **Optional hygiene** — root `README.md` quick-start still says `python layer_b.py`; the dispatcher is now `python run.py layer_b`. Correct alongside N1 in the same commit.
+
+### Code and evidence verified correct at this checkout
+
+The following were re-read and found consistent with [evaluation.md](evaluation.md), [findings.md](findings.md), and [inventory.md](inventory.md). No changes needed.
+
+- `services/forecastapi/main.py` `SERVED_SELECTION` — confirmed `mix[fcm_mlp+xgb]` for both directions; `status_for` correctly labels the mix as `exploratory` and other 30-minute models as `evaluated`. Fallback chain `mix → xgb[maps] → persistence → profile` is implemented in `query_default_served`.
+- `services/forecastapi/mix_bridge.py` — imports `layer_b_fcm_xgb_mix` from `shipped_eval/` or the repo root `eval/`; equal 0.5 / 0.5 weights match the backtest; `predict_value` returns `None` (→ fallback) when the mix is non-finite.
+- `scripts/vendor_forecast_mix_eval.sh` — exists and is called in the Cloud Build `Test` and `Vendor-mix` steps; `services/forecastapi/tests/test_shipped_eval_import.py` asserts isolated import. Finding P1 is closed.
+- Freeze boundary — `eval/runs/report/run.json` (`20261003T035807Z`, git `b3b6562`) is the primary evidence for §§1–7a. Later runs (`backtest-20261017T094617Z-d001a839`, `20261017T083554Z_counts-substitute`, `20261017T084900Z_camera-current`) are correctly separated in the Frozen Evidence Index. Finding P2 / P3 are closed.
+- `architecture.md` high-level Mermaid embed — shows `hosting/ in git; manual deploy`, `mix[fcm_mlp+xgb]` in the techniques table, and `local models / target: bin 30–40 min after the newest closed bin` on the `forecast-api` node. All accurate.
+- `findings.md` items 1–13 and claims register — consistent with committed run artifacts and inventory facts. No new false claim found.
+
+### Finishing checklist (no new experiments required)
+
+| Priority | Action | Status |
+| --- | --- | --- |
+| **High** | Fix N1: update `README.md` Layer B table row to say `mix[fcm_mlp+xgb]` for both directions | Done |
+| **High** | Fix N2: update `docs/diagrams/architecture-detailed.mmd` API node labels; re-sync embed into `architecture.md` | Done |
+| **High** | Fix N3: update `docs/roadmap.md` "Already true" serving bullet | Done |
+| **High** | Regenerate all four deck PNGs after N2 correction | Blocked (upstream image-generator service 500 internal error; Mermaid source & prompts verified and saved) |
+| **High** | Submission package: recorded demo, slides, video, reflections, Canvas archive | Open (team task) |
+| **Low** | Fix `README.md` quick-start: `python layer_b.py` → `python run.py layer_b` | Done (already verified `python run.py layer_b` in README.md) |
+
+
+
+---
+
+## Latest re-review: 17 Oct 2026, c98b4d5
+
+**Verdict: acceptable to assemble the final report from committed evidence, with packaging and figure work still open.** This review covers checkout `c98b4d5` (eval package refactor, October camera studies, refreshed §8 backtest). It does not run experiments, query cloud resources, or assess live availability. The team's no-new-runs constraint applies.
+
+### Findings addressed in tree (after c98b4d5)
+
+| ID | Finding | Resolution |
+| --- | --- | --- |
+| P1 | Forecast image vendored only mix shims (`import warehouse` failed in `shipped_eval/`) | [`scripts/vendor_forecast_mix_eval.sh`](../scripts/vendor_forecast_mix_eval.sh) copies shims plus `warehouse/` and required `harness/` modules; Cloud Build Test and Vendor-mix steps call it; [`services/forecastapi/tests/test_shipped_eval_import.py`](../services/forecastapi/tests/test_shipped_eval_import.py) asserts isolated import |
+| P2 | Counts-substitute labels ignored the ten-day harness gate | [`eval/studies/counts_substitute.py`](../eval/studies/counts_substitute.py) forces `inconclusive` when `calendar_days < 10`; [evaluation.md §7d](evaluation.md#7d-counts-substituted-for-maps-inputs-1-4-oct-2026) qualifies committed `regression` manifest labels as **interval regression** on four days |
+| P2 | Evidence freeze text did not separate `199c2e5` from later artifacts | [evaluation.md](evaluation.md) opening paragraphs and **Frozen Evidence Index** rows for camera-current and counts-substitute runs; dirty `run.json` flags documented as provenance |
+| P2 | §8 prose contradicted mix as HTTP default | [evaluation.md §8](evaluation.md) **Served selection** aligned with ADR 0004 and `forecastapi/main.py` |
+
+No rerun was required for these doc and packaging fixes.
+
+### Still open (unchanged by this pass)
+
+- **Deck PNGs** — factual freshness vs current architecture and Layer A/B claims ([diagrams/README.md](diagrams/README.md)).
+- **Submission package** — recorded demo, slides, reflections (out of repo scope).
+- **§8 vs §7c camera overlap** — `fcm_mlp_layer_a` / `timesfm_layer_a` detections end 22 Apr; `local_counts` is a different window; do not merge the sentences.
+- **Optional hygiene** — diagram skill inventory paths under `eval/lb/` (agent docs only).
+
+### Findings closed since the 3 Oct review (carried forward)
+
+- CNN-RNN protocol, speed measurements, pooled parity, hybrid MAE citations, Layer A AP50 vs mAP50-95 split, fuzzy insufficient-data wording, detector CSVs in git, harness code fingerprint for nested `eval/`.
+
+### Verification note
+
+Re-run `scripts/run_tests.sh` and `bash scripts/vendor_forecast_mix_eval.sh` before merge; the isolated shipped-eval test was added with the vendor script. The historical **596-test** count is not automatically refreshed here.
+
+The project has a strong basis for the report (supervised learning, ML/DL, hybrid/ensemble, intelligent sensing). Remaining work: regenerate figures, package the demonstration, finish submission materials. No new forecast experiments are required for the findings above.
+
 ## Still open after the 17 Oct honesty pass
 
 The evidence-index cells (CNN-RNN protocol, speed timings, pooled parity, mix MAE 2.134 / 2.132), the Layer A notebook-versus-Ultralytics box tables, the fuzzy insufficient-data wording, and the `data/sql/` fingerprint path are updated in this tree. Detector CSVs under `eval/test-reports/runs/` are on `main`. The 30-minute HTTP default is `mix[fcm_mlp+xgb]`.
@@ -14,7 +93,9 @@ No experiment was rerun.
 
 ## Current review: 17 Oct 2026, frozen submission
 
-**Verdict: request changes to report claims and packaging; no further experiments required.** The project has enough substantive evidence to assemble a defensible final report. It is not yet ready to submit unchanged, because its documents mix historical, exploratory and confirmed results. This is a substantially stronger position than the 3 Oct review.
+**Status: superseded by [Latest re-review](#latest-re-review-17-oct-2026-c98b4d5) above** for open items and verdict. The narrative below is retained as review history.
+
+**Verdict (historical): request changes to report claims and packaging; no further experiments required.** The project has enough substantive evidence to assemble a defensible final report. It is not yet ready to submit unchanged, because its documents mix historical, exploratory and confirmed results. This is a substantially stronger position than the 3 Oct review.
 
 **Scope fixed by the team on 17 Oct:** use **all currently committed results**, with **no more experiment runs**. Checkout reviewed: `main` at merge `199c2e5` (same tree as content commit `910d715`, tree `51a722ab`). Live operation is intentionally curtailed to reduce costs. An unavailable live forecast is therefore **not a readiness blocker**. The earlier proposed 19 Oct cutoff and future Runs A/B are superseded as requirements; unperformed confirmation remains a limitation, not work that must be commissioned.
 
@@ -31,11 +112,11 @@ This review used repository code and result artifacts, the grading guide, all fo
 
 ### Findings to resolve using the existing evidence
 
-**1. High: qualify the detector test-set claim.** [The detector report](../eval/test-reports/README.md#box-metrics-test-split) says scoreboard thresholds minimize car MAE over a 0.10-0.50 sweep. The comparison notebook selects `car_sw["count_MAE/img"].idxmin()` for each split. Thus test images were excluded from weight training and checkpoint selection, but were used to choose reported confidence thresholds. The blanket sentence in [evaluation.md](evaluation.md#layer-a--vision) that no detector was selected on them is too broad. Describe the 1.73 car MAE as a **test-threshold-selected descriptive result**. Report the 1.87 served-setting rescore separately, without claiming that its operating point was independently preregistered. AP50 remains useful notebook evidence; do not equate it with mAP50-95 or the unrun `eval/layer_a.py` procedure. Fifteen 2025 frames, seven day/eight night, do not validate 2026 directional-count accuracy. With the freeze, disclose these limits rather than require new labels or a new run.
+**1. High: qualify the detector test-set claim.** [The detector report](../eval/test-reports/README.md#box-metrics-test-split) says scoreboard thresholds minimize car MAE over a 0.10-0.50 sweep. The comparison notebook selects `car_sw["count_MAE/img"].idxmin()` for each split. Thus test images were excluded from weight training and checkpoint selection, but were used to choose reported confidence thresholds. The blanket sentence in [evaluation.md](evaluation.md#layer-a--vision) that no detector was selected on them is too broad. Describe the 1.73 car MAE as a **test-threshold-selected descriptive result**. Report the 1.87 served-setting rescore separately, without claiming that its operating point was independently preregistered. AP50 remains useful notebook evidence; do not equate it with mAP50-95 or the unrun `eval/la/layer_a.py` procedure. Fifteen 2025 frames, seven day/eight night, do not validate 2026 directional-count accuracy. With the freeze, disclose these limits rather than require new labels or a new run.
 
 **2. High: reconcile significance and ensemble conclusions.** [Evaluation's significance section](evaluation.md#significance) correctly downgrades short fuzzy results, but subsequently lists "The XGB -> fuzzy hybrid beats the persistence level" among robust claims. That should be a lower point estimate with insufficient temporal evidence. Similarly, "weather adds nothing" should be "no improvement detected on this window." The older finding that ensembling adds nothing is scoped to the original combiners; it is no longer an adequate summary of all committed work. The newer FCM/XGB mix scored **2.132 min** versus XGBoost **2.275** and persistence **2.640** in its standalone September backtest. Retain those numbers, but explicitly retain the exploratory label: the mix was formed after inspecting September results, uses a separate comparison family, and has no completed October confirmation. Do not claim C9 confirmed, or that the different camera and hybrid gains have been demonstrated in a single combined model.
 
-**3. Medium: narrow the camera-input conclusion.** The committed [ablation](../eval/runs/layer_a_eval/ablation.json) scores maps-only XGBoost **2.8445**, maps+camera **2.7618**, and persistence **2.6718** minutes. Camera features improve that restricted XGBoost by **0.0827 min**, but it still loses to persistence. [The implementation](../eval/layer_a_eval.py) uses current duration, congestion ratio, speed and direction; it does not test the full lag/calendar/profile baseline. Consequently "signal beyond the Maps lags" is unsupported by this experiment's feature list. Report the fold t-test as exploratory and the Pearson/Spearman coefficients as descriptive association; ordinary row-level correlation p-values do not account for serial dependence. Do not infer causal information, directional ground-truth accuracy, or replacement of Maps from these correlations. No further run is needed if the conclusion is narrowed accordingly.
+**3. Medium: narrow the camera-input conclusion.** The committed [ablation](../eval/runs/layer_a_eval/ablation.json) scores maps-only XGBoost **2.8445**, maps+camera **2.7618**, and persistence **2.6718** minutes. Camera features improve that restricted XGBoost by **0.0827 min**, but it still loses to persistence. [The implementation](../eval/studies/layer_a_eval.py) uses current duration, congestion ratio, speed and direction; it does not test the full lag/calendar/profile baseline. Consequently "signal beyond the Maps lags" is unsupported by this experiment's feature list. Report the fold t-test as exploratory and the Pearson/Spearman coefficients as descriptive association; ordinary row-level correlation p-values do not account for serial dependence. Do not infer causal information, directional ground-truth accuracy, or replacement of Maps from these correlations. No further run is needed if the conclusion is narrowed accordingly.
 
 **4. Medium: identify every frozen evidence source.** The canonical `eval/runs/report/run.json` is the 3 Oct run from `b3b6562`, while detector metrics, observed-count ablation, horizon study and FCM experiments live elsewhere. This is legitimate historical provenance, not evidence that the old run is invalid. However, the opening statement in evaluation.md that sections 1-7 all come from that manifest now excludes section 7c's actual source. Add a final evidence index listing each included result, its artifact/notebook, evaluation dates, code/model version, operating point, comparator and confirmation status. Preserve the original manifests and dates. Record the freeze as an artifact selection at merge `199c2e5` (same tree as `910d715`), not an invented common data cutoff. Replace future-tense statements that final numbers will come from Runs A/B; do not imply those runs exist.
 
@@ -72,14 +153,14 @@ Reviewed 2026-10-03 (SGT), checkout `be9281d`, against repository code, committe
 
 | # | Finding | Status | Where |
 | --- | --- | --- | --- |
-| 1 | Layer A box metrics | **Partial (17 Oct).** Image-level count error is scored on 15 frames ([evaluation.md](evaluation.md#layer-a--vision)). mAP, precision, recall and directional count error still need a box export in `eval/layer_a.py`. `cam2701` / `cam2702` remain Mar–Apr model detections, not ground truth | [findings.md](findings.md) item 8 |
+| 1 | Layer A box metrics | **Partial (17 Oct).** Image-level count error is scored on 15 frames ([evaluation.md](evaluation.md#layer-a--vision)). mAP, precision, recall and directional count error still need a box export in `eval/la/layer_a.py`. `cam2701` / `cam2702` remain Mar–Apr model detections, not ground truth | [findings.md](findings.md) item 8 |
 | 2 | Live API uses incomplete origin bins | **Fixed in code.** The origin is the newest bin closed for at least 60 s. The response carries `origin_closed_at`, `forecast_window_end` and `lead_min`. The target is described as the bin 30–40 min after the origin, 9–19 min ahead of the request | `forecastapi/main.py`, [runbook](runbooks/forecast-api.md), [ADR 0004](adr/0004-serve-local-models.md) amendment |
 | 3 | Stale observations served as current | **Fixed in code.** A direction answers 503 once its target bin has started or within an hour of a >25 min gap, and a cached answer expires with its target. Tests cover each case, per direction | `forecastapi/tests/test_forecast.py` |
-| 4 | Pooled inference ignores shared days | **Fixed in code; sensitivity re-run.** The gate counts shared calendar days, and the decision needs the joint calendar-day bootstrap CI; a day-clustered p is reported. 30-min pooled decisions are unchanged; the three fuzzy decisions become "insufficient data" | `eval/significance.py`, [findings.md](findings.md#pooled-significance-sensitivity-2026-10-04), [evaluation.md](evaluation.md#significance) |
+| 4 | Pooled inference ignores shared days | **Fixed in code; sensitivity re-run.** The gate counts shared calendar days, and the decision needs the joint calendar-day bootstrap CI; a day-clustered p is reported. 30-min pooled decisions are unchanged; the three fuzzy decisions become "insufficient data" | `eval/harness/significance.py`, [findings.md](findings.md#pooled-significance-sensitivity-2026-10-04), [evaluation.md](evaluation.md#significance) |
 | 5 | Non-significance treated as confirmation | **Reworded.** C5/C8 have no "confirmed" outcome; "not significant" is reported as no improvement detected. No equivalence margin was adopted, which needs team confirmation before 19 Oct | [roadmap.md](roadmap.md) |
 | 6 | Deployment and report architecture disagree | **Docs updated.** README, findings, architecture prose and Mermaid, runbook and ADR now describe `forecast-api` local serving; BQML results are labelled BQML-era | as listed; **PNGs need regeneration** (see 10) |
 | 7 | Access policy contradicts the smoke test | **Reconciled to the live decision (public).** Deploy sets `--no-invoker-iam-check` and `--max-instances=3`. The smoke test calls anonymously with the Hosting origin and checks the annotation and CORS. Risk recorded | `forecastapi/cloudbuild.yaml`, [findings.md](findings.md#known-risk-public-forecast-api-by-decision) |
-| 8 | Parity depends on gap-free data | **Fixed in code.** Serving and daily training build features from `v_bins_10min` with the harness's time-based rules. A test asserts they equal `eval/features.maps_features` with skipped bins and a gap. `v_training_set` itself is unchanged | `forecastapi/local_models.py`, `eval/tests/test_forecastapi_models.py` |
+| 8 | Parity depends on gap-free data | **Fixed in code.** Serving and daily training build features from `v_bins_10min` with the harness's time-based rules. A test asserts they equal `eval/lb/features.maps_features` with skipped bins and a gap. `v_training_set` itself is unchanged | `forecastapi/local_models.py`, `eval/tests/test_forecastapi_models.py` |
 | 9 | Reproducibility / submission package | **Open (team).** Static Hosting files are in `hosting/`. Still needs an immutable data package or access procedure, `firebase.json` / `.firebaserc` (not invented), the Maps fetcher source, and the frozen run from a clean revision | [roadmap.md](roadmap.md), [ADR 0002](adr/0002-firebase-hosting-source.md) |
 | 10 | Deck PNGs | **Regenerated 4 Oct, and now stale on three labels** (forecast-api input, public access, and the Hosting node still drawn as outside git). Handled separately, as agreed | [architecture.md](architecture.md) |
 
@@ -124,7 +205,7 @@ Define a maximum origin age appropriate to five-minute collection, reject expire
 
 ### 4. High: pooled inference ignores shared-day dependence
 
-[`eval/significance.py`](../eval/significance.py) computes HAC covariance within each direction and draws bootstrap blocks independently for each direction. Its minimum-block gate sums blocks across directions. The fuzzy manifest records **10 blocks across two routes**, although both routes cover roughly the same five days; that produces a formal `challenger` decision while the single-route deep results remain `insufficient data`.
+[`eval/harness/significance.py`](../eval/harness/significance.py) computes HAC covariance within each direction and draws bootstrap blocks independently for each direction. Its minimum-block gate sums blocks across directions. The fuzzy manifest records **10 blocks across two routes**, although both routes cover roughly the same five days; that produces a formal `challenger` decision while the single-route deep results remain `insufficient data`.
 
 Duplicating the calendar coverage across directions is not evidence of ten independent traffic days. Common events can correlate direction errors. This does not invalidate the point estimates, and this review has not recomputed the decisions. It does mean the combined significance claims need a sensitivity check that preserves the joint direction vector when resampling calendar-day blocks, or another justified panel covariance method. Base the minimum temporal-coverage gate on shared calendar history, and report directional results separately. Revisit the fuzzy significance headline after that check.
 
@@ -150,7 +231,7 @@ The camera service's public billed-inference exposure is an already accepted, do
 
 ### 8. Medium: model parity depends on gap-free data
 
-The live SQL uses positional LAG/LEAD; [`eval/features.py`](../eval/features.py) uses timestamp lookups. A missing ten-minute bin can change SQL horizons/lags while the local builder leaves the missing time empty. The `gap_min > 25` guard does not catch a single skipped bin (20-minute gap).
+The live SQL uses positional LAG/LEAD; [`eval/lb/features.py`](../eval/lb/features.py) uses timestamp lookups. A missing ten-minute bin can change SQL horizons/lags while the local builder leaves the missing time empty. The `gap_min > 25` guard does not catch a single skipped bin (20-minute gap).
 
 The fresh query found **zero** such single-bin gaps and **zero** three-row horizon mismatches, so this is a latent reliability issue, not evidence that the published window is wrong. Align the definitions or enforce continuity and target-time checks before both scoring and serving; add a missing-bin regression case.
 

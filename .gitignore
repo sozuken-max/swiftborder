@@ -30,6 +30,10 @@ eval/data/*
 !eval/data/README.md
 !eval/data/.gitkeep
 
+# forecast-api Cloud Build vendors eval mix modules here (see scripts/vendor_forecast_mix_eval.py)
+services/forecastapi/shipped_eval/**
+!services/forecastapi/shipped_eval/README.md
+
 # Secrets (Roboflow and Maps keys stay in the environment)
 .env
 .env.*

@@ -66,7 +66,11 @@ def _install(monkeypatch):
         calls.append((model_id, tuple(requested)))
         return _rows(requested)
 
+    def default_served(directions, horizon=30):
+        return fake("served", directions, horizon)
+
     monkeypatch.setattr(main, "query_forecast", fake)
+    monkeypatch.setattr(main, "query_default_served", default_served)
     return calls
 
 
@@ -614,7 +618,10 @@ def test_forecast_curve_errors_and_staleness(monkeypatch):
     bins = bins[bins["bin_ts"] < pd.Timestamp("2026-10-03 02:00", tz="UTC")]
     now = {"t": dt.datetime(2026, 10, 3, 2, 25, tzinfo=UTC)}
     _fake_bigquery(monkeypatch, bins, now)
-    assert _json(main.forecast(_request(query={"curve": "forecast"})))[1] == 503
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
+    assert status == 200
+    sg = payload["directions"]["SG_TO_MY"]["points"][0]
+    assert sg["model"] == "profile" and sg["forecast_min"] == sg["baseline_min"]
     assert _json(main.forecast(_request(query={"curve": "forecast", "hours": "0"})))[1] == 400
     assert _json(main.forecast(_request(query={"curve": "forecast", "hours": "25"})))[1] == 400
     assert _json(main.forecast(_request(query={"curve": "baseline"})))[1] == 400
@@ -703,10 +710,13 @@ def test_no_profile_history_never_sends_nan(monkeypatch):
     payload = json.loads(body)
     assert payload["baseline"]["directions"]["MY_TO_SG"]["forecast_min"] is None
     assert payload["baseline"]["directions"]["SG_TO_MY"]["forecast_min"] is not None
-    for query in ({"model": "profile"}, {"baseline": "profile"}, {"curve": "forecast"}, {"horizon_min": "120"}):
+    for query in ({"model": "profile"}, {"baseline": "profile"}, {"curve": "forecast"}):
         main._cache.clear()
         payload, status, _ = _json(main.forecast(_request(query=query)))
         assert status == 503 and payload == {"error": main.NO_PROFILE_ERROR}, query
+    main._cache.clear()
+    payload, status, _ = _json(main.forecast(_request(query={"horizon_min": "120"})))
+    assert status == 503 and payload == {"error": "No recent forecast for the requested direction"}
 
 
 def test_non_finite_numbers_are_a_502_not_invalid_json(monkeypatch):
@@ -830,7 +840,7 @@ def test_blend_point_lists_components_and_weights(monkeypatch):
         )
 
     monkeypatch.setattr(main, "query_forecast", fake)
-    payload, status, _ = _json(main.forecast(_request()))
+    payload, status, _ = _json(main.forecast(_request(query={"model": "served"})))
     assert status == 200 and payload["model"] == "served"
     sg = payload["directions"]["SG_TO_MY"]
     assert sg["model"] == "mean[models]" and sg["components"] == blend

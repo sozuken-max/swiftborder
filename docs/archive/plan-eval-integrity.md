@@ -62,12 +62,12 @@ flowchart LR
   subgraph Local["Local eval - data gitignored"]
     CF["Causeway fetchers"]
     CB["camera backfill<br/>camdetect.detect_frame + Roboflow"]
-    FB["eval/features.py<br/>causal join, 10-min bins"]
-    JX["eval/joined.py<br/>Maps-only vs +weather vs +camera<br/>+ ensemble"]
-    LB["eval/layer_b.py<br/>fixed 13-30 Sep window"]
-    OX["eval/timeseries_xgb.py"]
-    SIG["eval/significance.py<br/>DM-HAC, block bootstrap, Holm"]
-    LA["eval/layer_a.py<br/>mAP, P/R, count-error, day/night"]
+    FB["eval/lb/features.py<br/>causal join, 10-min bins"]
+    JX["eval/lb/joined.py<br/>Maps-only vs +weather vs +camera<br/>+ ensemble"]
+    LB["eval/lb/layer_b.py<br/>fixed 13-30 Sep window"]
+    OX["eval/timeseries/timeseries_xgb.py"]
+    SIG["eval/harness/significance.py<br/>DM-HAC, block bootstrap, Holm"]
+    LA["eval/la/layer_a.py<br/>mAP, P/R, count-error, day/night"]
   end
   RUN["eval/runs/report/run.json + PNGs<br/>schema v2"]
   DOCS["docs/"]
@@ -99,9 +99,9 @@ One significance module and one manifest schema serve every harness. Doc result 
 | 7 | Causeway fetcher hardening; weather/rainfall backfill | Mocked-session tests pass; per-day completeness report | done (1–30 Sep complete; 30 Sep fetched on 1 Oct once the day had closed; Woodlands rows appended to BigQuery) |
 | 8 | `camdetect` hardening; `detect_frame()` core | Handler tests pass | done (not deployed; a push to `main` would redeploy) |
 | 9 | Camera 2701 count backfill (dry run, 50-call pilot, budgeted run) | Coverage report by day | script and tests done; **pilot handed off** to the Roboflow key holder: [handoff-camera-pilot.md](handoff-camera-pilot.md) |
-| 10 | Causal feature builder (`eval/features.py`) | Causality and parity tests pass | done (parity with live `v_training_set` on 7,172 rows, recorded in `run.json`; camera 0% until Task 9 runs) |
-| 11 | Joined-feature experiment (`eval/joined.py`), vs-Maps baseline, ensemble | ΔMAE table with CIs per feature set and direction | done (weather: no significant gain; camera pending Task 9) |
-| 12 | Layer A scorer (`eval/layer_a.py`) on fixtures | Hand-computed fixture tests pass; results stay `pending` | done |
+| 10 | Causal feature builder (`eval/lb/features.py`) | Causality and parity tests pass | done (parity with live `v_training_set` on 7,172 rows, recorded in `run.json`; camera 0% until Task 9 runs) |
+| 11 | Joined-feature experiment (`eval/lb/joined.py`), vs-Maps baseline, ensemble | ΔMAE table with CIs per feature set and direction | done (weather: no significant gain; camera pending Task 9) |
+| 12 | Layer A scorer (`eval/la/layer_a.py`) on fixtures | Hand-computed fixture tests pass; results stay `pending` | done |
 | 13 | Full re-run and promotion to `eval/runs/report/` | v2 manifest validates; artifacts exist | done (`20260930T175104Z_offline-bqml-joined`, made from committed code `15f094b`, clean tree; camera rows pending Task 9) |
 | 14 | Documentation truthfulness and fresh inventory | Link and banned-string checks pass; numbers trace to `run.json` or inventory | done (deck PNGs still need regeneration) |
 | 15 | Final verification and review | Full runner green; review verdict recorded | done (semantic review NEEDS_CHANGES → 10 issues fixed, re-run and re-promoted from committed code) |

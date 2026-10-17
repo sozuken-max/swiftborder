@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 import camera_forecast as cf
+import lb.camera_forecast as _cf_impl
 
 
 def _history(days=12, drop_day=None):
@@ -59,7 +60,7 @@ def test_cross_validation_predicts_at_the_profile_fit_offset(monkeypatch):
             predicted_timestamps.extend(pd.Series(ts).tolist())
             return np.zeros(len(direction))
 
-    monkeypatch.setattr(cf, "candidate_models", lambda: {"probe": TimestampProbe})
+    monkeypatch.setattr(_cf_impl, "candidate_models", lambda: {"probe": TimestampProbe})
 
     cf.cross_validate(kept)
 

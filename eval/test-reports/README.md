@@ -152,7 +152,7 @@ YOLO-S (freeze) at the page's setting (conf 0.30, overlap off) matches the page'
 
 ## Box metrics (test split)
 
-From the full-comparison cell of [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) (run 10 Oct 2026, Tesla T4). A prediction counts as correct when it overlaps a labelled box of the same class at IoU 0.5 or more; labelled polygons are reduced to their enclosing box. AP50 is threshold-free. This is the notebook's own scorer, not [`eval/layer_a.py`](../layer_a.py), and it does not compute mAP50-95; Ultralytics' own evaluation of the two fine-tuned models on this split is under [Model weights and run files](#model-weights-and-run-files). The notebook's car count MAE at each detector's best threshold equals the scoreboard above (17.40, 11.60, 3.53, 1.73, 1.87), which is how these frames are matched to that run.
+From the full-comparison cell of [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) (run 10 Oct 2026, Tesla T4). A prediction counts as correct when it overlaps a labelled box of the same class at IoU 0.5 or more; labelled polygons are reduced to their enclosing box. AP50 is threshold-free. This is the notebook's own scorer, not [`eval/la/layer_a.py`](../la/layer_a.py), and it does not compute mAP50-95; Ultralytics' own evaluation of the two fine-tuned models on this split is under [Model weights and run files](#model-weights-and-run-files). The notebook's car count MAE at each detector's best threshold equals the scoreboard above (17.40, 11.60, 3.53, 1.73, 1.87), which is how these frames are matched to that run.
 
 | Detector | AP50 car | AP50 bus | AP50 truck | mAP50 (3 classes) | AP50 any vehicle | Time per image |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -198,14 +198,14 @@ The training runs, both checkpoints, the Ultralytics test-split evaluations and 
 
 | Detector | Weights | Notes |
 | --- | --- | --- |
-| YOLO-S trained (freeze) | [`runs/yolo26s/training/weights/best.pt`](runs/yolo26s/training/weights/best.pt), and the served ONNX export [`services/camdetect/models/yolo26s_v6_boxfix.onnx`](../../services/camdetect/models/yolo26s_v6_boxfix.onnx) | Ultralytics on the test split: mAP50 0.836, mAP50-95 0.562 |
-| YOLO-M trained (freeze) | [`runs/yolo26m/training/weights/best.pt`](runs/yolo26m/training/weights/best.pt) | Not exported, not served. Test split: mAP50 0.872, mAP50-95 0.583 |
+| YOLO-S trained (freeze) | [`runs/yolo26s/training/`](runs/yolo26s/training/) (`best.pt` on Drive; see [`runs/README.md`](runs/README.md)), and the served ONNX export [`services/camdetect/models/yolo26s_v6_boxfix.onnx`](../../services/camdetect/models/yolo26s_v6_boxfix.onnx) | Ultralytics on the test split: mAP50 0.836, mAP50-95 0.562 |
+| YOLO-M trained (freeze) | [`runs/yolo26m/training/`](runs/yolo26m/training/) (`best.pt` on Drive; see [`runs/README.md`](runs/README.md)) | Not exported, not served. Test split: mAP50 0.872, mAP50-95 0.583 |
 | COCO YOLO-S @640 / @1280 | stock `yolo26s.pt`, downloaded by Ultralytics | No fine-tuning |
-| Roboflow v6 | Hosted by Roboflow; weight download needs a Core plan | Raw API replies in [`runs/comparison_5_detectors/roboflow_v6/api_responses/`](runs/comparison_5_detectors/roboflow_v6/api_responses/) |
+| Roboflow v6 | Hosted by Roboflow; weight download needs a Core plan | Raw API replies on Drive with the comparison JPEG tree (summary CSVs in [`runs/comparison_5_detectors/`](runs/comparison_5_detectors/)) |
 
 ## What this does not show
 
-- **Box metrics are the notebooks'.** AP50, recall and precision come from the Colab scorer above, and mAP50-95 only from Ultralytics for the two fine-tuned models. [`eval/layer_a.py`](../layer_a.py) has not been run on this split, and the box labels are in Roboflow, not in git.
+- **Box metrics are the notebooks'.** AP50, recall and precision come from the Colab scorer above, and mAP50-95 only from Ultralytics for the two fine-tuned models. [`eval/la/layer_a.py`](../la/layer_a.py) has not been run on this split, and the box labels are in Roboflow, not in git.
 - **No direction score.** There are no direction labels, so per-direction count error is not measured.
 - **Small sample.** 15 frames from July and September 2025, one camera. One frame (19 Jul 09:35) dominates the baselines' error.
 - **Counts are not crossing time.** A good count is an input to Layer B, not a forecast result.

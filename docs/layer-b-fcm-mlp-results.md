@@ -11,7 +11,7 @@ Produced on 4 Oct 2026 by the `train` logic of [`layer_b_fcm_mlp.py`](../eval/la
   - Early stopping and L2 choice: 17–18 Sep.
   - Validation, used for the decision rules: 19–25 Sep.
   - Test, scored once: 26–30 Sep.
-- **Statistics:** paired day-block bootstrap, with both directions resampled together by calendar day.
+- **Statistics:** paired day-block bootstrap, with both directions resampled together by calendar day. Warehouse `train` / `backtest` paired tables in this tree now call `eval/harness/significance.py` via `eval/warehouse/scoring.py` (same joint-day rule as section 8); this document's 26–30 Sep CI bullets are from the October run of `train` and were not re-scored here.
 - **Layer A coverage:** zero (`layer_a_counts` does not exist yet), so the vision gate could not run.
 
 ## Test MAE in minutes (26–30 Sep, both directions, identical rows; n ≈ 1,430 per step)

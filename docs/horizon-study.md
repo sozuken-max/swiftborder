@@ -2,7 +2,7 @@
 
 **Status:** exploratory, recorded 2026-10-04. These are not report results. The study reuses the 13–30 Sep window that already informed the 30-minute design, so any horizon or arm chosen from it must be confirmed on the October-only Run B ([roadmap.md](roadmap.md)) before it is claimed. The label is Google Maps' `duration_in_traffic`, not a measured crossing time.
 
-**Reproduce:** `cd eval; python horizon_study.py` (several minutes on a laptop CPU). It writes results and the three charts below to `eval/runs/horizon-study/` (gitignored), each chart with a CSV of the plotted series. `python horizon_study.py --publish` copies the committed copies into place:
+**Reproduce:** `cd eval; python run.py horizon_study` (several minutes on a laptop CPU). It writes results and the three charts below to `eval/runs/horizon-study/` (gitignored), each chart with a CSV of the plotted series. `python run.py horizon_study --publish` copies the committed copies into place:
 - the charts and their CSVs, plus `results.json` (every comparison at every horizon), to `docs/images/horizon-study/`;
 - `forecastapi/horizon_study.json`, the summary `forecast-api` serves.
 
@@ -12,7 +12,7 @@
 
 ## Design
 
-- **Folds:** rolling-origin daily folds over 13–30 Sep SGT (18 test days), as in `joined.py`. For horizon `h`, the label of origin bin `t` is the mean over `[t+h, t+h+10)`. A training row counts only once that label bin closed before the test day started (`bin_ts + h + 10 <= day_start`). Features are the harness's time-based Maps features (`joined.FEATURE_SETS["maps"]`). There is one **direct** model per horizon; nothing is chained. The study runs every 30 minutes from 30 min to 24 h (48 horizons). The tables below show 11 of them, and the charts and `?list=horizon-study` show all 48.
+- **Folds:** rolling-origin daily folds over 13–30 Sep SGT (18 test days), as in `eval/lb/joined.py`. For horizon `h`, the label of origin bin `t` is the mean over `[t+h, t+h+10)`. A training row counts only once that label bin closed before the test day started (`bin_ts + h + 10 <= day_start`). Features are the harness's time-based Maps features (`joined.FEATURE_SETS["maps"]`). There is one **direct** model per horizon; nothing is chained. The study runs every 30 minutes from 30 min to 24 h (48 horizons). The tables below show 11 of them, and the charts and `?list=horizon-study` show all 48.
 - **Candidates:**
   - **persistence:** the origin bin.
   - **same time yesterday:** the bin at target − 1 day.
@@ -20,7 +20,7 @@
   - **profile:** a per-direction Fourier (K = 8) × weekend ridge, fitted on every closed bin before the test day and read at the target time. This is a **baseline, not a forecast**: it ignores current traffic, so its error does not depend on the horizon.
   - **`xgb[maps]`:** the harness XGBoost.
   - **`xgb[maps+prof]`:** the same, plus the profile at the origin and at the target.
-- **Significance:** pooled over both directions with the shared-calendar-day rule (`significance.py`). Each pooled comparison needs ≥ 10 shared days, a joint day-bootstrap CI that excludes 0, and a Diebold–Mariano p below 0.05. Every comparison here has 18 shared days. There is no Holm correction across the 336 comparisons (7 per horizon × 48 horizons), so treat single marginal results (|CI end| < 0.05) as noise. A Holm sensitivity check over all 336 is under Findings.
+- **Significance:** pooled over both directions with the shared-calendar-day rule (`eval/harness/significance.py`). Each pooled comparison needs ≥ 10 shared days, a joint day-bootstrap CI that excludes 0, and a Diebold–Mariano p below 0.05. Every comparison here has 18 shared days. There is no Holm correction across the 336 comparisons (7 per horizon × 48 horizons), so treat single marginal results (|CI end| < 0.05) as noise. A Holm sensitivity check over all 336 is under Findings.
 
 ## MAE by horizon (minutes, both directions)
 

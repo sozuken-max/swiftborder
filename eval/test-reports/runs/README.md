@@ -14,7 +14,7 @@ Nothing here is used by the service. The served model is the ONNX export in
 runs/
 ├── yolo26s/                     YOLO26s fine-tuned (freeze=10): the served model, model=local
 │   ├── training/                was v6_yolo26s_boxfix/
-│   │   ├── weights/best.pt      checkpoint behind services/camdetect/models/yolo26s_v6_boxfix.onnx
+│   │   ├── weights/             training checkpoints (best.pt not in git; see Drive `swiftborder_runs`)
 │   │   ├── args.yaml            training settings
 │   │   ├── results.csv/.png     loss and metrics per epoch
 │   │   ├── labels.jpg           label statistics of the training set
@@ -25,26 +25,17 @@ runs/
 ├── yolo26m/                     YOLO26m fine-tuned the same way; compared, not served
 │   ├── training/                was v6_yolo26m_boxfix/ (same layout)
 │   └── eval_test/               was val_yolo26m_test_boxfix/
-└── comparison_5_detectors/      every detector on the 15 test frames
+└── comparison_5_detectors/      summary CSVs only in git (annotated frames: [`../images/`](../images/) WebPs; full JPEG tree on Drive)
     ├── full_comparison_summary.csv   AP50 per class, recall/precision sweep, count error (valid and test)
-    ├── test_counts.csv               car and vehicle counts per detector and frame
-    ├── ground_truth/            labelled boxes drawn on each test frame
-    ├── coco_s_640/              stock COCO YOLO26s at 640 px
-    ├── coco_s_1280/             stock COCO YOLO26s at 1280 px
-    ├── roboflow_v6/             Roboflow-hosted workflow v6
-    │   └── api_responses/       raw API replies, <split>_2701_<timestamp>.json (valid and test)
-    ├── yolo26s/                 the fine-tuned YOLO26s (trained_s in the notebook)
-    └── yolo26m/                 the fine-tuned YOLO26m (trained_m in the notebook)
+    └── test_counts.csv               car and vehicle counts per detector and frame
 training_curves.csv / .png       per-epoch metrics and losses of both runs
 plot_training_curves.py          builds the two files above from each results.csv
 threshold_sweep.csv / .png       car recall, precision and count error vs confidence
 plot_threshold_sweep.py          builds them from the notebook output
 ```
 
-Each detector folder holds its 15 annotated test frames at 1920 x 1080, named
-`2701_<YYYYMMDD>T<HHMMSS>.jpg` like [`../frames/`](../frames/README.md).
-The CSVs and the notebook use the Roboflow export names (`..._jpg.rf.<hash>.jpg`); the frames
-manifest maps one to the other.
+Annotated test frames for the report live under [`../images/`](../images/) (WebP). The CSVs and the
+notebook use the Roboflow export names (`..._jpg.rf.<hash>.jpg`); the frames manifest maps one to the other.
 
 ## Training
 

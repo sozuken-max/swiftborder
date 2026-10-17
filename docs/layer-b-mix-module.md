@@ -5,7 +5,7 @@ Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `
 ## What it does
 - **Forecast:** the Google Maps travel time per direction, 30 minutes ahead (target bin [t+30, t+40) = `y_30`), as `mix = 0.5 × fcm_mlp + 0.5 × xgb[maps]`.
 - **`fcm_mlp`:** imported from [`layer_b_fcm_mlp.py`](../eval/layer_b_fcm_mlp.py). Byte-identical to its `train_direction` on the same days, and covered by a test.
-- **`xgb[maps]`:** the harness XGBoost (`eval/joined.py`, `eval/features.py`). Row-for-row identical to `forecastapi/local_models.py`, also covered by a test.
+- **`xgb[maps]`:** the harness XGBoost (`eval/lb/joined.py`, `eval/lb/features.py`). Row-for-row identical to `forecastapi/local_models.py`, also covered by a test.
 - **Refit:** both members are refitted daily on every label observed before 00:00 SGT since `MIX_HISTORY_START` (default 2026-09-06). This is the evaluated daily refit; `MIX_LOOKBACK_DAYS` is only an optional cap.
 - **Layer A:** the camera 2701 counts and congestion level (shared `layer_a_counts` table) are optional, gated inputs (slide 10).
   - The Layer A mix is served only if the camera covers at least 50% of validation rows and, on those rows, it beats both the identical no-vision mix trained on the same rows and the otherwise-served model (slides 13 and 15).
@@ -22,7 +22,7 @@ Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `
 - A `eval/README.md` row and a `CHANGELOG.md` entry.
 
 ## Verification (10 Oct 2026)
-- **Local backtest:** run on live BigQuery bins for 13–30 Sep with `--allow-protected-window` (`run_id: backtest-20261010T080013Z-6a139c3f`, 5,184 rows, 18 calendar days):
+- **Local backtest:** run on live BigQuery bins for 13–30 Sep with `--allow-protected-window` (`run_id: backtest-20261017T094617Z-d001a839`, 5,184 rows, 18 calendar days; committed under `eval/runs/`; supersedes `backtest-20261010T080013Z-6a139c3f` for intervals):
 
   | Model | MAE (min) | RMSE (min) | Bias (min) | [evaluation.md §8](../docs/evaluation.md#8-timesfm-25-and-fcm--mlp-shared-13-30-sep-window-2026-10-05) (min) |
   |---|---|---|---|---|
@@ -32,7 +32,7 @@ Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `
   | mix | 2.132 | 3.147 | +0.062 | 2.134 |
 
   - **Directional MAE:** MY→SG: persistence 2.504, `xgb[maps]` 2.150, `fcm_mlp` 2.062, **mix 1.988 min**; SG→MY: persistence 2.777, `xgb[maps]` 2.399, `fcm_mlp` 2.397, **mix 2.277 min**.
-  - **Paired day-block bootstrap 95% CIs:** `mix_vs_persistence` −0.508 [−0.628, −0.368] min; `mix_vs_xgb_maps` −0.143 [−0.215, −0.087] min; `mix_vs_fcm_mlp` −0.097 [−0.143, −0.049] min.
+  - **Paired comparisons (`eval/harness/significance.py`, joint calendar-day 95% CIs, pooled):** `mix_vs_persistence` −0.508 [−0.624, −0.361] min; `mix_vs_xgb_maps` −0.143 [−0.207, −0.086] min; `mix_vs_fcm_mlp` −0.097 [−0.145, −0.048] min. The 10 Oct run used warehouse day-sum bootstrap endpoints only.
   - **Slices:** Morning peak 2.613 min, evening peak 2.834 min, off-peak 1.623 min; weekday 1.998 min, weekend 2.482 min. Share within 15 min of Maps duration: 99.90%.
   Without `--allow-protected-window`, 5,178 rows are scored because six labels fall on 1 Oct.
 - **`train` on 24–30 Sep:** took 88 s and served the mix in both directions (validation mix 2.09 against persistence 2.74). The registry round trip is exact, and the registry entry is 0.74 MB.
