@@ -555,7 +555,7 @@ Why a substitute is a larger step than an input:
 
 - **Counts saturate.** Once the frame is full the count plateaus, while the queue, and the crossing time, keep growing beyond the frame.
 - **Counts do not show speed.** A full frame of moving traffic and a full frame of stopped traffic give similar counts. The `extent` measure helps a little. Speed would need tracking across frames, which are about 10 minutes apart.
-- **One camera sees one stretch.** Camera 2701 does not see the checkpoint queue or the Johor side.
+- **One camera sees one stretch.** Camera 2701 does not see the checkpoint queue or the Johor side ([map and distances](camera-coverage/README.md): about 1.4 km of approach road lies outside the frame).
 - **A substitute still needs a label.** Any count-to-duration model is calibrated against something, and today that is Maps. Without an independent ground truth, the realistic role for Layer A is a fallback or complement (for example during a Distance Matrix outage or to cap API cost), not a replacement.
 - **Visibility.** Fog, haze, heavy rain, night glare, lens obstruction, and stale or missing LTA frames make frames unusable. The dangerous case is a frame where nothing is visible: it scores as "0 vehicles" and would read as free-flowing traffic. The backfill records missing and stale frames as missing, but it cannot yet tell a foggy frame from an empty road; a visibility check is needed before any substitute use.
 

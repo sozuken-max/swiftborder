@@ -4,7 +4,7 @@ The 15 frames of the Roboflow dataset v6 `test` split, unannotated, 1920 x 1080 
 
 **Naming.** `2701_<YYYYMMDD>T<HHMMSS>.jpg`: camera id, then the capture time in SGT. This is the same name as the object in `gs://sg-lta-traffic-cameras/camera_id=2701/month=<YYYY-MM>/`. Roboflow renamed the files on export (`..._jpg.rf.<hash>.jpg`), and that name is what the [notebooks](../notebooks/), `test_counts.csv` and the Drive `test_predictions/` folders use; the table maps one to the other.
 
-**Where the bytes came from.** Downloaded on 17 Oct 2026 from the data.gov.sg URL in the last column (the URL the live `swiftbackend` resolved for that timestamp). The 03:15 frame was earlier checked byte-identical to its GCS object; the other 14 were not compared. The box labels are in the Roboflow project (`vehicle-detection-proejct`, version 6), not in git.
+**Where the bytes came from.** Downloaded on 17 Oct 2026 from the data.gov.sg URL in the last column (the URL the live `swiftbackend` resolved for that timestamp). The 03:15 frame was earlier checked byte-identical to its GCS object; the other 14 were not compared. The box labels are in the Roboflow project (`vehicle-detection-proejct`, version 6); an export of them is in [`annotations_with_predictions.json`](../../runs/layer_a_count/annotations_with_predictions.json).
 
 **Day / night.** Day is 07:00-18:59 SGT (7 frames), night the other 8.
 
