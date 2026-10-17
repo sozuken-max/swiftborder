@@ -2,6 +2,14 @@
 
 Dated copy of GCP project `swiftborder`. When this file and the project disagree, the project wins; re-query and update this file. Older blocks below are history. They keep the revisions and sentences that were true at their own timestamps.
 
+## Forecast serving: 2026-10-17, approximately 15:40 SGT
+
+Queried after Cloud Build `24ec59b4-52e5-4c88-86c7-a249d214c934` (trigger `forecast-api`, commit `4a23f43009f9a3c6979465c084cb583a8a74c812`) finished SUCCESS and promoted traffic.
+
+- `forecast-api` (`asia-southeast1`) serves revision `forecast-api-00021-qud` at 100% traffic. Image `asia-southeast1-docker.pkg.dev/swiftborder/cloud-run-source-deploy/swiftborder/forecast-api@sha256:f0b2c359704b0cfeae6399e09093dd39221d7d7715d5e6af51a08dfb0dce4ac7`.
+- `GET ?list=models` returns `served` selection `mix[fcm_mlp+xgb]` for both `SG_TO_MY` and `MY_TO_SG`, and that id is callable (`deploy_state` production). `xgb[maps]` stays callable.
+- Anonymous `GET ?model=served` returned **503**, `{"error":"No recent forecast for the requested direction"}`. That is a missing recent bin, not a catalog that still says the mix is unserved.
+
 ## Trigger paths: 2026-10-17, approximately 13:50-14:05 SGT
 
 Read with `gcloud builds triggers list` / `describe` (`--region=global`, `asia-southeast1`, `europe-west1`), `gcloud run services list`, and `gcloud run jobs describe` for `cam2701-local-backfill` and `traffic-backfill`. Cloud Audit Logs for `UpdateBuildTrigger` the same day (05:39-05:47 UTC) are the before/after for the path edit. No revision, row count, or bucket list was repeated.
