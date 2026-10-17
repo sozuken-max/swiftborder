@@ -14,8 +14,8 @@ replay-*/*
 !replay-*/*/*.csv
 # Counts-for-Maps substitution (1-4 Oct 2026), cited from docs/evaluation.md section 7d.
 # Read with google.cloud.bigquery (Python 3.11).
-!20261017T082703Z_counts-substitute/
-!20261017T082703Z_counts-substitute/**
+!20261017T083554Z_counts-substitute/
+!20261017T083554Z_counts-substitute/**
 # Layer A evaluation
 !layer_a_eval/
 !layer_a_eval/**

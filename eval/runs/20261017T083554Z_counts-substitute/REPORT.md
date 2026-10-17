@@ -54,6 +54,14 @@ Paired difference is counts MAE minus Maps-version MAE, in minutes. Positive mea
 | `mix[fcm_mlp+xgb]` | SG_TO_MY | 534 | 2.751 | 6.197 | 3.236 | 3.446 [1.843, 5.678] | regression |
 | `mix[fcm_mlp+xgb]` | MY_TO_SG | 534 | 2.723 | 5.181 | 3.172 | 2.458 [1.686, 3.459] | regression |
 
+## Figures
+
+![October MAE by model, pooled and by direction.](mae_maps_vs_counts.png)
+
+![Paired difference (counts minus Maps) with the +/- 0.5 minute bar.](paired_diff.png)
+
+![Maps y_30 against the Maps-input and counts-only forecasts for xgb[maps] and the served mix.](series_xgb_mix.png)
+
 ## Notes
 
 - `persistence`: Univariate. Counts version repeats the current vehicle count and is not a minute forecast.

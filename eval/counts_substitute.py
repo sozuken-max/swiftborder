@@ -24,7 +24,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sklearn
@@ -470,6 +476,175 @@ def _fmt_ci(row: dict) -> str:
     return f"{row['paired_diff_counts_minus_maps_min']:.3f} [{row['interval_low_min']:.3f}, {row['interval_high_min']:.3f}]"
 
 
+_MAPS_COLOR = "#1b4f72"
+_COUNTS_COLOR = "#d35400"
+_PERS_COLOR = "#7f8c8d"
+_SGT_ZONE = ZoneInfo("Asia/Singapore")
+_SLICE_TITLES = {
+    "both": "Pooled",
+    "SG_TO_MY": "SG_TO_MY",
+    "MY_TO_SG": "MY_TO_SG",
+}
+
+
+def _slice_rows(payload: dict, slice_name: str) -> List[dict]:
+    rows = []
+    for model in payload["models"]:
+        for sl in model["slices"]:
+            if sl["slice"] == slice_name:
+                rows.append({"id": model["id"], **sl})
+    return rows
+
+
+def _style_axes(ax: plt.Axes) -> None:
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(axis="x", color="#e5e8eb", linewidth=0.6)
+    ax.set_axisbelow(True)
+
+
+def write_plots(run_dir: Path, payload: dict, frame: pd.DataFrame) -> List[str]:
+    """October MAE bars, paired-difference intervals, and the served-model series."""
+    names = [
+        _plot_mae(run_dir, payload),
+        _plot_paired_diff(run_dir, payload),
+        _plot_series(run_dir, frame),
+    ]
+    return names
+
+
+def _plot_mae(run_dir: Path, payload: dict) -> str:
+    name = "mae_maps_vs_counts.png"
+    fig, axes = plt.subplots(1, 3, figsize=(14.2, 6.4), sharey=True)
+    panels = ("both",) + DIRECTIONS
+    for ax, panel in zip(axes, panels):
+        rows = _slice_rows(payload, panel)
+        y = np.arange(len(rows))
+        height = 0.24
+        maps_vals = np.array([row["mae_maps_min"] for row in rows], dtype=float)
+        counts_vals = np.array(
+            [np.nan if row["mae_counts_min"] is None else row["mae_counts_min"] for row in rows],
+            dtype=float,
+        )
+        pers_vals = np.array([row["mae_persistence_maps_min"] for row in rows], dtype=float)
+        finite = np.isfinite(counts_vals)
+        ax.barh(y - height, maps_vals, height, color=_MAPS_COLOR, label="Maps inputs")
+        ax.barh(y[finite], counts_vals[finite], height, color=_COUNTS_COLOR, label="Counts only")
+        ax.barh(y + height, pers_vals, height, color=_PERS_COLOR, label="Maps persistence")
+        ax.set_yticks(y)
+        ax.set_yticklabels([row["id"] for row in rows])
+        ax.set_xlabel("MAE (minutes)")
+        n = rows[0]["n"] if rows else 0
+        ax.set_title(f"{_SLICE_TITLES[panel]} (n={n})")
+        ax.set_xlim(0, max(10.0, float(np.nanmax(maps_vals)), float(np.nanmax(counts_vals)), float(np.nanmax(pers_vals))) + 0.4)
+        _style_axes(ax)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.suptitle("October 2026 MAE: Maps inputs, counts-only, and Maps persistence", fontsize=12)
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, 0.06))
+    fig.text(
+        0.5,
+        0.01,
+        "Persistence and profile have no counts bar: those rules emit a vehicle count, not minutes. "
+        "lin_bq and xgb_bq daily and sept-refit are the same September fit.",
+        ha="center",
+        fontsize=8,
+        color="#333333",
+    )
+    fig.tight_layout(rect=(0, 0.10, 1, 0.96))
+    fig.savefig(run_dir / name, dpi=140, bbox_inches="tight")
+    plt.close(fig)
+    return name
+
+
+def _plot_paired_diff(run_dir: Path, payload: dict) -> str:
+    name = "paired_diff.png"
+    fig, axes = plt.subplots(1, 3, figsize=(14.2, 5.6), sharey=True)
+    for ax, panel in zip(axes, ("both",) + DIRECTIONS):
+        rows = [row for row in _slice_rows(payload, panel) if row["paired_diff_counts_minus_maps_min"] is not None]
+        y = np.arange(len(rows))
+        diffs = np.array([row["paired_diff_counts_minus_maps_min"] for row in rows], dtype=float)
+        lows = np.array([row["interval_low_min"] for row in rows], dtype=float)
+        highs = np.array([row["interval_high_min"] for row in rows], dtype=float)
+        span_lo = min(-0.8, float(lows.min()) - 0.3)
+        span_hi = max(0.8, float(highs.max()) + 0.3)
+        ax.axvspan(-BAR_MIN, BAR_MIN, color="#e8f6ef", zorder=0)
+        ax.axvline(-BAR_MIN, color="#1e8449", linestyle="--", linewidth=1, label="-0.5 min")
+        ax.axvline(BAR_MIN, color="#922b21", linestyle="--", linewidth=1, label="+0.5 min")
+        ax.axvline(0, color="#b0b7bf", linewidth=0.7)
+        ax.errorbar(
+            diffs,
+            y,
+            xerr=[diffs - lows, highs - diffs],
+            fmt="o",
+            color="#922b21",
+            ecolor="#922b21",
+            elinewidth=1.2,
+            capsize=3,
+            markersize=5,
+            label="Counts - Maps",
+        )
+        ax.set_yticks(y)
+        ax.set_yticklabels([row["id"] for row in rows])
+        ax.set_xlim(span_lo, span_hi)
+        ax.set_xlabel("Counts MAE - Maps MAE (minutes)")
+        ax.set_title(f"{_SLICE_TITLES[panel]} (n={rows[0]['n']})")
+        _style_axes(ax)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.suptitle("Paired October difference. The band is the +/- 0.5 minute bar.", fontsize=12)
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, 0.07))
+    fig.text(
+        0.5,
+        0.01,
+        "Positive means the counts version is worse. An interval entirely above +0.5 is a regression; "
+        "entirely below -0.5 would be an improvement. Holm is not applied.",
+        ha="center",
+        fontsize=8,
+        color="#333333",
+    )
+    fig.tight_layout(rect=(0, 0.12, 1, 0.94))
+    fig.savefig(run_dir / name, dpi=140, bbox_inches="tight")
+    plt.close(fig)
+    return name
+
+
+def _plot_series(run_dir: Path, frame: pd.DataFrame) -> str:
+    name = "series_xgb_mix.png"
+    panels = (
+        ("xgb[maps]", "xgb_maps", "xgb_counts"),
+        ("mix[fcm_mlp+xgb]", "mix_maps", "mix_counts"),
+    )
+    fig, axes = plt.subplots(2, 2, figsize=(12.4, 7.2), sharex=True, sharey=True)
+    for row_i, direction in enumerate(DIRECTIONS):
+        part = frame[frame["direction"] == direction].sort_values("bin_ts")
+        clock = part["bin_ts"].dt.tz_convert(_SGT_ZONE)
+        for col_i, (title, maps_col, counts_col) in enumerate(panels):
+            ax = axes[row_i, col_i]
+            ax.plot(clock, part["y_30"], color="#1a1a1a", linewidth=0.9, label="Maps y_30")
+            ax.plot(clock, part[maps_col], color=_MAPS_COLOR, linewidth=0.8, label="Maps-input forecast")
+            ax.plot(clock, part[counts_col], color=_COUNTS_COLOR, linewidth=0.8, label="Counts-only forecast")
+            ax.set_title(f"{title}  {direction}  n={len(part)}")
+            _style_axes(ax)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b", tz=_SGT_ZONE))
+            ax.xaxis.set_major_locator(mdates.DayLocator(tz=_SGT_ZONE))
+            if row_i == 0 and col_i == 1:
+                ax.legend(loc="upper right", frameon=False, fontsize=8)
+            if col_i == 0:
+                ax.set_ylabel("Minutes")
+    fig.suptitle("Actual Maps duration and forecasts, 1-4 Oct 2026 (Asia/Singapore)", fontsize=12)
+    fig.text(
+        0.01,
+        0.01,
+        "10-minute origins that have both a camera count and a Maps y_30 label. "
+        "The counts forecast does not read v_bins_10min at predict time.",
+        fontsize=8,
+        color="#333333",
+    )
+    fig.tight_layout(rect=(0, 0.04, 1, 0.95))
+    fig.savefig(run_dir / name, dpi=140)
+    plt.close(fig)
+    return name
+
+
 def write_report(run_dir: Path, payload: dict) -> None:
     pooled = []
     directional = []
@@ -514,7 +689,18 @@ def write_report(run_dir: Path, payload: dict) -> None:
         lines.append(
             f"| `{row['id']}` | {row['slice']} | {row['n']} | {_fmt(row['mae_maps_min'])} | {_fmt(row['mae_counts_min'])} | {_fmt(row['mae_persistence_maps_min'])} | {_fmt_ci(row)} | {row['label']} |"
         )
-    lines += ["", "## Notes", ""]
+    figures = payload.get("figures") or []
+    if figures:
+        lines += ["", "## Figures", ""]
+        captions = {
+            "mae_maps_vs_counts.png": "October MAE by model, pooled and by direction.",
+            "paired_diff.png": "Paired difference (counts minus Maps) with the +/- 0.5 minute bar.",
+            "series_xgb_mix.png": "Maps y_30 against the Maps-input and counts-only forecasts for xgb[maps] and the served mix.",
+        }
+        for figure in figures:
+            lines.append(f"![{captions.get(figure, figure)}]({figure})")
+            lines.append("")
+    lines += ["## Notes", ""]
     for model in payload["models"]:
         lines.append(f"- `{model['id']}`: {model['note']}")
     if payload.get("univariate_raw"):
@@ -825,6 +1011,7 @@ def main() -> int:
                 note=spec[6],
             )
         )
+    payload["figures"] = write_plots(run_dir, payload, common)
     raw_pers = mae(common["y_30"].to_numpy(), common["persistence_counts"].to_numpy())
     raw_prof = mae(common["y_30"].to_numpy(), common["profile_counts"].to_numpy())
     payload["univariate_raw"] = (
