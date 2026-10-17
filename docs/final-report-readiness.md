@@ -1,5 +1,84 @@
 # Final-report readiness review
 
+## Re-review: 17 Oct 2026, HEAD c98b4d5 (22:09 SGT)
+
+**Verdict: acceptable to assemble the final report. Two new stale-prose items found; all previously listed open items remain open and unchanged.** This pass reads the full working tree at `c98b4d5` (the merge of `experiment/counts-for-maps` into `main`). It does not run experiments, query GCP resources beyond what is already in [inventory.md](inventory.md), or make any deployment. The team's no-new-runs constraint applies.
+
+### New findings (not present in the earlier c98b4d5 pass)
+
+| ID | File | Stale text | Correct text |
+| --- | --- | --- | --- |
+| **N1 — Medium** | [`README.md`](../README.md), Layer B table row | `the local lin_h30 replica for SG→MY, persistence for MY→SG` | `mix[fcm_mlp+xgb]` for both directions — what `SERVED_SELECTION` in [`forecastapi/main.py`](../services/forecastapi/main.py) says and what live revision `forecast-api-00021-qud` confirms |
+| **N2 — Medium** | [`docs/diagrams/architecture-detailed.mmd`](diagrams/architecture-detailed.mmd) line 17, and the matching embed in [`docs/architecture.md`](architecture.md) | `SG_TO_MY: lin_bq frozen` / `MY_TO_SG: persistence` on the API node | Both directions now `mix[fcm_mlp+xgb]`. The high-level Mermaid in `architecture.md` is already correct; only the detailed `.mmd` source and its embed in `architecture.md` are stale |
+| **N3 — Low** | [`docs/roadmap.md`](roadmap.md), "Already true" serving bullet | `lin_h30 replica for SG to MY and persistence for MY to SG` | Same as N1; the roadmap has not been updated to reflect the October mix promotion |
+
+**Resolution without a new experiment run:** update the three prose locations listed above and re-sync the detailed `.mmd` into `architecture.md` (run `python docs/diagrams/sync_mermaid.py`). The deck PNGs must also be regenerated once the `.mmd` is corrected — this is already an open item carried forward.
+
+### Previously open items — status unchanged
+
+- **Deck PNGs** — still not regenerated. `architecture-high-level.png` and `architecture-detailed.png` (both regenerated 4 Oct) are stale on: the `forecast-api` node labels (pre-mix selection), the Hosting node still labelled as outside git in the PNG, and the `gmap-woodlands-fetcher` source path. `eval-layer-a.png` and `eval-layer-b.png` should be checked against the current Mermaid. **Action before submission:** regenerate all four PNGs after correcting N2 above.
+- **Submission package** — recorded demo, slides, reflections, video, and Canvas submission archive. Out of repo scope; team responsibility.
+- **§8 vs §7c camera overlap sentence** — `fcm_mlp_layer_a` / `timesfm_layer_a` detections end 22 Apr; `local_counts` is the 6 Sep–4 Oct window. These are different windows and must not be collapsed into one sentence in the report.
+- **Optional hygiene** — root `README.md` quick-start still says `python layer_b.py`; the dispatcher is now `python run.py layer_b`. Correct alongside N1 in the same commit.
+
+### Code and evidence verified correct at this checkout
+
+The following were re-read and found consistent with [evaluation.md](evaluation.md), [findings.md](findings.md), and [inventory.md](inventory.md). No changes needed.
+
+- `services/forecastapi/main.py` `SERVED_SELECTION` — confirmed `mix[fcm_mlp+xgb]` for both directions; `status_for` correctly labels the mix as `exploratory` and other 30-minute models as `evaluated`. Fallback chain `mix → xgb[maps] → persistence → profile` is implemented in `query_default_served`.
+- `services/forecastapi/mix_bridge.py` — imports `layer_b_fcm_xgb_mix` from `shipped_eval/` or the repo root `eval/`; equal 0.5 / 0.5 weights match the backtest; `predict_value` returns `None` (→ fallback) when the mix is non-finite.
+- `scripts/vendor_forecast_mix_eval.sh` — exists and is called in the Cloud Build `Test` and `Vendor-mix` steps; `services/forecastapi/tests/test_shipped_eval_import.py` asserts isolated import. Finding P1 is closed.
+- Freeze boundary — `eval/runs/report/run.json` (`20261003T035807Z`, git `b3b6562`) is the primary evidence for §§1–7a. Later runs (`backtest-20261017T094617Z-d001a839`, `20261017T083554Z_counts-substitute`, `20261017T084900Z_camera-current`) are correctly separated in the Frozen Evidence Index. Finding P2 / P3 are closed.
+- `architecture.md` high-level Mermaid embed — shows `hosting/ in git; manual deploy`, `mix[fcm_mlp+xgb]` in the techniques table, and `local models / target: bin 30–40 min after the newest closed bin` on the `forecast-api` node. All accurate.
+- `findings.md` items 1–13 and claims register — consistent with committed run artifacts and inventory facts. No new false claim found.
+
+### Finishing checklist (no new experiments required)
+
+| Priority | Action | Status |
+| --- | --- | --- |
+| **High** | Fix N1: update `README.md` Layer B table row to say `mix[fcm_mlp+xgb]` for both directions | Done |
+| **High** | Fix N2: update `docs/diagrams/architecture-detailed.mmd` API node labels; re-sync embed into `architecture.md` | Done |
+| **High** | Fix N3: update `docs/roadmap.md` "Already true" serving bullet | Done |
+| **High** | Regenerate all four deck PNGs after N2 correction | Blocked (upstream image-generator service 500 internal error; Mermaid source & prompts verified and saved) |
+| **High** | Submission package: recorded demo, slides, video, reflections, Canvas archive | Open (team task) |
+| **Low** | Fix `README.md` quick-start: `python layer_b.py` → `python run.py layer_b` | Done (already verified `python run.py layer_b` in README.md) |
+
+
+
+---
+
+## Latest re-review: 17 Oct 2026, c98b4d5
+
+**Verdict: acceptable to assemble the final report from committed evidence, with packaging and figure work still open.** This review covers checkout `c98b4d5` (eval package refactor, October camera studies, refreshed §8 backtest). It does not run experiments, query cloud resources, or assess live availability. The team's no-new-runs constraint applies.
+
+### Findings addressed in tree (after c98b4d5)
+
+| ID | Finding | Resolution |
+| --- | --- | --- |
+| P1 | Forecast image vendored only mix shims (`import warehouse` failed in `shipped_eval/`) | [`scripts/vendor_forecast_mix_eval.sh`](../scripts/vendor_forecast_mix_eval.sh) copies shims plus `warehouse/` and required `harness/` modules; Cloud Build Test and Vendor-mix steps call it; [`services/forecastapi/tests/test_shipped_eval_import.py`](../services/forecastapi/tests/test_shipped_eval_import.py) asserts isolated import |
+| P2 | Counts-substitute labels ignored the ten-day harness gate | [`eval/studies/counts_substitute.py`](../eval/studies/counts_substitute.py) forces `inconclusive` when `calendar_days < 10`; [evaluation.md §7d](evaluation.md#7d-counts-substituted-for-maps-inputs-1-4-oct-2026) qualifies committed `regression` manifest labels as **interval regression** on four days |
+| P2 | Evidence freeze text did not separate `199c2e5` from later artifacts | [evaluation.md](evaluation.md) opening paragraphs and **Frozen Evidence Index** rows for camera-current and counts-substitute runs; dirty `run.json` flags documented as provenance |
+| P2 | §8 prose contradicted mix as HTTP default | [evaluation.md §8](evaluation.md) **Served selection** aligned with ADR 0004 and `forecastapi/main.py` |
+
+No rerun was required for these doc and packaging fixes.
+
+### Still open (unchanged by this pass)
+
+- **Deck PNGs** — factual freshness vs current architecture and Layer A/B claims ([diagrams/README.md](diagrams/README.md)).
+- **Submission package** — recorded demo, slides, reflections (out of repo scope).
+- **§8 vs §7c camera overlap** — `fcm_mlp_layer_a` / `timesfm_layer_a` detections end 22 Apr; `local_counts` is a different window; do not merge the sentences.
+- **Optional hygiene** — diagram skill inventory paths under `eval/lb/` (agent docs only).
+
+### Findings closed since the 3 Oct review (carried forward)
+
+- CNN-RNN protocol, speed measurements, pooled parity, hybrid MAE citations, Layer A AP50 vs mAP50-95 split, fuzzy insufficient-data wording, detector CSVs in git, harness code fingerprint for nested `eval/`.
+
+### Verification note
+
+Re-run `scripts/run_tests.sh` and `bash scripts/vendor_forecast_mix_eval.sh` before merge; the isolated shipped-eval test was added with the vendor script. The historical **596-test** count is not automatically refreshed here.
+
+The project has a strong basis for the report (supervised learning, ML/DL, hybrid/ensemble, intelligent sensing). Remaining work: regenerate figures, package the demonstration, finish submission materials. No new forecast experiments are required for the findings above.
+
 ## Still open after the 17 Oct honesty pass
 
 The evidence-index cells (CNN-RNN protocol, speed timings, pooled parity, mix MAE 2.134 / 2.132), the Layer A notebook-versus-Ultralytics box tables, the fuzzy insufficient-data wording, and the `data/sql/` fingerprint path are updated in this tree. Detector CSVs under `eval/test-reports/runs/` are on `main`. The 30-minute HTTP default is `mix[fcm_mlp+xgb]`.
@@ -14,7 +93,9 @@ No experiment was rerun.
 
 ## Current review: 17 Oct 2026, frozen submission
 
-**Verdict: request changes to report claims and packaging; no further experiments required.** The project has enough substantive evidence to assemble a defensible final report. It is not yet ready to submit unchanged, because its documents mix historical, exploratory and confirmed results. This is a substantially stronger position than the 3 Oct review.
+**Status: superseded by [Latest re-review](#latest-re-review-17-oct-2026-c98b4d5) above** for open items and verdict. The narrative below is retained as review history.
+
+**Verdict (historical): request changes to report claims and packaging; no further experiments required.** The project has enough substantive evidence to assemble a defensible final report. It is not yet ready to submit unchanged, because its documents mix historical, exploratory and confirmed results. This is a substantially stronger position than the 3 Oct review.
 
 **Scope fixed by the team on 17 Oct:** use **all currently committed results**, with **no more experiment runs**. Checkout reviewed: `main` at merge `199c2e5` (same tree as content commit `910d715`, tree `51a722ab`). Live operation is intentionally curtailed to reduce costs. An unavailable live forecast is therefore **not a readiness blocker**. The earlier proposed 19 Oct cutoff and future Runs A/B are superseded as requirements; unperformed confirmation remains a limitation, not work that must be commissioned.
 

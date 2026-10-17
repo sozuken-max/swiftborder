@@ -15,8 +15,9 @@ steps:
       - |
         set -euo pipefail
         pip install -q -r services/forecastapi/requirements-dev.txt -r eval/requirements-dev.txt
+        bash scripts/vendor_forecast_mix_eval.sh
         python -m pytest -q services/forecastapi
-        # the served models must equal the harness models (eval/joined.py, eval/bq_replica.py)
+        # the served models must equal the harness models (eval/lb/joined.py, eval/lb/bq_replica.py)
         cd eval && python -m pytest -q tests/test_forecastapi_models.py
 
   - id: Vendor-mix
@@ -26,9 +27,7 @@ steps:
       - -c
       - |
         set -euo pipefail
-        mkdir -p services/forecastapi/shipped_eval
-        cp eval/layer_b_fcm_mlp.py eval/layer_b_fcm_xgb_mix.py services/forecastapi/shipped_eval/
-        test -s services/forecastapi/shipped_eval/layer_b_fcm_xgb_mix.py
+        bash scripts/vendor_forecast_mix_eval.sh
 
   - id: Buildpack
     name: gcr.io/k8s-skaffold/pack@sha256:221c0c0d9a90f46f108bb888a1da9e99c82ff631e8b1c63b0223ea951752bd53

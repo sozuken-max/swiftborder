@@ -340,7 +340,13 @@ def classify(
     *,
     emits_minutes: bool,
     reads_maps_at_predict: bool,
+    calendar_days: Optional[int] = None,
 ) -> Tuple[str, str]:
+    if calendar_days is not None and calendar_days < sig.MIN_BLOCKS:
+        return (
+            "inconclusive",
+            f"only {calendar_days} shared calendar days (harness gate needs {sig.MIN_BLOCKS})",
+        )
     if min(n_by_direction.values()) < MIN_N_PER_DIRECTION:
         return "inconclusive", "fewer than 50 October rows in a direction"
     if not emits_minutes:
@@ -416,6 +422,7 @@ def score_block(
             label_n = {d: MIN_N_PER_DIRECTION for d in DIRECTIONS}
             label_n[direction] = int(len(part))
             label_counts, label_pers = part_counts, part_pers
+        cal_days = None if result is None else result.calendar_days
         label, reason = classify(
             label_n,
             low,
@@ -424,6 +431,7 @@ def score_block(
             label_pers,
             emits_minutes=emits_minutes,
             reads_maps_at_predict=reads_maps_at_predict,
+            calendar_days=cal_days,
         )
         y = part["y_30"].to_numpy()
         slices.append(
@@ -805,9 +813,10 @@ def main() -> int:
         "Substitution also requires the counts version to be able to run when Maps bins are absent "
         "(it does not read `v_bins_10min` at predict time) and its October MAE to sit within 0.5 min of both "
         "the Maps version and persistence-of-Maps. "
-        "Label `regression` when the paired interval lies entirely above +0.5 min, `improvement` when it lies "
-        "entirely below -0.5 min, `substitute` when the interval lies inside +/-0.5 min and the counts MAE is "
-        "also within 0.5 min of persistence, and `inconclusive` when a direction has fewer than 50 rows or the "
+        "Label `inconclusive` when fewer than ten shared calendar days (harness significance gate) or fewer than "
+        "50 rows in a direction. Otherwise label `regression` when the paired interval lies entirely above "
+        "+0.5 min, `improvement` when it lies entirely below -0.5 min, `substitute` when the interval lies inside "
+        "+/-0.5 min and the counts MAE is also within 0.5 min of persistence, and `inconclusive` when the "
         "interval crosses +/-0.5 min."
     )
     window = (

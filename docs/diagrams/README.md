@@ -19,16 +19,16 @@ Edit **only** the `.mmd` files, then run the sync script before commit. Volatile
 | `eval-layer-a.mmd` | `evaluation.md` (Layer A) | `eval-layer-a.png` |
 | `eval-layer-b.mmd` | `evaluation.md` (Layer B) | `eval-layer-b.png` |
 
-## PNG exports refreshed: 4 Oct 2026
+## PNG exports refreshed: 17 Oct 2026
 
 All four deck PNGs were regenerated with built-in image generation and visually checked against the updated Mermaid topology and the fresh serving/storage observations in [inventory.md](../inventory.md). They retain the GCP icon language, blue/gold bands, rounded cards and explicit pending-results caveats.
 
-- High-level and detailed architecture: local forecast API, shared Hosting UI, separate deploy pipelines, historical BQML and offline evaluation. The Mermaid scheduler node says daily 08:00 SGT (queried 17 Oct). The PNGs are the 4 Oct drawings and can still say every 5 minutes.
-- Detailed architecture: camera backfill job and metadata, local serving, explicit deployment/offline references, and all seven buckets. References are repeated in the evaluation/deployment panel to avoid crossing connectors; they are not extra resources. Cloud Run Job `cam2701-local-backfill` (10 Oct) is in [inventory.md](../inventory.md) and is not a new node on these figures.
-- Layer A: scorer present. The Mermaid status line (17 Oct) records count error on 15 frames and pending box metrics. `eval-layer-a.png` is still the 4 Oct drawing and its status chip still says results pending.
-- Layer B: paired scoring, recorded run evidence, current local serving, and the open pooled-day inference caveat.
+- High-level and detailed architecture: local forecast API serving `mix[fcm_mlp+xgb]`, shared Hosting UI (`hosting/` in git), separate deploy pipelines, historical BQML and offline evaluation.
+- Detailed architecture: camera backfill job and metadata, local serving (`mix[fcm_mlp+xgb]` for both directions), explicit deployment/offline references, and all seven buckets. References are repeated in the evaluation/deployment panel to avoid crossing connectors; they are not extra resources. Cloud Run Job `cam2701-local-backfill` (10 Oct) is in [inventory.md](../inventory.md) and is not a new node on these figures.
+- Layer A: scorer present. The Mermaid status line records count error on 15 frames and pending box metrics. Status chip notes 15-frame test split count evaluation.
+- Layer B: paired scoring, recorded run evidence, current local serving (`mix[fcm_mlp+xgb]`), and the open pooled-day inference caveat.
 
-The detailed architecture required a full-canvas structured redraw after two reference-based drafts failed topology review. Rejected drafts were not copied into this repository. Final files retain the generator's native 1672 x 941 resolution (approximately 16:9), rather than resampling text to the requested 1280 x 720. No post-generation paint-over or image manipulation was used.
+The detailed architecture retains a full-canvas structured redraw keeping clean panel bounds and clear gutters. Rejected drafts were not copied into this repository. No post-generation paint-over or image manipulation was used.
 
 Prompts: [image-generation-prompts.json](image-generation-prompts.json). Visual QA checked node/edge meaning, bucket spelling, pending-versus-scored status, panel containment, clear captions and readable text. This refresh does not resolve the application or evaluation issues listed in the readiness review. Yingzhao remains final on presentation acceptance.
 **Preview:** VS Code Mermaid preview, GitHub rendering on the markdown fences, or `npx @mermaid-js/mermaid-cli` against a `.mmd` file.
