@@ -35,6 +35,8 @@ runs/
     │   └── api_responses/       raw API replies, <split>_2701_<timestamp>.json (valid and test)
     ├── yolo26s/                 the fine-tuned YOLO26s (trained_s in the notebook)
     └── yolo26m/                 the fine-tuned YOLO26m (trained_m in the notebook)
+training_curves.csv / .png       per-epoch metrics and losses of both runs
+plot_training_curves.py          builds the two files above from each results.csv
 ```
 
 Each detector folder holds its 15 annotated test frames at 1920 x 1080, named
@@ -55,6 +57,14 @@ first (the `boxfix` in the old names). Best epoch and its scores are read from `
 `best.pt` hash matches the checkpoint recorded for the served ONNX file in the
 [camdetect README](../../../camdetect/README.md#in-container-model-modellocal). `last.pt` (the final epoch) was left
 on Drive.
+
+Per-epoch curves for both runs, in one table and one chart:
+[`training_curves.csv`](training_curves.csv) (one row per model and epoch; `best_epoch` = 1 marks the
+`best.pt` epoch) and [`training_curves.png`](training_curves.png) (validation mAP50 and mAP50-95 on
+top; train and validation box, class and L1 losses below). YOLO26 has no objectness loss, so there is
+no "object loss" panel. Rebuild both with `python eval/test-reports/runs/plot_training_curves.py`.
+
+![Training curves](training_curves.png)
 
 ## Ultralytics evaluation on the test split
 
