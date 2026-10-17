@@ -7,7 +7,8 @@ full precision-recall curve; the full curves are BoxPR_curve.png in each eval_te
 
 Writes, next to this file:
   threshold_sweep.csv   one row per split, model and confidence
-  threshold_sweep.png   precision-recall points, count error and count ratio vs confidence
+  threshold_sweep.png   test split: precision-recall points with car PR-AUC, count error and
+                        count as a % of ground truth vs confidence
 
     python eval/test-reports/runs/plot_threshold_sweep.py
 """
@@ -48,7 +49,25 @@ def parse_sweep():
     return rows
 
 
+def parse_car_ap(split="test"):
+    """Car AP50 (area under the full precision-recall curve) from the full-comparison cell's table."""
+    nb = json.load(open(NOTEBOOK))
+    cell = next(c for c in nb["cells"] if "FULL COMPARISON" in "".join(c["source"]))
+    text = "".join("".join(o.get("text", [])) for o in cell.get("outputs", []))
+    table = text[text.index("ACCURACY (AP50"):text.index("OPERATING POINT")]
+    ap, current = {}, None
+    for line in table.splitlines():
+        parts = line.split()
+        if parts and parts[0] in ("valid", "test"):
+            current, parts = parts[0], parts[1:]
+        if current == split and parts and parts[0] in ("trained_s", "trained_m"):
+            ap[{"trained_s": "yolo26s", "trained_m": "yolo26m"}[parts[0]]] = float(parts[2])  # AP50 car
+    assert set(ap) == set(NAMES), ap
+    return ap
+
+
 rows = parse_sweep()
+CAR_AP = parse_car_ap()
 with open(os.path.join(HERE, "threshold_sweep.csv"), "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=list(rows[0]))
     w.writeheader()
@@ -63,75 +82,85 @@ def series(split, model, key):
 plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10, "axes.edgecolor": GRID,
                      "axes.labelcolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
                      "axes.titlecolor": INK, "axes.titleweight": "bold", "axes.titlesize": 11})
-fig, axes = plt.subplots(1, 3, figsize=(16, 5.6), facecolor=SURFACE, gridspec_kw={"wspace": 0.32})
+fig, axes = plt.subplots(1, 3, figsize=(16, 5.6), facecolor=SURFACE, gridspec_kw={"wspace": 0.3})
 for ax in axes:
     ax.set_facecolor(SURFACE)
     ax.grid(True, color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
-LS = {"test": "-", "valid": (0, (4, 2))}
+SPLIT = "test"
 
-# 1. Precision vs recall, one point per confidence threshold
+
+def mark_thresholds(ax, top):
+    ax.axvline(CHOSEN, color=INK, lw=1, ls=":")
+    ax.axvline(SERVED, color=MUTED, lw=1, ls=":")
+    ax.text(CHOSEN, top, " 0.30 chosen", fontsize=8.5, color=INK, va="top")
+    ax.text(SERVED, top, " 0.20 served\n (+ overlap 0.6)", fontsize=8.5, color=MUTED, va="top")
+
+
+# 1. Precision vs recall, one point per confidence threshold; PR-AUC from the full curve
 ax = axes[0]
-for f1 in (0.75, 0.80, 0.85):  # iso-F1 guides
-    r = [x / 200 for x in range(140, 200)]
-    p = [f1 * x / (2 * x - f1) if 2 * x > f1 else None for x in r]
-    ax.plot(r, p, color=GRID, lw=1, zorder=0)
-    ax.text(0.945, f1 * 0.945 / (2 * 0.945 - f1), f"F1 {f1:.2f}", fontsize=8, color=MUTED, ha="right", va="bottom")
+for f1 in (0.80, 0.85):  # iso-F1 guides
+    r = [x / 400 for x in range(320, 381)]
+    ax.plot(r, [f1 * x / (2 * x - f1) for x in r], color=GRID, lw=1, zorder=0)
+    ax.text(0.928, f1 * 0.928 / (2 * 0.928 - f1), f"F1 {f1:.2f}", fontsize=8, color=MUTED, ha="right", va="bottom")
 for model in NAMES:
-    for split in ("test", "valid"):
-        _, rec, pts = series(split, model, "recall")
-        prec = [p["precision"] for p in pts]
-        ax.plot(rec, prec, ls=LS[split], color=COLORS[model], lw=2, marker="o", ms=4,
-                label=f"{NAMES[model]}, {split}")
-        for p in pts:
-            if p["conf"] == CHOSEN:
-                ax.plot(p["recall"], p["precision"], "o", ms=10, color=COLORS[model], mec=INK, mew=1.5, zorder=5)
-    _, rec, pts = series("test", model, "recall")
-    for p in pts:  # label the test points with their threshold
-        ax.annotate(f"{p['conf']:.2f}", (p["recall"], p["precision"]), xytext=(6, -10 if model == "yolo26s" else 4),
-                    textcoords="offset points", fontsize=7.5, color=COLORS[model])
-ax.set_xlim(0.72, 0.95)
-ax.set_ylim(0.55, 0.95)
+    _, rec, pts = series(SPLIT, model, "recall")
+    ax.plot(rec, [p["precision"] for p in pts], color=COLORS[model], lw=2, marker="o", ms=5,
+            label=f"{NAMES[model]}: PR-AUC {CAR_AP[model]:.3f}")
+    for p in pts:
+        if p["conf"] == CHOSEN:
+            ax.plot(p["recall"], p["precision"], "o", ms=11, color=COLORS[model], mec=INK, mew=1.5, zorder=5)
+        ax.annotate(f"{p['conf']:.2f}", (p["recall"], p["precision"]),
+                    xytext=(7, -11) if model == "yolo26s" else (-26, 5),
+                    textcoords="offset points", fontsize=8, color=COLORS[model])
+ax.set_xlim(0.76, 0.93)
+ax.set_ylim(0.60, 0.95)
 ax.set_xlabel("Car recall")
 ax.set_ylabel("Car precision")
-ax.set_title("Precision vs recall (labels = confidence)", loc="left")
-ax.legend(frameon=False, fontsize=8.5, loc="lower left", labelcolor=INK)
+ax.set_title("Car precision vs recall (labels = confidence)", loc="left")
+ax.legend(frameon=False, fontsize=9, loc="lower left", labelcolor=INK,
+          title="PR-AUC = car AP50, full curve", title_fontsize=8.5)
 
 # 2. Count error vs confidence
 ax = axes[1]
 for model in NAMES:
-    for split in ("test", "valid"):
-        conf, mae, _ = series(split, model, "count_mae")
-        ax.plot(conf, mae, ls=LS[split], color=COLORS[model], lw=2, marker="o", ms=4,
-                label=f"{NAMES[model]}, {split}")
-ax.axvline(CHOSEN, color=INK, lw=1, ls=":")
-ax.axvline(SERVED, color=MUTED, lw=1, ls=":")
-ax.text(CHOSEN, 17.5, " 0.30 chosen", fontsize=8.5, color=INK)
-ax.text(SERVED, 17.5, " 0.20 served\n (+ overlap 0.6)", fontsize=8.5, color=MUTED, va="top")
-ax.set_ylim(0, 18.5)
+    conf, mae, _ = series(SPLIT, model, "count_mae")
+    ax.plot(conf, mae, color=COLORS[model], lw=2, marker="o", ms=5, label=NAMES[model])
+    i = mae.index(min(mae))
+    ax.annotate(f"{mae[i]:.2f}", (conf[i], mae[i]), xytext=(0, -15), textcoords="offset points",
+                ha="center", fontsize=9, color=COLORS[model], fontweight="bold")
+mark_thresholds(ax, 14.8)
+ax.set_ylim(0, 15)
 ax.set_xlabel("Confidence threshold")
-ax.set_ylabel("Car count MAE per frame")
-ax.set_title("Count error is lowest at 0.25-0.40", loc="left")
+ax.set_ylabel("Car count MAE (cars per frame)")
+ax.set_title("Count error per frame", loc="left")
+ax.legend(frameon=False, fontsize=9, loc="center right", labelcolor=INK)
 
-# 3. Count ratio vs confidence
+# 3. Predicted count as a % of ground truth
 ax = axes[2]
-ax.axhline(1.0, color=INK, lw=1)
-ax.text(0.505, 1.0, "  predicted = labelled", fontsize=8.5, color=INK, va="bottom", ha="right")
+ax.axhline(100, color=INK, lw=1)
+ax.text(0.085, 99, "100% = exact total", fontsize=8.5, color=INK, va="top", ha="left")
 for model in NAMES:
-    for split in ("test", "valid"):
-        conf, ratio, _ = series(split, model, "count_ratio")
-        ax.plot(conf, ratio, ls=LS[split], color=COLORS[model], lw=2, marker="o", ms=4)
-ax.axvline(CHOSEN, color=INK, lw=1, ls=":")
-ax.axvline(SERVED, color=MUTED, lw=1, ls=":")
+    conf, ratio, _ = series(SPLIT, model, "count_ratio")
+    pct = [x * 100 for x in ratio]
+    ax.plot(conf, pct, color=COLORS[model], lw=2, marker="o", ms=5, label=NAMES[model])
+    for c, v in zip(conf, pct):
+        if c in (SERVED, CHOSEN):
+            ax.annotate(f"{v:.0f}%", (c, v), xytext=(8, 2 if model == "yolo26s" else -12),
+                        textcoords="offset points", fontsize=9, color=COLORS[model], fontweight="bold")
+mark_thresholds(ax, 152)
+ax.set_ylim(80, 153)
+ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(decimals=0))
 ax.set_xlabel("Confidence threshold")
-ax.set_ylabel("Predicted cars ÷ labelled cars")
-ax.set_title("Over-count below ~0.35", loc="left")
+ax.set_ylabel("Predicted cars as % of labelled cars")
+ax.set_title("Total count as % of ground truth (451 cars)", loc="left")
 
-fig.suptitle("Choosing the confidence threshold: cars, Roboflow dataset v6, 15 images per split", x=0.08,
-             ha="left", fontsize=14, fontweight="bold", color=INK, y=1.04)
-fig.text(0.08, 0.955, "Solid = test split, dashed = valid split. Ringed points = conf 0.30. IoU 0.5, no overlap "
-         "suppression. Source: s-vs-m cell of vehicle_detection_comparison.ipynb.", fontsize=9.5, color=MUTED)
+fig.suptitle("Choosing the confidence threshold: cars on the test split (15 frames, 451 labelled cars)",
+             x=0.08, ha="left", fontsize=14, fontweight="bold", color=INK, y=1.04)
+fig.text(0.08, 0.955, "Points: the notebook's sweep at 7 thresholds (IoU 0.5, no overlap suppression). PR-AUC: area "
+         "under the full car precision-recall curve from the notebook's comparison cell. Ringed = conf 0.30.",
+         fontsize=9.5, color=MUTED)
 fig.savefig(os.path.join(HERE, "threshold_sweep.png"), dpi=150, bbox_inches="tight", facecolor=SURFACE)
-print(f"wrote threshold_sweep.csv ({len(rows)} rows) and threshold_sweep.png")
+print(f"wrote threshold_sweep.csv ({len(rows)} rows) and threshold_sweep.png; car PR-AUC {CAR_AP}")

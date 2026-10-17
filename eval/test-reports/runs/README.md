@@ -68,12 +68,14 @@ no "object loss" panel. Rebuild both with `python eval/test-reports/runs/plot_tr
 
 ![Training curves](training_curves.png)
 
-Car recall, precision and count error at confidence 0.10-0.50 for both models, valid and test
-splits, parsed from the notebook output: [`threshold_sweep.csv`](threshold_sweep.csv) and
-[`threshold_sweep.png`](threshold_sweep.png) (rebuild with
-`python eval/test-reports/runs/plot_threshold_sweep.py`). It is a 7-point trade-off curve; the
-per-box predictions behind a full precision-recall curve are not in the repo (Ultralytics' own full
-curves are `BoxPR_curve.png` in each `eval_test/` folder). Count error is lowest at 0.30 (YOLO-S)
+Car recall, precision and count error at confidence 0.10-0.50 for both models, parsed from the
+notebook output: [`threshold_sweep.csv`](threshold_sweep.csv) (valid and test splits) and
+[`threshold_sweep.png`](threshold_sweep.png) (test split: precision vs recall with each model's car
+PR-AUC, count MAE, and the total count as a % of the 451 labelled cars). Rebuild with
+`python eval/test-reports/runs/plot_threshold_sweep.py`. The points are a 7-threshold sweep; the
+PR-AUC is car AP50 from the notebook's full-comparison cell (0.899 YOLO-S, 0.894 YOLO-M). The
+per-box predictions behind a full precision-recall curve are not in the repo (Ultralytics' own
+full curves are `BoxPR_curve.png` in each `eval_test/` folder). Count error is lowest at 0.30 (YOLO-S)
 and 0.25 (YOLO-M) on test, and at 0.40 for both on valid. Picking the threshold on test is
 optimistic; the served setting is conf 0.20 with overlap 0.6.
 
