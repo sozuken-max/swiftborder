@@ -126,25 +126,23 @@ YOLO-S (freeze) at the page's setting (conf 0.30, overlap off) matches the page'
 
 ### Per-frame cars at the served settings
 
-| # | Captured (SGT) | GT | `local` 0.2 / 0.6 | `local` 0.30 / off | `local` 0.30 / 0.6 | Roboflow v6 0.2 | `local` 0.2 / 0.6 by direction (SG-MY / MY-SG) |
-| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 1 | 01 Jul 2025 03:15 | 3 | 3 (0) | 3 (0) | 3 (0) | 4 (+1) | 4 / 1 |
-| 2 | 01 Jul 2025 10:46 | 75 | 82 (+7) | 81 (+6) | 75 (0) | 71 (-4) | 80 / 7 |
-| 3 | 01 Jul 2025 17:16 | 33 | 37 (+4) | 35 (+2) | 34 (+1) | 37 (+4) | 17 / 25 |
-| 4 | 07 Jul 2025 00:45 | 9 | 11 (+2) | 11 (+2) | 11 (+2) | 11 (+2) | 9 / 6 |
-| 5 | 11 Jul 2025 04:55 | 8 | 8 (0) | 8 (0) | 7 (-1) | 9 (+1) | 4 / 8 |
-| 6 | 14 Jul 2025 00:15 | 66 | 64 (-2) | 69 (+3) | 65 (-1) | 56 (-10) | 21 / 44 |
-| 7 | 14 Jul 2025 10:55 | 56 | 56 (0) | 56 (0) | 56 (0) | 57 (+1) | 38 / 34 |
-| 8 | 15 Jul 2025 01:46 | 0 | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 1 / 0 |
-| 9 | 15 Jul 2025 14:45 | 10 | 11 (+1) | 10 (0) | 10 (0) | 9 (-1) | 9 / 7 |
-| 10 | 18 Jul 2025 18:26 | 39 | 40 (+1) | 41 (+2) | 39 (0) | 32 (-7) | 38 / 7 |
-| 11 | 19 Jul 2025 09:35 | 87 | 91 (+4) | 89 (+2) | 82 (-5) | 58 (-29) | 90 / 5 |
-| 12 | 20 Jul 2025 02:16 | 1 | 1 (0) | 1 (0) | 1 (0) | 3 (+2) | 2 / 1 |
-| 13 | 22 Jul 2025 07:46 | 24 | 27 (+3) | 27 (+3) | 25 (+1) | 24 (0) | 23 / 28 |
-| 14 | 22 Jul 2025 19:57 | 15 | 13 (-2) | 11 (-4) | 11 (-4) | 14 (-1) | 22 / 7 |
-| 15 | 01 Sep 2025 19:06 | 25 | 27 (+2) | 28 (+3) | 27 (+2) | 28 (+3) | 25 / 6 |
-
-The direction split is the model's own attribution with the 2701 dividing line. There are no direction labels, so it is not scored.
+| # | Captured (SGT) | GT | `local` 0.2 / 0.6 | `local` 0.30 / off | `local` 0.30 / 0.6 | Roboflow v6 0.2 |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 01 Jul 2025 03:15 | 3 | 3 (0) | 3 (0) | 3 (0) | 4 (+1) |
+| 2 | 01 Jul 2025 10:46 | 75 | 82 (+7) | 81 (+6) | 75 (0) | 71 (-4) |
+| 3 | 01 Jul 2025 17:16 | 33 | 37 (+4) | 35 (+2) | 34 (+1) | 37 (+4) |
+| 4 | 07 Jul 2025 00:45 | 9 | 11 (+2) | 11 (+2) | 11 (+2) | 11 (+2) |
+| 5 | 11 Jul 2025 04:55 | 8 | 8 (0) | 8 (0) | 7 (-1) | 9 (+1) |
+| 6 | 14 Jul 2025 00:15 | 66 | 64 (-2) | 69 (+3) | 65 (-1) | 56 (-10) |
+| 7 | 14 Jul 2025 10:55 | 56 | 56 (0) | 56 (0) | 56 (0) | 57 (+1) |
+| 8 | 15 Jul 2025 01:46 | 0 | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| 9 | 15 Jul 2025 14:45 | 10 | 11 (+1) | 10 (0) | 10 (0) | 9 (-1) |
+| 10 | 18 Jul 2025 18:26 | 39 | 40 (+1) | 41 (+2) | 39 (0) | 32 (-7) |
+| 11 | 19 Jul 2025 09:35 | 87 | 91 (+4) | 89 (+2) | 82 (-5) | 58 (-29) |
+| 12 | 20 Jul 2025 02:16 | 1 | 1 (0) | 1 (0) | 1 (0) | 3 (+2) |
+| 13 | 22 Jul 2025 07:46 | 24 | 27 (+3) | 27 (+3) | 25 (+1) | 24 (0) |
+| 14 | 22 Jul 2025 19:57 | 15 | 13 (-2) | 11 (-4) | 11 (-4) | 14 (-1) |
+| 15 | 01 Sep 2025 19:06 | 25 | 27 (+2) | 28 (+3) | 27 (+2) | 28 (+3) |
 
 ## What this does not show
 
@@ -153,147 +151,36 @@ The direction split is the model's own attribution with the 2701 dividing line. 
 - **Small sample.** 15 frames from July and September 2025, one camera. One frame (19 Jul 09:35) dominates the baselines' error.
 - **Counts are not crossing time.** A good count is an input to Layer B, not a forecast result.
 
-## Appendix A: every frame, every detector
+## Appendix A: vehicle counts, every frame and detector
 
-One row per frame and detector setting: the five detectors from the comparison page, then the four rescores of the 1920 x 1080 originals at served settings. Error is predicted minus ground truth. Direction is the model's own split at the 2701 dividing line (SG-MY / MY-SG); it is only recorded for the `local` rescores and is not scored.
+Total vehicles only. One row per frame; each detector setting has three sub-columns: ground truth, the detector's count, and its error (predicted minus ground truth). The first five settings are the comparison page's detectors; the last four are rescores of the 1920 x 1080 originals at served settings. Conf and overlap are in the header; the page did not record its overlap setting.
 
-| # | Captured (SGT) | Detector | Conf | Overlap | GT cars | Cars | Car error | GT vehicles | Vehicles | Vehicle error | SG-MY / MY-SG |
-| ---: | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| [1](#frame-1) | 01 Jul 2025 03:15 | COCO YOLO-S @640 | 0.10 | not recorded | 3 | 5 | +2 | 5 | 6 | +1 | n/a |
-| [1](#frame-1) | 01 Jul 2025 03:15 | COCO YOLO-S @1280 | 0.10 | not recorded | 3 | 3 | 0 | 5 | 5 | 0 | n/a |
-| [1](#frame-1) | 01 Jul 2025 03:15 | Roboflow v6 | 0.30 | not recorded | 3 | 4 | +1 | 5 | 4 | -1 | n/a |
-| [1](#frame-1) | 01 Jul 2025 03:15 | YOLO-S trained (freeze) | 0.30 | not recorded | 3 | 3 | 0 | 5 | 5 | 0 | n/a |
-| [1](#frame-1) | 01 Jul 2025 03:15 | YOLO-M trained (freeze) | 0.25 | not recorded | 3 | 3 | 0 | 5 | 5 | 0 | n/a |
-| [1](#frame-1) | 01 Jul 2025 03:15 | `model=local` (served) | 0.20 | 0.6 | 3 | 3 | 0 | 5 | 5 | 0 | 4 / 1 |
-| [1](#frame-1) | 01 Jul 2025 03:15 | `local`, page's YOLO-S point | 0.30 | off | 3 | 3 | 0 | 5 | 5 | 0 | 4 / 1 |
-| [1](#frame-1) | 01 Jul 2025 03:15 | `local` (not served) | 0.30 | 0.6 | 3 | 3 | 0 | 5 | 5 | 0 | 4 / 1 |
-| [1](#frame-1) | 01 Jul 2025 03:15 | Roboflow v6 (served) | 0.20 | off | 3 | 4 | +1 | 5 | 4 | -1 | n/a |
-| [2](#frame-2) | 01 Jul 2025 10:46 | COCO YOLO-S @640 | 0.10 | not recorded | 75 | 32 | -43 | 80 | 39 | -41 | n/a |
-| [2](#frame-2) | 01 Jul 2025 10:46 | COCO YOLO-S @1280 | 0.10 | not recorded | 75 | 45 | -30 | 80 | 56 | -24 | n/a |
-| [2](#frame-2) | 01 Jul 2025 10:46 | Roboflow v6 | 0.30 | not recorded | 75 | 73 | -2 | 80 | 75 | -5 | n/a |
-| [2](#frame-2) | 01 Jul 2025 10:46 | YOLO-S trained (freeze) | 0.30 | not recorded | 75 | 81 | +6 | 80 | 86 | +6 | n/a |
-| [2](#frame-2) | 01 Jul 2025 10:46 | YOLO-M trained (freeze) | 0.25 | not recorded | 75 | 84 | +9 | 80 | 90 | +10 | n/a |
-| [2](#frame-2) | 01 Jul 2025 10:46 | `model=local` (served) | 0.20 | 0.6 | 75 | 82 | +7 | 80 | 87 | +7 | 80 / 7 |
-| [2](#frame-2) | 01 Jul 2025 10:46 | `local`, page's YOLO-S point | 0.30 | off | 75 | 81 | +6 | 80 | 86 | +6 | 79 / 7 |
-| [2](#frame-2) | 01 Jul 2025 10:46 | `local` (not served) | 0.30 | 0.6 | 75 | 75 | 0 | 80 | 80 | 0 | 73 / 7 |
-| [2](#frame-2) | 01 Jul 2025 10:46 | Roboflow v6 (served) | 0.20 | off | 75 | 71 | -4 | 80 | 73 | -7 | n/a |
-| [3](#frame-3) | 01 Jul 2025 17:16 | COCO YOLO-S @640 | 0.10 | not recorded | 33 | 44 | +11 | 36 | 47 | +11 | n/a |
-| [3](#frame-3) | 01 Jul 2025 17:16 | COCO YOLO-S @1280 | 0.10 | not recorded | 33 | 37 | +4 | 36 | 42 | +6 | n/a |
-| [3](#frame-3) | 01 Jul 2025 17:16 | Roboflow v6 | 0.30 | not recorded | 33 | 37 | +4 | 36 | 38 | +2 | n/a |
-| [3](#frame-3) | 01 Jul 2025 17:16 | YOLO-S trained (freeze) | 0.30 | not recorded | 33 | 35 | +2 | 36 | 39 | +3 | n/a |
-| [3](#frame-3) | 01 Jul 2025 17:16 | YOLO-M trained (freeze) | 0.25 | not recorded | 33 | 36 | +3 | 36 | 42 | +6 | n/a |
-| [3](#frame-3) | 01 Jul 2025 17:16 | `model=local` (served) | 0.20 | 0.6 | 33 | 37 | +4 | 36 | 42 | +6 | 17 / 25 |
-| [3](#frame-3) | 01 Jul 2025 17:16 | `local`, page's YOLO-S point | 0.30 | off | 33 | 35 | +2 | 36 | 39 | +3 | 15 / 24 |
-| [3](#frame-3) | 01 Jul 2025 17:16 | `local` (not served) | 0.30 | 0.6 | 33 | 34 | +1 | 36 | 38 | +2 | 15 / 23 |
-| [3](#frame-3) | 01 Jul 2025 17:16 | Roboflow v6 (served) | 0.20 | off | 33 | 37 | +4 | 36 | 37 | +1 | n/a |
-| [4](#frame-4) | 07 Jul 2025 00:45 | COCO YOLO-S @640 | 0.10 | not recorded | 9 | 10 | +1 | 14 | 11 | -3 | n/a |
-| [4](#frame-4) | 07 Jul 2025 00:45 | COCO YOLO-S @1280 | 0.10 | not recorded | 9 | 12 | +3 | 14 | 16 | +2 | n/a |
-| [4](#frame-4) | 07 Jul 2025 00:45 | Roboflow v6 | 0.30 | not recorded | 9 | 11 | +2 | 14 | 13 | -1 | n/a |
-| [4](#frame-4) | 07 Jul 2025 00:45 | YOLO-S trained (freeze) | 0.30 | not recorded | 9 | 11 | +2 | 14 | 16 | +2 | n/a |
-| [4](#frame-4) | 07 Jul 2025 00:45 | YOLO-M trained (freeze) | 0.25 | not recorded | 9 | 13 | +4 | 14 | 17 | +3 | n/a |
-| [4](#frame-4) | 07 Jul 2025 00:45 | `model=local` (served) | 0.20 | 0.6 | 9 | 11 | +2 | 14 | 15 | +1 | 9 / 6 |
-| [4](#frame-4) | 07 Jul 2025 00:45 | `local`, page's YOLO-S point | 0.30 | off | 9 | 11 | +2 | 14 | 16 | +2 | 9 / 7 |
-| [4](#frame-4) | 07 Jul 2025 00:45 | `local` (not served) | 0.30 | 0.6 | 9 | 11 | +2 | 14 | 15 | +1 | 9 / 6 |
-| [4](#frame-4) | 07 Jul 2025 00:45 | Roboflow v6 (served) | 0.20 | off | 9 | 11 | +2 | 14 | 13 | -1 | n/a |
-| [5](#frame-5) | 11 Jul 2025 04:55 | COCO YOLO-S @640 | 0.10 | not recorded | 8 | 18 | +10 | 12 | 19 | +7 | n/a |
-| [5](#frame-5) | 11 Jul 2025 04:55 | COCO YOLO-S @1280 | 0.10 | not recorded | 8 | 9 | +1 | 12 | 11 | -1 | n/a |
-| [5](#frame-5) | 11 Jul 2025 04:55 | Roboflow v6 | 0.30 | not recorded | 8 | 9 | +1 | 12 | 12 | 0 | n/a |
-| [5](#frame-5) | 11 Jul 2025 04:55 | YOLO-S trained (freeze) | 0.30 | not recorded | 8 | 8 | 0 | 12 | 12 | 0 | n/a |
-| [5](#frame-5) | 11 Jul 2025 04:55 | YOLO-M trained (freeze) | 0.25 | not recorded | 8 | 8 | 0 | 12 | 12 | 0 | n/a |
-| [5](#frame-5) | 11 Jul 2025 04:55 | `model=local` (served) | 0.20 | 0.6 | 8 | 8 | 0 | 12 | 12 | 0 | 4 / 8 |
-| [5](#frame-5) | 11 Jul 2025 04:55 | `local`, page's YOLO-S point | 0.30 | off | 8 | 8 | 0 | 12 | 12 | 0 | 5 / 7 |
-| [5](#frame-5) | 11 Jul 2025 04:55 | `local` (not served) | 0.30 | 0.6 | 8 | 7 | -1 | 12 | 11 | -1 | 4 / 7 |
-| [5](#frame-5) | 11 Jul 2025 04:55 | Roboflow v6 (served) | 0.20 | off | 8 | 9 | +1 | 12 | 10 | -2 | n/a |
-| [6](#frame-6) | 14 Jul 2025 00:15 | COCO YOLO-S @640 | 0.10 | not recorded | 66 | 36 | -30 | 66 | 38 | -28 | n/a |
-| [6](#frame-6) | 14 Jul 2025 00:15 | COCO YOLO-S @1280 | 0.10 | not recorded | 66 | 42 | -24 | 66 | 46 | -20 | n/a |
-| [6](#frame-6) | 14 Jul 2025 00:15 | Roboflow v6 | 0.30 | not recorded | 66 | 57 | -9 | 66 | 58 | -8 | n/a |
-| [6](#frame-6) | 14 Jul 2025 00:15 | YOLO-S trained (freeze) | 0.30 | not recorded | 66 | 69 | +3 | 66 | 70 | +4 | n/a |
-| [6](#frame-6) | 14 Jul 2025 00:15 | YOLO-M trained (freeze) | 0.25 | not recorded | 66 | 68 | +2 | 66 | 69 | +3 | n/a |
-| [6](#frame-6) | 14 Jul 2025 00:15 | `model=local` (served) | 0.20 | 0.6 | 66 | 64 | -2 | 66 | 65 | -1 | 21 / 44 |
-| [6](#frame-6) | 14 Jul 2025 00:15 | `local`, page's YOLO-S point | 0.30 | off | 66 | 69 | +3 | 66 | 70 | +4 | 23 / 47 |
-| [6](#frame-6) | 14 Jul 2025 00:15 | `local` (not served) | 0.30 | 0.6 | 66 | 65 | -1 | 66 | 66 | 0 | 21 / 45 |
-| [6](#frame-6) | 14 Jul 2025 00:15 | Roboflow v6 (served) | 0.20 | off | 66 | 56 | -10 | 66 | 56 | -10 | n/a |
-| [7](#frame-7) | 14 Jul 2025 10:55 | COCO YOLO-S @640 | 0.10 | not recorded | 56 | 23 | -33 | 72 | 40 | -32 | n/a |
-| [7](#frame-7) | 14 Jul 2025 10:55 | COCO YOLO-S @1280 | 0.10 | not recorded | 56 | 37 | -19 | 72 | 66 | -6 | n/a |
-| [7](#frame-7) | 14 Jul 2025 10:55 | Roboflow v6 | 0.30 | not recorded | 56 | 57 | +1 | 72 | 64 | -8 | n/a |
-| [7](#frame-7) | 14 Jul 2025 10:55 | YOLO-S trained (freeze) | 0.30 | not recorded | 56 | 56 | 0 | 72 | 73 | +1 | n/a |
-| [7](#frame-7) | 14 Jul 2025 10:55 | YOLO-M trained (freeze) | 0.25 | not recorded | 56 | 56 | 0 | 72 | 72 | 0 | n/a |
-| [7](#frame-7) | 14 Jul 2025 10:55 | `model=local` (served) | 0.20 | 0.6 | 56 | 56 | 0 | 72 | 72 | 0 | 38 / 34 |
-| [7](#frame-7) | 14 Jul 2025 10:55 | `local`, page's YOLO-S point | 0.30 | off | 56 | 56 | 0 | 72 | 73 | +1 | 38 / 35 |
-| [7](#frame-7) | 14 Jul 2025 10:55 | `local` (not served) | 0.30 | 0.6 | 56 | 56 | 0 | 72 | 71 | -1 | 37 / 34 |
-| [7](#frame-7) | 14 Jul 2025 10:55 | Roboflow v6 (served) | 0.20 | off | 56 | 57 | +1 | 72 | 64 | -8 | n/a |
-| [8](#frame-8) | 15 Jul 2025 01:46 | COCO YOLO-S @640 | 0.10 | not recorded | 0 | 2 | +2 | 1 | 2 | +1 | n/a |
-| [8](#frame-8) | 15 Jul 2025 01:46 | COCO YOLO-S @1280 | 0.10 | not recorded | 0 | 0 | 0 | 1 | 0 | -1 | n/a |
-| [8](#frame-8) | 15 Jul 2025 01:46 | Roboflow v6 | 0.30 | not recorded | 0 | 0 | 0 | 1 | 1 | 0 | n/a |
-| [8](#frame-8) | 15 Jul 2025 01:46 | YOLO-S trained (freeze) | 0.30 | not recorded | 0 | 0 | 0 | 1 | 1 | 0 | n/a |
-| [8](#frame-8) | 15 Jul 2025 01:46 | YOLO-M trained (freeze) | 0.25 | not recorded | 0 | 0 | 0 | 1 | 2 | +1 | n/a |
-| [8](#frame-8) | 15 Jul 2025 01:46 | `model=local` (served) | 0.20 | 0.6 | 0 | 0 | 0 | 1 | 1 | 0 | 1 / 0 |
-| [8](#frame-8) | 15 Jul 2025 01:46 | `local`, page's YOLO-S point | 0.30 | off | 0 | 0 | 0 | 1 | 1 | 0 | 1 / 0 |
-| [8](#frame-8) | 15 Jul 2025 01:46 | `local` (not served) | 0.30 | 0.6 | 0 | 0 | 0 | 1 | 1 | 0 | 1 / 0 |
-| [8](#frame-8) | 15 Jul 2025 01:46 | Roboflow v6 (served) | 0.20 | off | 0 | 0 | 0 | 1 | 1 | 0 | n/a |
-| [9](#frame-9) | 15 Jul 2025 14:45 | COCO YOLO-S @640 | 0.10 | not recorded | 10 | 8 | -2 | 15 | 13 | -2 | n/a |
-| [9](#frame-9) | 15 Jul 2025 14:45 | COCO YOLO-S @1280 | 0.10 | not recorded | 10 | 5 | -5 | 15 | 12 | -3 | n/a |
-| [9](#frame-9) | 15 Jul 2025 14:45 | Roboflow v6 | 0.30 | not recorded | 10 | 10 | 0 | 15 | 15 | 0 | n/a |
-| [9](#frame-9) | 15 Jul 2025 14:45 | YOLO-S trained (freeze) | 0.30 | not recorded | 10 | 10 | 0 | 15 | 15 | 0 | n/a |
-| [9](#frame-9) | 15 Jul 2025 14:45 | YOLO-M trained (freeze) | 0.25 | not recorded | 10 | 10 | 0 | 15 | 15 | 0 | n/a |
-| [9](#frame-9) | 15 Jul 2025 14:45 | `model=local` (served) | 0.20 | 0.6 | 10 | 11 | +1 | 15 | 16 | +1 | 9 / 7 |
-| [9](#frame-9) | 15 Jul 2025 14:45 | `local`, page's YOLO-S point | 0.30 | off | 10 | 10 | 0 | 15 | 15 | 0 | 9 / 6 |
-| [9](#frame-9) | 15 Jul 2025 14:45 | `local` (not served) | 0.30 | 0.6 | 10 | 10 | 0 | 15 | 15 | 0 | 9 / 6 |
-| [9](#frame-9) | 15 Jul 2025 14:45 | Roboflow v6 (served) | 0.20 | off | 10 | 9 | -1 | 15 | 14 | -1 | n/a |
-| [10](#frame-10) | 18 Jul 2025 18:26 | COCO YOLO-S @640 | 0.10 | not recorded | 39 | 11 | -28 | 45 | 13 | -32 | n/a |
-| [10](#frame-10) | 18 Jul 2025 18:26 | COCO YOLO-S @1280 | 0.10 | not recorded | 39 | 21 | -18 | 45 | 26 | -19 | n/a |
-| [10](#frame-10) | 18 Jul 2025 18:26 | Roboflow v6 | 0.30 | not recorded | 39 | 33 | -6 | 45 | 34 | -11 | n/a |
-| [10](#frame-10) | 18 Jul 2025 18:26 | YOLO-S trained (freeze) | 0.30 | not recorded | 39 | 41 | +2 | 45 | 46 | +1 | n/a |
-| [10](#frame-10) | 18 Jul 2025 18:26 | YOLO-M trained (freeze) | 0.25 | not recorded | 39 | 39 | 0 | 45 | 43 | -2 | n/a |
-| [10](#frame-10) | 18 Jul 2025 18:26 | `model=local` (served) | 0.20 | 0.6 | 39 | 40 | +1 | 45 | 45 | 0 | 38 / 7 |
-| [10](#frame-10) | 18 Jul 2025 18:26 | `local`, page's YOLO-S point | 0.30 | off | 39 | 41 | +2 | 45 | 46 | +1 | 38 / 8 |
-| [10](#frame-10) | 18 Jul 2025 18:26 | `local` (not served) | 0.30 | 0.6 | 39 | 39 | 0 | 45 | 43 | -2 | 36 / 7 |
-| [10](#frame-10) | 18 Jul 2025 18:26 | Roboflow v6 (served) | 0.20 | off | 39 | 32 | -7 | 45 | 33 | -12 | n/a |
-| [11](#frame-11) | 19 Jul 2025 09:35 | COCO YOLO-S @640 | 0.10 | not recorded | 87 | 17 | -70 | 91 | 20 | -71 | n/a |
-| [11](#frame-11) | 19 Jul 2025 09:35 | COCO YOLO-S @1280 | 0.10 | not recorded | 87 | 31 | -56 | 91 | 47 | -44 | n/a |
-| [11](#frame-11) | 19 Jul 2025 09:35 | Roboflow v6 | 0.30 | not recorded | 87 | 68 | -19 | 91 | 72 | -19 | n/a |
-| [11](#frame-11) | 19 Jul 2025 09:35 | YOLO-S trained (freeze) | 0.30 | not recorded | 87 | 89 | +2 | 91 | 93 | +2 | n/a |
-| [11](#frame-11) | 19 Jul 2025 09:35 | YOLO-M trained (freeze) | 0.25 | not recorded | 87 | 86 | -1 | 91 | 90 | -1 | n/a |
-| [11](#frame-11) | 19 Jul 2025 09:35 | `model=local` (served) | 0.20 | 0.6 | 87 | 91 | +4 | 91 | 95 | +4 | 90 / 5 |
-| [11](#frame-11) | 19 Jul 2025 09:35 | `local`, page's YOLO-S point | 0.30 | off | 87 | 89 | +2 | 91 | 93 | +2 | 88 / 5 |
-| [11](#frame-11) | 19 Jul 2025 09:35 | `local` (not served) | 0.30 | 0.6 | 87 | 82 | -5 | 91 | 86 | -5 | 81 / 5 |
-| [11](#frame-11) | 19 Jul 2025 09:35 | Roboflow v6 (served) | 0.20 | off | 87 | 58 | -29 | 91 | 61 | -30 | n/a |
-| [12](#frame-12) | 20 Jul 2025 02:16 | COCO YOLO-S @640 | 0.10 | not recorded | 1 | 1 | 0 | 3 | 3 | 0 | n/a |
-| [12](#frame-12) | 20 Jul 2025 02:16 | COCO YOLO-S @1280 | 0.10 | not recorded | 1 | 2 | +1 | 3 | 4 | +1 | n/a |
-| [12](#frame-12) | 20 Jul 2025 02:16 | Roboflow v6 | 0.30 | not recorded | 1 | 3 | +2 | 3 | 3 | 0 | n/a |
-| [12](#frame-12) | 20 Jul 2025 02:16 | YOLO-S trained (freeze) | 0.30 | not recorded | 1 | 1 | 0 | 3 | 3 | 0 | n/a |
-| [12](#frame-12) | 20 Jul 2025 02:16 | YOLO-M trained (freeze) | 0.25 | not recorded | 1 | 0 | -1 | 3 | 2 | -1 | n/a |
-| [12](#frame-12) | 20 Jul 2025 02:16 | `model=local` (served) | 0.20 | 0.6 | 1 | 1 | 0 | 3 | 3 | 0 | 2 / 1 |
-| [12](#frame-12) | 20 Jul 2025 02:16 | `local`, page's YOLO-S point | 0.30 | off | 1 | 1 | 0 | 3 | 3 | 0 | 2 / 1 |
-| [12](#frame-12) | 20 Jul 2025 02:16 | `local` (not served) | 0.30 | 0.6 | 1 | 1 | 0 | 3 | 3 | 0 | 2 / 1 |
-| [12](#frame-12) | 20 Jul 2025 02:16 | Roboflow v6 (served) | 0.20 | off | 1 | 3 | +2 | 3 | 3 | 0 | n/a |
-| [13](#frame-13) | 22 Jul 2025 07:46 | COCO YOLO-S @640 | 0.10 | not recorded | 24 | 6 | -18 | 51 | 12 | -39 | n/a |
-| [13](#frame-13) | 22 Jul 2025 07:46 | COCO YOLO-S @1280 | 0.10 | not recorded | 24 | 17 | -7 | 51 | 42 | -9 | n/a |
-| [13](#frame-13) | 22 Jul 2025 07:46 | Roboflow v6 | 0.30 | not recorded | 24 | 26 | +2 | 51 | 38 | -13 | n/a |
-| [13](#frame-13) | 22 Jul 2025 07:46 | YOLO-S trained (freeze) | 0.30 | not recorded | 24 | 27 | +3 | 51 | 51 | 0 | n/a |
-| [13](#frame-13) | 22 Jul 2025 07:46 | YOLO-M trained (freeze) | 0.25 | not recorded | 24 | 28 | +4 | 51 | 52 | +1 | n/a |
-| [13](#frame-13) | 22 Jul 2025 07:46 | `model=local` (served) | 0.20 | 0.6 | 24 | 27 | +3 | 51 | 51 | 0 | 23 / 28 |
-| [13](#frame-13) | 22 Jul 2025 07:46 | `local`, page's YOLO-S point | 0.30 | off | 24 | 27 | +3 | 51 | 51 | 0 | 23 / 28 |
-| [13](#frame-13) | 22 Jul 2025 07:46 | `local` (not served) | 0.30 | 0.6 | 24 | 25 | +1 | 51 | 47 | -4 | 21 / 26 |
-| [13](#frame-13) | 22 Jul 2025 07:46 | Roboflow v6 (served) | 0.20 | off | 24 | 24 | 0 | 51 | 35 | -16 | n/a |
-| [14](#frame-14) | 22 Jul 2025 19:57 | COCO YOLO-S @640 | 0.10 | not recorded | 15 | 10 | -5 | 26 | 11 | -15 | n/a |
-| [14](#frame-14) | 22 Jul 2025 19:57 | COCO YOLO-S @1280 | 0.10 | not recorded | 15 | 13 | -2 | 26 | 23 | -3 | n/a |
-| [14](#frame-14) | 22 Jul 2025 19:57 | Roboflow v6 | 0.30 | not recorded | 15 | 14 | -1 | 26 | 21 | -5 | n/a |
-| [14](#frame-14) | 22 Jul 2025 19:57 | YOLO-S trained (freeze) | 0.30 | not recorded | 15 | 12 | -3 | 26 | 25 | -1 | n/a |
-| [14](#frame-14) | 22 Jul 2025 19:57 | YOLO-M trained (freeze) | 0.25 | not recorded | 15 | 16 | +1 | 26 | 27 | +1 | n/a |
-| [14](#frame-14) | 22 Jul 2025 19:57 | `model=local` (served) | 0.20 | 0.6 | 15 | 13 | -2 | 26 | 29 | +3 | 22 / 7 |
-| [14](#frame-14) | 22 Jul 2025 19:57 | `local`, page's YOLO-S point | 0.30 | off | 15 | 11 | -4 | 26 | 24 | -2 | 18 / 6 |
-| [14](#frame-14) | 22 Jul 2025 19:57 | `local` (not served) | 0.30 | 0.6 | 15 | 11 | -4 | 26 | 24 | -2 | 18 / 6 |
-| [14](#frame-14) | 22 Jul 2025 19:57 | Roboflow v6 (served) | 0.20 | off | 15 | 14 | -1 | 26 | 21 | -5 | n/a |
-| [15](#frame-15) | 01 Sep 2025 19:06 | COCO YOLO-S @640 | 0.10 | not recorded | 25 | 31 | +6 | 29 | 38 | +9 | n/a |
-| [15](#frame-15) | 01 Sep 2025 19:06 | COCO YOLO-S @1280 | 0.10 | not recorded | 25 | 29 | +4 | 29 | 34 | +5 | n/a |
-| [15](#frame-15) | 01 Sep 2025 19:06 | Roboflow v6 | 0.30 | not recorded | 25 | 28 | +3 | 29 | 29 | 0 | n/a |
-| [15](#frame-15) | 01 Sep 2025 19:06 | YOLO-S trained (freeze) | 0.30 | not recorded | 25 | 28 | +3 | 29 | 31 | +2 | n/a |
-| [15](#frame-15) | 01 Sep 2025 19:06 | YOLO-M trained (freeze) | 0.25 | not recorded | 25 | 28 | +3 | 29 | 32 | +3 | n/a |
-| [15](#frame-15) | 01 Sep 2025 19:06 | `model=local` (served) | 0.20 | 0.6 | 25 | 27 | +2 | 29 | 31 | +2 | 25 / 6 |
-| [15](#frame-15) | 01 Sep 2025 19:06 | `local`, page's YOLO-S point | 0.30 | off | 25 | 28 | +3 | 29 | 31 | +2 | 25 / 6 |
-| [15](#frame-15) | 01 Sep 2025 19:06 | `local` (not served) | 0.30 | 0.6 | 25 | 27 | +2 | 29 | 30 | +1 | 24 / 6 |
-| [15](#frame-15) | 01 Sep 2025 19:06 | Roboflow v6 (served) | 0.20 | off | 25 | 28 | +3 | 29 | 29 | 0 | n/a |
+<table>
+<thead>
+<tr><th rowspan="2">#</th><th rowspan="2">Captured (SGT)</th><th colspan="3">COCO YOLO-S @640<br>conf 0.10</th><th colspan="3">COCO YOLO-S @1280<br>conf 0.10</th><th colspan="3">Roboflow v6<br>conf 0.30</th><th colspan="3">YOLO-S trained (freeze)<br>conf 0.30</th><th colspan="3">YOLO-M trained (freeze)<br>conf 0.25</th><th colspan="3"><code>model=local</code> (served)<br>conf 0.20, overlap 0.6</th><th colspan="3"><code>local</code><br>conf 0.30, overlap off</th><th colspan="3"><code>local</code> (not served)<br>conf 0.30, overlap 0.6</th><th colspan="3">Roboflow v6 (served)<br>conf 0.20, overlap off</th></tr>
+<tr><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th><th>GT</th><th>Count</th><th>Error</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#frame-1">1</a></td><td>01 Jul 2025 03:15</td><td align="right">5</td><td align="right">6</td><td align="right">+1</td><td align="right">5</td><td align="right">5</td><td align="right">0</td><td align="right">5</td><td align="right">4</td><td align="right">-1</td><td align="right">5</td><td align="right">5</td><td align="right">0</td><td align="right">5</td><td align="right">5</td><td align="right">0</td><td align="right">5</td><td align="right">5</td><td align="right">0</td><td align="right">5</td><td align="right">5</td><td align="right">0</td><td align="right">5</td><td align="right">5</td><td align="right">0</td><td align="right">5</td><td align="right">4</td><td align="right">-1</td></tr>
+<tr><td><a href="#frame-2">2</a></td><td>01 Jul 2025 10:46</td><td align="right">80</td><td align="right">39</td><td align="right">-41</td><td align="right">80</td><td align="right">56</td><td align="right">-24</td><td align="right">80</td><td align="right">75</td><td align="right">-5</td><td align="right">80</td><td align="right">86</td><td align="right">+6</td><td align="right">80</td><td align="right">90</td><td align="right">+10</td><td align="right">80</td><td align="right">87</td><td align="right">+7</td><td align="right">80</td><td align="right">86</td><td align="right">+6</td><td align="right">80</td><td align="right">80</td><td align="right">0</td><td align="right">80</td><td align="right">73</td><td align="right">-7</td></tr>
+<tr><td><a href="#frame-3">3</a></td><td>01 Jul 2025 17:16</td><td align="right">36</td><td align="right">47</td><td align="right">+11</td><td align="right">36</td><td align="right">42</td><td align="right">+6</td><td align="right">36</td><td align="right">38</td><td align="right">+2</td><td align="right">36</td><td align="right">39</td><td align="right">+3</td><td align="right">36</td><td align="right">42</td><td align="right">+6</td><td align="right">36</td><td align="right">42</td><td align="right">+6</td><td align="right">36</td><td align="right">39</td><td align="right">+3</td><td align="right">36</td><td align="right">38</td><td align="right">+2</td><td align="right">36</td><td align="right">37</td><td align="right">+1</td></tr>
+<tr><td><a href="#frame-4">4</a></td><td>07 Jul 2025 00:45</td><td align="right">14</td><td align="right">11</td><td align="right">-3</td><td align="right">14</td><td align="right">16</td><td align="right">+2</td><td align="right">14</td><td align="right">13</td><td align="right">-1</td><td align="right">14</td><td align="right">16</td><td align="right">+2</td><td align="right">14</td><td align="right">17</td><td align="right">+3</td><td align="right">14</td><td align="right">15</td><td align="right">+1</td><td align="right">14</td><td align="right">16</td><td align="right">+2</td><td align="right">14</td><td align="right">15</td><td align="right">+1</td><td align="right">14</td><td align="right">13</td><td align="right">-1</td></tr>
+<tr><td><a href="#frame-5">5</a></td><td>11 Jul 2025 04:55</td><td align="right">12</td><td align="right">19</td><td align="right">+7</td><td align="right">12</td><td align="right">11</td><td align="right">-1</td><td align="right">12</td><td align="right">12</td><td align="right">0</td><td align="right">12</td><td align="right">12</td><td align="right">0</td><td align="right">12</td><td align="right">12</td><td align="right">0</td><td align="right">12</td><td align="right">12</td><td align="right">0</td><td align="right">12</td><td align="right">12</td><td align="right">0</td><td align="right">12</td><td align="right">11</td><td align="right">-1</td><td align="right">12</td><td align="right">10</td><td align="right">-2</td></tr>
+<tr><td><a href="#frame-6">6</a></td><td>14 Jul 2025 00:15</td><td align="right">66</td><td align="right">38</td><td align="right">-28</td><td align="right">66</td><td align="right">46</td><td align="right">-20</td><td align="right">66</td><td align="right">58</td><td align="right">-8</td><td align="right">66</td><td align="right">70</td><td align="right">+4</td><td align="right">66</td><td align="right">69</td><td align="right">+3</td><td align="right">66</td><td align="right">65</td><td align="right">-1</td><td align="right">66</td><td align="right">70</td><td align="right">+4</td><td align="right">66</td><td align="right">66</td><td align="right">0</td><td align="right">66</td><td align="right">56</td><td align="right">-10</td></tr>
+<tr><td><a href="#frame-7">7</a></td><td>14 Jul 2025 10:55</td><td align="right">72</td><td align="right">40</td><td align="right">-32</td><td align="right">72</td><td align="right">66</td><td align="right">-6</td><td align="right">72</td><td align="right">64</td><td align="right">-8</td><td align="right">72</td><td align="right">73</td><td align="right">+1</td><td align="right">72</td><td align="right">72</td><td align="right">0</td><td align="right">72</td><td align="right">72</td><td align="right">0</td><td align="right">72</td><td align="right">73</td><td align="right">+1</td><td align="right">72</td><td align="right">71</td><td align="right">-1</td><td align="right">72</td><td align="right">64</td><td align="right">-8</td></tr>
+<tr><td><a href="#frame-8">8</a></td><td>15 Jul 2025 01:46</td><td align="right">1</td><td align="right">2</td><td align="right">+1</td><td align="right">1</td><td align="right">0</td><td align="right">-1</td><td align="right">1</td><td align="right">1</td><td align="right">0</td><td align="right">1</td><td align="right">1</td><td align="right">0</td><td align="right">1</td><td align="right">2</td><td align="right">+1</td><td align="right">1</td><td align="right">1</td><td align="right">0</td><td align="right">1</td><td align="right">1</td><td align="right">0</td><td align="right">1</td><td align="right">1</td><td align="right">0</td><td align="right">1</td><td align="right">1</td><td align="right">0</td></tr>
+<tr><td><a href="#frame-9">9</a></td><td>15 Jul 2025 14:45</td><td align="right">15</td><td align="right">13</td><td align="right">-2</td><td align="right">15</td><td align="right">12</td><td align="right">-3</td><td align="right">15</td><td align="right">15</td><td align="right">0</td><td align="right">15</td><td align="right">15</td><td align="right">0</td><td align="right">15</td><td align="right">15</td><td align="right">0</td><td align="right">15</td><td align="right">16</td><td align="right">+1</td><td align="right">15</td><td align="right">15</td><td align="right">0</td><td align="right">15</td><td align="right">15</td><td align="right">0</td><td align="right">15</td><td align="right">14</td><td align="right">-1</td></tr>
+<tr><td><a href="#frame-10">10</a></td><td>18 Jul 2025 18:26</td><td align="right">45</td><td align="right">13</td><td align="right">-32</td><td align="right">45</td><td align="right">26</td><td align="right">-19</td><td align="right">45</td><td align="right">34</td><td align="right">-11</td><td align="right">45</td><td align="right">46</td><td align="right">+1</td><td align="right">45</td><td align="right">43</td><td align="right">-2</td><td align="right">45</td><td align="right">45</td><td align="right">0</td><td align="right">45</td><td align="right">46</td><td align="right">+1</td><td align="right">45</td><td align="right">43</td><td align="right">-2</td><td align="right">45</td><td align="right">33</td><td align="right">-12</td></tr>
+<tr><td><a href="#frame-11">11</a></td><td>19 Jul 2025 09:35</td><td align="right">91</td><td align="right">20</td><td align="right">-71</td><td align="right">91</td><td align="right">47</td><td align="right">-44</td><td align="right">91</td><td align="right">72</td><td align="right">-19</td><td align="right">91</td><td align="right">93</td><td align="right">+2</td><td align="right">91</td><td align="right">90</td><td align="right">-1</td><td align="right">91</td><td align="right">95</td><td align="right">+4</td><td align="right">91</td><td align="right">93</td><td align="right">+2</td><td align="right">91</td><td align="right">86</td><td align="right">-5</td><td align="right">91</td><td align="right">61</td><td align="right">-30</td></tr>
+<tr><td><a href="#frame-12">12</a></td><td>20 Jul 2025 02:16</td><td align="right">3</td><td align="right">3</td><td align="right">0</td><td align="right">3</td><td align="right">4</td><td align="right">+1</td><td align="right">3</td><td align="right">3</td><td align="right">0</td><td align="right">3</td><td align="right">3</td><td align="right">0</td><td align="right">3</td><td align="right">2</td><td align="right">-1</td><td align="right">3</td><td align="right">3</td><td align="right">0</td><td align="right">3</td><td align="right">3</td><td align="right">0</td><td align="right">3</td><td align="right">3</td><td align="right">0</td><td align="right">3</td><td align="right">3</td><td align="right">0</td></tr>
+<tr><td><a href="#frame-13">13</a></td><td>22 Jul 2025 07:46</td><td align="right">51</td><td align="right">12</td><td align="right">-39</td><td align="right">51</td><td align="right">42</td><td align="right">-9</td><td align="right">51</td><td align="right">38</td><td align="right">-13</td><td align="right">51</td><td align="right">51</td><td align="right">0</td><td align="right">51</td><td align="right">52</td><td align="right">+1</td><td align="right">51</td><td align="right">51</td><td align="right">0</td><td align="right">51</td><td align="right">51</td><td align="right">0</td><td align="right">51</td><td align="right">47</td><td align="right">-4</td><td align="right">51</td><td align="right">35</td><td align="right">-16</td></tr>
+<tr><td><a href="#frame-14">14</a></td><td>22 Jul 2025 19:57</td><td align="right">26</td><td align="right">11</td><td align="right">-15</td><td align="right">26</td><td align="right">23</td><td align="right">-3</td><td align="right">26</td><td align="right">21</td><td align="right">-5</td><td align="right">26</td><td align="right">25</td><td align="right">-1</td><td align="right">26</td><td align="right">27</td><td align="right">+1</td><td align="right">26</td><td align="right">29</td><td align="right">+3</td><td align="right">26</td><td align="right">24</td><td align="right">-2</td><td align="right">26</td><td align="right">24</td><td align="right">-2</td><td align="right">26</td><td align="right">21</td><td align="right">-5</td></tr>
+<tr><td><a href="#frame-15">15</a></td><td>01 Sep 2025 19:06</td><td align="right">29</td><td align="right">38</td><td align="right">+9</td><td align="right">29</td><td align="right">34</td><td align="right">+5</td><td align="right">29</td><td align="right">29</td><td align="right">0</td><td align="right">29</td><td align="right">31</td><td align="right">+2</td><td align="right">29</td><td align="right">32</td><td align="right">+3</td><td align="right">29</td><td align="right">31</td><td align="right">+2</td><td align="right">29</td><td align="right">31</td><td align="right">+2</td><td align="right">29</td><td align="right">30</td><td align="right">+1</td><td align="right">29</td><td align="right">29</td><td align="right">0</td></tr>
+</tbody>
+<tfoot>
+<tr><th colspan="2">Vehicle MAE</th><th colspan="3">19.47</th><th colspan="3">9.60</th><th colspan="3">4.87</th><th colspan="3">1.47</th><th colspan="3">2.13</th><th colspan="3">1.67</th><th colspan="3">1.53</th><th colspan="3">1.27</th><th colspan="3">6.27</th></tr>
+</tfoot>
+</table>
 
 ## Appendix B: annotated frames
 
