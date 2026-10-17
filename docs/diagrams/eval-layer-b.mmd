@@ -7,7 +7,7 @@ flowchart LR
   subgraph INPUTS["Offline feature experiments"]
     WX["Weather: scored"] --> MODELS
     PROFILE["Mar-Apr camera queue profile: scored"] --> MODELS
-    CAMERA["Observed camera counts: pending"] -.-> MODELS
+    CAMERA["Observed counts scored offline<br/>section 7c, not in v_training_set"] -.-> MODELS
   end
   subgraph LIMITS["Interpretation"]
     L1["Maps estimates are the label<br/>not independent crossing time"]

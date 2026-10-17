@@ -17,10 +17,10 @@ This plan covers what to do between now and the deadlines, given what has landed
 | --- | --- | --- | --- |
 | Layer B, 30 min | Daily-refit `xgb[maps]` beats persistence (−0.37) and the served mix (−0.27) on 13–30 Sep | `fcm_mlp` + `xgb[maps]` mean (−0.14 vs `xgb[maps]`, formed after scoring); TimesFM ≈ `xgb[maps]` | October confirmation (Run B) |
 | Layer B, 1–24 h | — | `xgb[maps+prof]` beats the profile to 3 h under Holm (5.5 h uncorrected); nothing consistent after | Frozen-run claims for any horizon |
-| Layer A | — | v6 is live; count-band labels (from 14 frames) | Any detector score; v6 vs v4; observed counts for the Maps window |
+| Layer A | Image-level count error on 15 frames ([evaluation.md](evaluation.md#layer-a--vision)). `local_counts` overlaps 13–30 Sep | Count bands on the page (14 frames, not a classifier) | mAP, precision, recall, directional count error (`eval/layer_a.py` on a box export) |
 | Demo | API and curve are live and public | Page shows a 5 h curve with no caveats | Hosting deployed from git; browser rehearsal |
 
-The largest gap is still Layer A: nothing in it is measured. The largest risk is claiming exploratory Layer B results as findings.
+The largest open Layer A gap is box metrics and directional count error. Image-level count error and the observed-count join are scored. The largest risk is claiming exploratory Layer B results as findings.
 
 ## Before 19 Oct 23:59 SGT
 
@@ -35,19 +35,17 @@ The largest gap is still Layer A: nothing in it is measured. The largest risk is
 | Page copy | No caveats (current), or a one-word `status` cue in the tooltip | Add the cue. The page is graded as the MVP and should not overclaim |
 | Detector to score first | v6 (Roboflow default), `model=local` (in-container YOLO26s), v4 | v6 and `model=local` on the same export; they are what the demo shows |
 
-### 2. Layer A scoring (the critical path; needs the Roboflow key holder)
+### 2. Layer A box scoring (count error is done; boxes still need an export)
 
 1. Export a Roboflow dataset version with a `test` split that none of the candidates trained on. The local YOLO26s was trained on dataset v6, so exclude v6's training images.
 2. Score v6 and `model=local` (and v4 if possible) with [`eval/layer_a.py`](../eval/layer_a.py), recording mAP, precision/recall, count error by direction, and day vs night.
    - The local model can be scored offline from `camdetect/models/yolo26s_v6_boxfix.onnx`, with no Roboflow credits.
    - Score it at its served overlap setting (0.6), and with suppression off.
 3. Record the model ids, the dataset version and the overlap setting, and fill the Layer A table in [evaluation.md](evaluation.md#layer-a--vision).
-4. Run the 6–11 Sep backfill ([handoff-camera-pilot.md](handoff-camera-pilot.md), about 864 frames). It gives the first observed counts that overlap the Maps label (§7c).
-   - With `model=local` the backfill costs no credits, so prefer it if its score is at least as good as v6's.
-   - The backfill script calls Roboflow today, so it needs a `model=local` path first.
+4. The 6 Sep–4 Oct local backfill is in `cam2701.local_counts` (4,052 frames). Section 7c is the correlation and the maps-only ablation. A row-level test against `maps+mpfc` is still open.
 5. Check the count bands on the scored frames: do the four labels match a hand label? If not, report them as a display heuristic only.
 
-If step 2 cannot happen by 19 Oct, the report describes Layer A as an unvalidated prototype ([final-report-readiness.md](final-report-readiness.md) §1).
+If the box export is still unscored on 19 Oct, the report keeps mAP, precision, recall and directional count error as pending and uses the 15-frame count table for what it actually measures ([final-report-readiness.md](final-report-readiness.md) §1).
 
 ### 3. Code for the frozen run (before 19 Oct, so Run A/B only run code that already exists)
 

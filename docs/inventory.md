@@ -2,6 +2,21 @@
 
 Dated copy of GCP project `swiftborder`. When this file and the project disagree, the project wins; re-query and update this file. Older blocks below are history. They keep the revisions and sentences that were true at their own timestamps.
 
+## Update: 2026-10-17, approximately 09:15 SGT (read-only)
+
+Queried with `gcloud run services list`, `gcloud run jobs list` / `jobs describe cam2701-local-backfill`, `gcloud scheduler jobs describe Gmap-Woodlands` (`asia-southeast1`), `gcloud storage buckets list`, `bq ls --models traffic_prediction`, and read-only aggregates on `travel_times`, `cam2701.local_counts`, `Cam2701`, `Cam2702`, `traffic_images.metadata`, `traffic_images.labels`, and `rainfall.rainfall`. No IAM policies, view SQL, or forecast response body were re-read. Fifteen `swiftbackend` `model=v6` calls were made the same morning to rescore labelled frames; that is evaluation traffic, not a deploy.
+
+- **Cloud Run services (100% on the latest ready revision):** `forecast-api` `forecast-api-00012-zal` (`asia-southeast1`); `gmap-woodlands-fetcher` `gmap-woodlands-fetcher-00008-rq8`; `swiftbackend` `swiftbackend-00044-4l9` (`europe-west1`); `weather-backfill-tmp` `weather-backfill-tmp-00025-55m`. Commit SHAs for `00044` and `00008` were not read.
+- **Scheduler:** `Gmap-Woodlands` is ENABLED, schedule `0 8 * * *`, time zone `Asia/Singapore`, last attempt `2026-10-17T00:00:00.874509Z` (08:00 SGT). That is one run a day. It is not the `*/5` or `*/10` cadence described in older notes.
+- **`causeway.travel_times`:** 11,289 rows per route (`jb_to_woodlands`, `mandai_to_shell_jb`), earliest `2026-09-05 17:53:30` UTC, latest `2026-10-17 00:00:02` UTC. The twelve newest `jb_to_woodlands` stamps are 08:00 SGT on 17 Oct, then 00:10 SGT on 17 Oct, then 10-minute spacing back through the previous evening. History before that gap is denser than the live daily job.
+- **`cam2701.local_counts`:** still 4,052 rows, `2026-09-06T00:05:46` to `2026-10-04T23:55:48`, `model_id` `local:yolo26s-v6-boxfix`. No frames after 4 Oct.
+- **`traffic_images`:** `labels` 0; `metadata` 392,438, `MAX(capture_timestamp)` `2026-10-09T23:55:54`. Metadata now runs past 11 Sep. It is still not a label table.
+- **Historical detections:** `cam2701.Cam2701` 298,137 rows; `cam2702.Cam2702` 233,463 rows. Unchanged from 10 Oct.
+- **Weather:** `rainfall.rainfall` 108,607 rows, `MAX(timestamp)` `2026-10-16 15:55:00` UTC. `weatherforecast.weatherforecast` 25,406 rows (maximum issue time not queried).
+- **Models:** `traffic_prediction` still lists only `lin_h30` and `xgb_h30`.
+- **Jobs:** Cloud Run Job `cam2701-local-backfill` (`asia-southeast1`) last execution `cam2701-local-backfill-6zh7d` succeeded at `2026-10-10T08:58:43Z`, args `--gcs-out=gs://sg-lta-traffic-cameras/processed/local`. `traffic-backfill` is still a Cloud Run Job (latest created execution `traffic-backfill-slfg9`; completion time not re-read).
+- **Buckets:** the same seven: `sg-lta-traffic-cameras`, `swiftborder-frame-cache`, `run-sources-swiftborder-asia-southeast1`, `run-sources-swiftborder-europe-west1`, `swiftborder-public`, `swiftborder_cloudbuild`, `swiftborder_asia-southeast1_cloudbuild`.
+
 ## Update: 2026-10-10, approximately 16:20 SGT (read-only)
 
 - **BigQuery dataset `cam2701` table `local_counts`:**

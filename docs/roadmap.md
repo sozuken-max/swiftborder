@@ -82,15 +82,15 @@ Neither run uses `--bqml`, so the ensemble pool is local (`ensemble.pool_30_loca
 
 ## Already true
 
-- Maps durations log every 5 minutes into `causeway.travel_times` (both directions; counts in [inventory.md](inventory.md)).
+- Maps durations are in `causeway.travel_times` (both directions). The live Scheduler job and row counts are in [inventory.md](inventory.md).
 - `forecast-api` (Cloud Run, public) serves the 30-minute forecast from local models ([ADR 0004](adr/0004-serve-local-models.md)): the `lin_h30` replica for SG to MY and persistence for MY to SG. It also accepts exploratory `horizon_min` values out to 24 h. The public curve draws the study model only to 5.5 h (the generous end; Holm keeps `xgb[maps+prof]` ahead of the profile only to 3 h) and the calendar profile after that ([horizon-study.md](horizon-study.md)). That is not a confirmed 24-hour forecast. `v_forecast_recent` and the BQML models remain as history. Live revisions: [inventory.md](inventory.md).
 - Weather and camera-2701 congestion views exist and are not joined.
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
 - Layer B is scored and promoted to [`eval/runs/report/`](../eval/runs/report/): production models at 30 min on 13–30 Sep (`layer_b.py`), the joined weather experiment (`joined.py`), and offline 60-min XGBoost (`timeseries_xgb.py`), all with significance tests (Diebold–Mariano on error differences, Holm correction across models). Numbers are in [evaluation.md](evaluation.md).
-- Weather history for 5–30 Sep is fetched (`Causeway/`) and appended to BigQuery; weather gave no significant gain. The Layer A scorer exists (`eval/layer_a.py`); no export is scored.
+- Weather history for 5–30 Sep is fetched (`Causeway/`) and appended to BigQuery; weather gave no significant gain. The Layer A box scorer exists (`eval/layer_a.py`). Image-level count error on 15 frames is in [evaluation.md](evaluation.md#layer-a--vision). mAP and directional count error are not scored.
 - Also scored in `report/`: LSTM, GRU and a patch Transformer at 60 min (none beats XGBoost), a fuzzy light / moderate / heavy forecast (the XGB → fuzzy hybrid is best), and ensembles / hybrids of the 30-min models (no gain over a daily-refit XGBoost, which beats the served forecast).
-- Report drafts exist: design, evaluation, findings, inventory (latest verification 2026-10-04).
+- Report drafts exist: design, evaluation, findings, inventory (latest verification 2026-10-17).
 
 ---
 

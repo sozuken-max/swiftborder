@@ -7,7 +7,7 @@ flowchart LR
     HIST["cam2701 / cam2702<br/>historical detections<br/>congestion view: 2701"]
   end
   subgraph LB["Layer B - Forecasting"]
-    SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
+    SCH["Cloud Scheduler<br/>daily 08:00 SGT"] --> ING["gmap-woodlands-fetcher"]
     MAPS["Google Maps Distance Matrix"] --> ING
     ING --> TT["causeway.travel_times"]
     TT --> FEATURES["v_bins_10min<br/>closed bins only"]

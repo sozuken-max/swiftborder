@@ -5,7 +5,7 @@ flowchart LR
     SB --> UI["Firebase Hosting UI<br/>hosting/ in git; manual deploy"]
   end
   subgraph LB["Layer B - Forecasting"]
-    SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
+    SCH["Cloud Scheduler<br/>daily 08:00 SGT"] --> ING["gmap-woodlands-fetcher"]
     GM["Google Maps<br/>Distance Matrix"] --> ING
     ING --> TT["BigQuery travel_times<br/>Maps-only 10-minute bins"]
     TT --> API["Cloud Run forecast-api, public<br/>local models<br/>target: bin 30-40 min after<br/>the newest closed bin"]

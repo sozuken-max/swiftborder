@@ -44,7 +44,7 @@ flowchart LR
     SB --> UI["Firebase Hosting UI<br/>hosting/ in git; manual deploy"]
   end
   subgraph LB["Layer B - Forecasting"]
-    SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
+    SCH["Cloud Scheduler<br/>daily 08:00 SGT"] --> ING["gmap-woodlands-fetcher"]
     GM["Google Maps<br/>Distance Matrix"] --> ING
     ING --> TT["BigQuery travel_times<br/>Maps-only 10-minute bins"]
     TT --> API["Cloud Run forecast-api, public<br/>local models<br/>target: bin 30-40 min after<br/>the newest closed bin"]
@@ -89,7 +89,7 @@ flowchart LR
     HIST["cam2701 / cam2702<br/>historical detections<br/>congestion view: 2701"]
   end
   subgraph LB["Layer B - Forecasting"]
-    SCH["Cloud Scheduler<br/>every 5 minutes"] --> ING["gmap-woodlands-fetcher"]
+    SCH["Cloud Scheduler<br/>daily 08:00 SGT"] --> ING["gmap-woodlands-fetcher"]
     MAPS["Google Maps Distance Matrix"] --> ING
     ING --> TT["causeway.travel_times"]
     TT --> FEATURES["v_bins_10min<br/>closed bins only"]
@@ -135,4 +135,4 @@ What those facts allow the report to claim is in [findings.md](findings.md). Met
 
 ![Detailed architecture](images/architecture-detailed.png)
 
-Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the join, a longer horizon, Layer A results, 2702 geometry, a Firebase project file for Hosting) is in [findings.md](findings.md) and [roadmap.md](roadmap.md). `hosting/` is in git; the deck PNGs still label that node as outside git.
+Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the served join, a longer horizon, Layer A box metrics, 2702 geometry, a Firebase project file for Hosting) is in [findings.md](findings.md) and [roadmap.md](roadmap.md). `hosting/` is in git; the deck PNGs still label that node as outside git.
