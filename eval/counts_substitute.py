@@ -99,6 +99,10 @@ def load_maps() -> pd.DataFrame:
     """
     frame = _query(sql, "US")
     frame["bin_ts"] = pd.to_datetime(frame["bin_ts"], utc=True)
+    # The client returns gap_min as a nullable integer. The first bin's NA must be a float
+    # NaN so features.maps_features can flag gaps; a pandas NA cannot cast to int.
+    for column in ("dur_min", "congestion_ratio", "speed_kmh", "n_obs", "gap_min"):
+        frame[column] = pd.to_numeric(frame[column], errors="coerce").astype("float64").astype(float)
     frame["typical_min"] = np.nan
     return frame.sort_values(["route_id", "bin_ts"]).reset_index(drop=True)
 

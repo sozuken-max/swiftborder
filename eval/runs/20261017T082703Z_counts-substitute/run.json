@@ -1,15 +1,15 @@
 {
   "schema_version": 2,
-  "run_id": "20261017T081758Z_counts-substitute",
+  "run_id": "20261017T082703Z_counts-substitute",
   "component": "counts_substitute",
   "provenance": {
-    "git_sha": "150a272d567cdedd7a497380396036028b1b36a1",
-    "git_branch": "fix/forecast-cloudbuild-step-order",
+    "git_sha": "47a6b55f7a53a3736a042beeee7c9aec6a10e7da",
+    "git_branch": "experiment/counts-for-maps",
     "git_dirty": 1,
-    "python": "3.8.10",
-    "pandas": "2.0.3",
-    "numpy": "1.24.3",
-    "scikit_learn": "1.3.2",
+    "python": "3.11.9",
+    "pandas": "2.2.3",
+    "numpy": "2.1.3",
+    "scikit_learn": "1.5.2",
     "xgboost": "2.1.4"
   },
   "definition": "The target on every row is Google Maps duration in traffic at the 30-minute horizon: the mean `duration_in_traffic` of the bin that starts 30 minutes after the origin (`y_30`), in minutes. The Maps version is that served estimator refit on September 2026 only, reading Maps duration, lags, rolling means, slope, congestion ratio and speed where that model uses them. The counts version puts the directional camera-2701 count in those duration slots (`sg_my` for SG_TO_MY, `my_sg` for MY_TO_SG) and does not read a Maps duration, lag, speed or distance feature at predict time. Calendar terms stay. Persistence-of-Maps repeats the current Maps duration. Persistence-of-counts repeats the current directional count and does not see Maps at predict time; that output is a vehicle count, so it is not scored as a minute forecast. The counts profile is the same Fourier rule fit on September counts and read at the target clock; that output is a typical count, not a duration. Learned counts models are fit to September rows whose label is Maps `y_30`, so they can emit minutes.",
@@ -628,7 +628,7 @@
         },
         "alpha": 0.01,
         "alpha_search_inner_mae": {
-          "0.0001": 2.412264987087294,
+          "0.0001": 2.4122649870872945,
           "0.001": 2.411783639137689,
           "0.01": 2.411610286589984
         },
@@ -674,7 +674,7 @@
         "alpha": 0.01,
         "alpha_search_inner_mae": {
           "0.0001": 2.0357425221562075,
-          "0.001": 2.035579877599254,
+          "0.001": 2.035579877599253,
           "0.01": 2.035193250983822
         },
         "best_epochs": [
@@ -725,7 +725,7 @@
         },
         "alpha": 0.01,
         "alpha_search_inner_mae": {
-          "0.0001": 4.709398535820585,
+          "0.0001": 4.709398535820586,
           "0.001": 4.728353473553212,
           "0.01": 4.70768671389775
         },
@@ -771,8 +771,8 @@
         "alpha": 0.001,
         "alpha_search_inner_mae": {
           "0.0001": 3.5109174283258686,
-          "0.001": 3.5070449497985043,
-          "0.01": 3.533088695354272
+          "0.001": 3.5070449497985035,
+          "0.01": 3.5330886953542717
         },
         "best_epochs": [
           37,
