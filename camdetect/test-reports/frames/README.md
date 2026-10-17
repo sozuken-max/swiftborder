@@ -1,0 +1,31 @@
+# Test frames (camera 2701)
+
+The 15 frames of the Roboflow dataset v6 `test` split, unannotated, 1920 x 1080 JPEG. These are the frames behind every count and box score in the [test report](../README.md). They were not used to train or to select any of the fine-tuned detectors.
+
+**Naming.** `2701_<YYYYMMDD>T<HHMMSS>.jpg`: camera id, then the capture time in SGT. This is the same name as the object in `gs://sg-lta-traffic-cameras/camera_id=2701/month=<YYYY-MM>/`. Roboflow renamed the files on export (`..._jpg.rf.<hash>.jpg`), and that name is what the notebooks, `test_counts.csv` and the Drive `test_predictions/` folders use; the table maps one to the other.
+
+**Where the bytes came from.** Downloaded on 17 Oct 2026 from the data.gov.sg URL in the last column (the URL the live `swiftbackend` resolved for that timestamp). The 03:15 frame was earlier checked byte-identical to its GCS object; the other 14 were not compared. The box labels are in the Roboflow project (`vehicle-detection-proejct`, version 6), not in git.
+
+**Day / night.** Day is 07:00-18:59 SGT (7 frames), night the other 8.
+
+| # | File | Captured (SGT) | Day/night | GT cars | GT vehicles | Roboflow export name | sha256 (first 12) | data.gov.sg source |
+| ---: | --- | --- | --- | ---: | ---: | --- | --- | --- |
+| 1 | [`2701_20250701T031541.jpg`](2701_20250701T031541.jpg) | 01 Jul 2025 03:15:41 | night | 3 | 5 | `2701_20250701T031541_jpg.rf.305d8ff6133a3042f867f23ec741ae18.jpg` | `fe23db91ae23` | [link](https://images.data.gov.sg/api/traffic-images/2025/06/8e8a4b97-d682-40ee-b6a9-17b4bc8854dd.jpg) |
+| 2 | [`2701_20250701T104609.jpg`](2701_20250701T104609.jpg) | 01 Jul 2025 10:46:09 | day | 75 | 80 | `camera_id-2701_month-2025-07_2701_20250701T104609_jpg.rf.ac3643752e84aa54a25355ffb165f008.jpg` | `ba3146ab3b9a` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/235998c9-ffab-422f-850b-c284674f6a66.jpg) |
+| 3 | [`2701_20250701T171615.jpg`](2701_20250701T171615.jpg) | 01 Jul 2025 17:16:15 | day | 33 | 36 | `2701_20250701T171615_jpg.rf.2c614559e4c9ff55ed03ec2de9d135e9.jpg` | `8c3f83be6fcf` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/23a325c9-7a70-424d-b26c-eaf295cf864d.jpg) |
+| 4 | [`2701_20250707T004549.jpg`](2701_20250707T004549.jpg) | 07 Jul 2025 00:45:49 | night | 9 | 14 | `2701_20250707T004549_jpg.rf.c77044050d670fc2bfffa93675c6da80.jpg` | `2197d035f021` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/612339b4-8855-45c7-9973-8f6b09bef2a3.jpg) |
+| 5 | [`2701_20250711T045532.jpg`](2701_20250711T045532.jpg) | 11 Jul 2025 04:55:32 | night | 8 | 12 | `2701_20250711T045532_jpg.rf.678d451f4415b965cd680ea85ad15882.jpg` | `0896d506da5c` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/2e6ac41f-217e-441a-ba12-f961c3f2e98c.jpg) |
+| 6 | [`2701_20250714T001542.jpg`](2701_20250714T001542.jpg) | 14 Jul 2025 00:15:42 | night | 66 | 66 | `2701_20250714T001542_jpg.rf.3090aa01df1162d781004f6e01eddaee.jpg` | `d5b7ec3e0a09` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/7eaa82d5-c4a7-4e88-9772-249c754fb8f3.jpg) |
+| 7 | [`2701_20250714T105553.jpg`](2701_20250714T105553.jpg) | 14 Jul 2025 10:55:53 | day | 56 | 72 | `2701_20250714T105553_jpg.rf.f73246c6a77913a22e247d3b2ae89c6c.jpg` | `1f8d93e6cc2d` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/a4373f3d-2e5e-442f-a934-60db65e0b43a.jpg) |
+| 8 | [`2701_20250715T014608.jpg`](2701_20250715T014608.jpg) | 15 Jul 2025 01:46:08 | night | 0 | 1 | `2701_20250715T014608_jpg.rf.a2c117d8afe7ba47b46288008083e93b.jpg` | `893c62c018ff` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/f96b6c7d-d2a9-4ab6-bdb1-e0a143d93a65.jpg) |
+| 9 | [`2701_20250715T144541.jpg`](2701_20250715T144541.jpg) | 15 Jul 2025 14:45:41 | day | 10 | 15 | `2701_20250715T144541_jpg.rf.35b63305e56bfae4ea16bc6ad81ca58d.jpg` | `065bb1bee372` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/764579a4-75e5-4cf2-a7c5-53c2c9d7b73c.jpg) |
+| 10 | [`2701_20250718T182605.jpg`](2701_20250718T182605.jpg) | 18 Jul 2025 18:26:05 | day | 39 | 45 | `2701_20250718T182605_jpg.rf.809298121812af11927ea2b6fb7b096c.jpg` | `f8d0f6e462cb` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/aa07e6b4-0fa5-4c03-99e9-4a8c09f2c694.jpg) |
+| 11 | [`2701_20250719T093542.jpg`](2701_20250719T093542.jpg) | 19 Jul 2025 09:35:42 | day | 87 | 91 | `2701_20250719T093542_jpg.rf.40c97a80db5f5b7eb25b18ffc2665168.jpg` | `f70960b8ec2d` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/44552e5a-1a1c-4dd3-8df4-495e1290c614.jpg) |
+| 12 | [`2701_20250720T021638.jpg`](2701_20250720T021638.jpg) | 20 Jul 2025 02:16:38 | night | 1 | 3 | `2701_20250720T021638_jpg.rf.0209baf89dfb6e4eb51b3a9414f482db.jpg` | `4d715c6749c2` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/fb3c747e-754f-4a8d-bc3f-ef6439ac5ae6.jpg) |
+| 13 | [`2701_20250722T074652.jpg`](2701_20250722T074652.jpg) | 22 Jul 2025 07:46:52 | day | 24 | 51 | `2701_20250722T074652_jpg.rf.726f91de5a9c04d4507b0be46bb14f17.jpg` | `4472b19ae4b0` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/f4fa0d10-f6d5-489e-adcc-2476a25fa568.jpg) |
+| 14 | [`2701_20250722T195703.jpg`](2701_20250722T195703.jpg) | 22 Jul 2025 19:57:03 | night | 15 | 26 | `2701_20250722T195703_jpg.rf.dc042f89e0c9ca98ebdc67197f07a798.jpg` | `79fd9df0187b` | [link](https://images.data.gov.sg/api/traffic-images/2025/07/ee24c56b-fd4e-4b5d-b864-9d8e41cd1feb.jpg) |
+| 15 | [`2701_20250901T190618.jpg`](2701_20250901T190618.jpg) | 01 Sep 2025 19:06:18 | night | 25 | 29 | `camera_id-2701_month-2025-09_2701_20250901T190618_jpg.rf.646c1fea1ba2d48f432680f3cf43ff09.jpg` | `85750d77d8ac` | [link](https://images.data.gov.sg/api/traffic-images/2025/09/efc26406-85d1-4858-9aee-435e7beb5f45.jpg) |
+
+Totals: 451 cars and 546 vehicles, matching the split's label counts in the notebook (451 cars, 25 buses, 70 trucks).
+
+The speed test's recorded GPU run used 20 live frames that were not kept, so they are not here. Rerun it on these frames with `--frames` (see [Speed test](../README.md#speed-test)).

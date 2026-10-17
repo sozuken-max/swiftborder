@@ -1,6 +1,6 @@
 # Layer A count comparison (15 frames)
 
-Image-level car and vehicle totals for camera 2701. Not a box score: `eval/layer_a.py` has not been run, and these files have no bounding boxes.
+Image-level car and vehicle totals for camera 2701, on the 15-frame Roboflow v6 `test` split. These files have no bounding boxes; the notebook's box AP50 on the same split is in [camdetect/test-reports/](../../../camdetect/test-reports/README.md#box-metrics-test-split). `eval/layer_a.py` has not been run on it.
 
 | File | What it is |
 | --- | --- |
