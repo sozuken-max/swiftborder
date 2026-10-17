@@ -1,5 +1,7 @@
 # Roadmap
 
+> **Freeze decision, 17 Oct 2026:** the team selected all results in the tree of `main` at merge `199c2e5` (same tree as `910d715`) as the final evidence set, with **no more experiment runs**. Live operation is curtailed to reduce costs. The proposed 19 Oct cutoff, future Runs A/B and new-data tasks below are historical plans, not remaining requirements. Unperformed confirmation stays a limitation; it must not be described as completed. Remaining work is claims reconciliation, an evidence index, updated figures, a frozen demonstration/submission package and final writing. See [the current readiness review](final-report-readiness.md#current-review-17-oct-2026-frozen-submission).
+
 **Source of truth:** GCP project `swiftborder`. Re-query it before starting a step that depends on row counts, joins, or what is served.  
 **GCP snapshot:** [inventory.md](inventory.md)  
 **Dates (briefing; confirm on Canvas):** first presentation **30 Sep 2026, 18:30–22:30**; final deliverables **31 Oct 2026**.  
