@@ -16,6 +16,9 @@ replay-*/*
 # Read with google.cloud.bigquery (Python 3.11).
 !20261017T083554Z_counts-substitute/
 !20261017T083554Z_counts-substitute/**
+# Camera-only current duration versus a calendar baseline (section 7b).
+!20261017T084900Z_camera-current/
+!20261017T084900Z_camera-current/**
 # Layer A evaluation
 !layer_a_eval/
 !layer_a_eval/**

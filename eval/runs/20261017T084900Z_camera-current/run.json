@@ -1,0 +1,44 @@
+{
+  "run_id": "20261017T084900Z_camera-current",
+  "question": "camera-only estimate of current Maps duration versus a calendar-only baseline",
+  "target": "y_persistence (current bin duration_in_traffic, minutes)",
+  "definition": "The target is the current 10-minute Maps duration (`y_persistence`), not the 30-minute-ahead label. The calendar baseline is a Fourier profile of that duration, fit on September rows only. Ridge and XGBoost add the current camera-2701 directional count (`sg_my` or `my_sg` in the same bin) to calendar terms (`tod_sin`, `tod_cos`, `dow`, weekend, morning peak, evening peak). They do not read a Maps duration, lag, speed, congestion ratio, or distance at predict time.",
+  "window": "Train: 6972 September rows with a current Maps duration, a camera count, and `after_gap = 0` (6-30 Sep 2026 Asia/Singapore). Eval: 1110 rows on 1-4 Oct ({'SG_TO_MY': 555, 'MY_TO_SG': 555}). Counts end 4 Oct, so later October Maps bins are not in this score.",
+  "visibility": "A bin with no scored frame is missing, not zero. A scored frame whose count is zero stays zero. `local_counts` has no column that separates fog, haze, glare, or an empty road, so that flag is not applied.",
+  "models": [
+    {
+      "id": "ridge[counts+calendar]",
+      "n": 1110,
+      "mae_counts_calendar": 7.2245426550590714,
+      "mae_calendar": 6.702074767261005,
+      "mae_ridge_calendar": 7.891245656709547,
+      "diff": 0.5224678877980659,
+      "ci_low": -0.10625304469846343,
+      "ci_high": 0.9577753813784186,
+      "label": "inconclusive"
+    },
+    {
+      "id": "xgb[counts+calendar]",
+      "n": 1110,
+      "mae_counts_calendar": 6.570249111015159,
+      "mae_calendar": 6.702074767261005,
+      "mae_ridge_calendar": 7.891245656709547,
+      "diff": -0.1318256562458453,
+      "ci_low": -0.9308636155263146,
+      "ci_high": 0.6541029789097049,
+      "label": "inconclusive"
+    }
+  ],
+  "figures": [
+    "mae_current.png",
+    "paired_current.png",
+    "series_current.png"
+  ],
+  "packages": {
+    "python": "3.11.9",
+    "sklearn": "1.5.2",
+    "xgboost": "2.1.4"
+  },
+  "git": "6364a15",
+  "created_at": "2026-10-17T08:52:46Z"
+}
