@@ -207,6 +207,9 @@ LOCAL_CLASS_OFFSET = 7680  # shifts each class onto its own plane so NMS never s
 # On by default for model=local only; the ``overlap`` request parameter sets it for any model
 # (1 turns it off).
 LOCAL_MAX_OVERLAP = _env_float("LOCAL_MAX_OVERLAP", 0.6)
+# Pass to ``detect_frame(max_overlap=...)`` (or HTTP ``overlap=1``) to turn suppression off.
+# ``None`` means the model default (``LOCAL_MAX_OVERLAP`` for ``model=local``), not off.
+OVERLAP_SUPPRESSION_OFF = 1.0
 LOCAL_SIZE_RATIO = _env_float("LOCAL_SIZE_RATIO", 3.0)
 # Default minimum confidence for model=local (Roboflow models use DEFAULT_CONFIDENCE). 0.35 cleared
 # the weak echo boxes (confidence ~0.1-0.3) before the size-ratio dedupe existed; with it, 0.2 adds

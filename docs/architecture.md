@@ -15,8 +15,8 @@ The module asks the system to demonstrate at least three of these. All four are 
 | --- | --- |
 | Supervised learning | Roboflow vehicle labels; BigQuery ML and offline regression of later Maps duration (`y_30`, 60-min offline) |
 | Machine learning / deep learning | YOLO served through Roboflow; `lin_h30` (linear regression), `xgb_h30` (boosted tree), offline XGBoost; LSTM, GRU and a patch Transformer are scored offline |
-| Intelligent sensing | LTA frame to directional occupancy. Dividing line in `camdetect` is camera 2701 only |
-| Hybrid / ensemble | Mean of `lin_h30` and `xgb_h30`, and ridge+XGBoost in the joined experiment, scored against the single models in [evaluation.md](evaluation.md). Not in the serve path |
+| Intelligent sensing | LTA frame to directional occupancy (`swiftbackend` counts). Dividing line in `camdetect` is camera 2701 only. **Also:** Colab CNN-RNN research maps pixels to duration bands (not served) |
+| Hybrid / ensemble | Mean of `lin_h30` and `xgb_h30`, and ridge+XGBoost in the joined experiment, scored against the single models in [evaluation.md](evaluation.md). Not in the serve path. CNN-RNN **residual** models add a learned correction on top of a time-of-day baseline (notebook only) |
 
 ## Roboflow / YOLO free tier
 
@@ -87,6 +87,9 @@ flowchart LR
     CAM["sg-lta-traffic-cameras"] --> JOB["Cloud Run Job<br/>traffic-backfill"]
     JOB --> META["traffic_images<br/>metadata populated; labels empty"]
     HIST["cam2701 / cam2702<br/>historical detections<br/>congestion view: 2701"]
+    CNNRNN["camdetect/CNN_RNN_Congestion<br/>Colab CNN-RNN research<br/>image to duration bands"]
+    CAM -.-> CNNRNN
+    TT -.-> CNNRNN
   end
   subgraph LB["Layer B - Forecasting"]
     SCH["Cloud Scheduler<br/>daily 08:00 SGT"] --> ING["gmap-woodlands-fetcher"]
@@ -107,6 +110,7 @@ flowchart LR
     WX["NEA weather<br/>Causeway manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
     HIST -.->|"historical queue profile"| EVAL
     TT -.->|"read-only export"| EVAL
+    CNNRNN -.->|"not in run.json"| EVAL
   end
   subgraph STORAGE["Other storage - inventory only, no inferred data edges"]
     CACHE["swiftborder-frame-cache<br/>no writer in git"]
@@ -130,6 +134,26 @@ Weather and historical camera features are used only in offline experiments. The
 - A 24-hour forecast of crossing time is the product intent. The live API's evaluated response is the 30-minute Maps-duration forecast. It can also return exploratory horizons out to 24 h, and `?curve=forecast` draws the study model only to 5.5 h (the generous end of an exploratory study; Holm over 336 comparisons keeps `xgb[maps+prof]` ahead of the profile only to 3 h) and the calendar profile after that. That curve is not a confirmed 24-hour forecast. See [horizon-study.md](horizon-study.md).
 
 What those facts allow the report to claim is in [findings.md](findings.md). Methods and scored results are in [evaluation.md](evaluation.md).
+
+## Offline image-to-duration research (CNN-RNN)
+
+Deepak's Colab notebooks, checked in under [`camdetect/CNN_RNN_Congestion/`](../camdetect/CNN_RNN_Congestion/). This is a **third camera story**, parallel to production Layer A (Chad's detector and [test report](../camdetect/test-reports/README.md)) and to the scored count experiments in `eval/`.
+
+| Approach | Input | Output | Live? | Scored in `eval/`? |
+| --- | --- | --- | --- | --- |
+| **Served Layer A** | One frame | Directional vehicle counts (`swiftbackend`) | Yes | Count error on 15 frames; box mAP pending |
+| **Layer B + camera features** | Maps bins ± `local_counts` or Mar–Apr profile | Future Maps duration | Forecast API: no camera | Section 7 in [evaluation.md](evaluation.md) |
+| **CNN-RNN notebooks** | Frame sequence + time features | Google duration minutes or nine bands; human congestion ratings in v10a | No (Colab) | No |
+
+**Data overlap.** The v10a window (6 Sep – 4 Oct 2026 SGT) uses the same GCS camera tree and `causeway.travel_times` as `cam2701.local_counts` and section 7c. The notebooks do not read `local_counts`; they learn from pixels and Maps labels directly.
+
+**Architectural choice.** Production keeps **interpretable counts** (Layer A) and **Maps-series forecasting** (Layer B) separate because crossing time is not the same as queue depth, and because the serve path must stay small and testable. The CNN-RNN line asks a different question: can a single deep model skip explicit detection and still recover congestion signal? That is useful for the report's "intelligent sensing" and "deep learning" categories, but it is **not** wired into Hosting or `forecast-api` until someone exports a model, defines latency and failure modes, and scores it beside XGBoost the same way `eval/deep_forecast.py` does for tabular sequences.
+
+**Label caveat (from the notebook).** Maps duration covers more road than the camera sees, so low Google MAE is not sufficient to claim the image "predicts crossing time." v10a uses blind human ratings and an image-swap ablation for that reason.
+
+**Relation to `eval/deep_forecast.py`.** Both use deep learning on the causeway problem, but deep forecast consumes **only** 5-minute Maps bins (LSTM / GRU / Transformer). CNN-RNN consumes **images** and is closer to an alternative Layer A→B bridge than to another tabular forecaster. See [deep-learning-assessment.md](deep-learning-assessment.md) for the scored tabular DL result (do not serve; XGBoost wins on 5 day-blocks).
+
+Runbook: [camdetect/CNN_RNN_Congestion/README.md](../camdetect/CNN_RNN_Congestion/README.md).
 
 **Deck export (regenerated 4 Oct 2026):**
 
