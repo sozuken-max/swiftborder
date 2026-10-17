@@ -41,7 +41,7 @@ same as for `v4`/`v6`. `workflow_id` / `X-Workflow-Id` read
 | Classes | `bus`, `car`, `truck` |
 | Checkpoint | `best.pt`, sha256 `de7d105b380dbe1b1f4aa962487920b6cbb3128704f337591a8043d3b38abf0e`, 20.4 MB (not in git; it lives in the team Drive under `swiftborder_runs/v6_yolo26s_boxfix/weights/`) |
 | Export | `YOLO("best.pt").export(format="onnx", imgsz=[736, 1280], simplify=True)`; sha256 `dc43db2fe30ab8cf08b6d7056bd7d20d0f111f0a5ec577a51ed86cb593f65fe8`, 38 MB |
-| Validation (from the checkpoint) | mAP50 0.833, mAP50-95 0.558, P 0.797, R 0.734 (Colab, best epoch). This is the run's own validation split of about 15 images, which also picked the checkpoint. It is not a held-out box score. Image-level count error on a separate 15-frame caption set, including this ONNX file at the served confidence and overlap, is in [test-reports/](test-reports/README.md) and [docs/evaluation.md](../docs/evaluation.md#layer-a--vision). |
+| Validation (from the checkpoint) | mAP50 0.833, mAP50-95 0.558, P 0.797, R 0.734 (Colab, best epoch). This is the run's own validation split of about 15 images, which also picked the checkpoint. On the separate 15-frame `test` split the notebook gives car AP50 0.899 and mAP50 0.827. That split's frames and image-level count error (including this ONNX file at the served confidence and overlap) are in [test-reports/](test-reports/README.md) and [docs/evaluation.md](../docs/evaluation.md#layer-a--vision). |
 
 How it matches Ultralytics' `model.predict(imgsz=1280)`:
 
@@ -489,7 +489,8 @@ the repo root). `requirements.txt` is the pinned Cloud Run dependency set;
 
 Detector accuracy is not a unit test. The 15-frame count comparison on camera
 2701 (five detectors, per-frame errors, the served operating points and the
-annotated frames) is in [test-reports/](test-reports/README.md).
+annotated frames) is in [test-reports/](test-reports/README.md), with the
+15 test frames, box AP50, the ONNX speed test and where the trained weights are.
 
 ## Reuse outside the handler
 

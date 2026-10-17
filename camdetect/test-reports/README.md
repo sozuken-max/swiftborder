@@ -1,6 +1,6 @@
 # camdetect test reports
 
-Detector test results for camera 2701 (Woodlands Causeway). One test set so far: 15 labelled frames, scored on image-level car and vehicle **counts**. These are not box scores. mAP, precision, recall and per-direction count error have not been run on this set (`eval/layer_a.py` is still fixture-only).
+Detector test results for camera 2701 (Woodlands Causeway). One test set so far: the 15 frames of the Roboflow dataset v6 **test split**, scored on image-level car and vehicle **counts**, plus box AP50 and car recall/precision from the Colab notebook that produced the comparison. Per-direction count error is not scored: there are no direction labels.
 
 The unit tests for the service itself are in [`tests/`](../tests/) and are described in [the camdetect README](../README.md#tests).
 
@@ -11,12 +11,17 @@ The unit tests for the service itself are in [`tests/`](../tests/) and are descr
 | [`eval/runs/layer_a_count/local_rescore.json`](../../eval/runs/layer_a_count/local_rescore.json) | `local:yolo26s-v6-boxfix` rescored on the 1920 x 1080 originals at three settings |
 | [`eval/runs/layer_a_count/roboflow_v6_conf02.json`](../../eval/runs/layer_a_count/roboflow_v6_conf02.json) | Live `swiftbackend` `model=v6` at its served setting (confidence 0.2), 17 Oct 2026 |
 | [`images/`](images/) | The annotated prediction images from the comparison page, one folder per frame |
+| [`frames/`](frames/README.md) | The 15 test frames themselves (1920 x 1080 JPEG, unannotated) and a manifest |
+| [`speed_benchmark.py`](speed_benchmark.py) | The ONNX speed test (CPU or GPU), from the speed-test notebook |
+| [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) | Colab notebook with outputs: YOLO26s/m training on dataset v6, the five-detector comparison (box AP50, recall/precision sweep, count error) and the `test_predictions` export. Roboflow key removed; it reads the Colab secret `ROBOFLOW_API_KEY` |
+| [`notebooks/onnx_gpu_speed_test.ipynb`](notebooks/onnx_gpu_speed_test.ipynb) | Colab notebook with outputs: the recorded GPU speed run |
 
 Every number on this page is computed from those three JSON files. The narrative and how the result is used in the report are in [docs/evaluation.md](../../docs/evaluation.md#layer-a--vision) and [docs/findings.md](../../docs/findings.md).
 
 ## Test set
 
-- **Frames:** 15 camera-2701 frames, 01 Jul 2025 03:15 to 01 Sep 2025 19:06 SGT. Originals are 1920 x 1080 in `gs://sg-lta-traffic-cameras/` (listed in `traffic_images.metadata`); the images here are the page's 1280 x 720 copies.
+- **Frames:** 15 camera-2701 frames, 01 Jul 2025 03:15 to 01 Sep 2025 19:06 SGT, in [`frames/`](frames/README.md) as `2701_<YYYYMMDD>T<HHMMSS>.jpg` (1920 x 1080). The same frames are in `gs://sg-lta-traffic-cameras/` (listed in `traffic_images.metadata`). The annotated images in Appendix B are 1280 x 720 copies.
+- **Split:** these are the whole `test` split of Roboflow dataset v6 (train 60, valid 15, test 15 images). The detectors were trained on `train`, and the checkpoint was chosen on `valid`, so these frames were not used for either. The split's label totals (451 cars, 25 buses, 70 trucks; 546 vehicles) equal the sums of the ground-truth column below.
 - **Ground truth:** human labels from the Roboflow project. Car totals come from `test_counts.csv`; vehicle totals come from the caption on each ground-truth image. The two agree on car totals for all 15 frames.
 - **Day / night:** day is 07:00-18:59 SGT from the file timestamp (7 frames); night is the other 8.
 - **Error** is predicted minus ground truth. Positive means over-counting; negative means missed vehicles.
@@ -144,10 +149,65 @@ YOLO-S (freeze) at the page's setting (conf 0.30, overlap off) matches the page'
 | 14 | 22 Jul 2025 19:57 | 15 | 13 (-2) | 11 (-4) | 11 (-4) | 14 (-1) |
 | 15 | 01 Sep 2025 19:06 | 25 | 27 (+2) | 28 (+3) | 27 (+2) | 28 (+3) |
 
+## Box metrics (test split)
+
+From the full-comparison cell of [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) (run 10 Oct 2026, Tesla T4). A prediction counts as correct when it overlaps a labelled box of the same class at IoU 0.5 or more; labelled polygons are reduced to their enclosing box. AP50 is threshold-free. This is the notebook's own scorer, not [`eval/layer_a.py`](../../eval/layer_a.py), and there is no mAP50-95 on this split. The notebook's car count MAE at each detector's best threshold equals the scoreboard above (17.40, 11.60, 3.53, 1.73, 1.87), which is how these frames are matched to that run.
+
+| Detector | AP50 car | AP50 bus | AP50 truck | mAP50 (3 classes) | AP50 any vehicle | Time per image |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| COCO YOLO-S @640 | 0.486 | 0.408 | 0.253 | 0.383 | 0.520 | 6.2 ms (T4 GPU) |
+| COCO YOLO-S @1280 | 0.714 | 0.576 | 0.362 | 0.551 | 0.733 | 23.6 ms (T4 GPU) |
+| Roboflow v6 | 0.757 | 0.444 | 0.595 | 0.599 | 0.744 | 182 ms (API round trip) |
+| YOLO-S trained (freeze) | 0.899 | 0.798 | 0.784 | 0.827 | 0.895 | 23.2 ms (T4 GPU) |
+| YOLO-M trained (freeze) | 0.894 | 0.912 | 0.781 | 0.862 | 0.890 | 57.2 ms (T4 GPU) |
+
+Car recall and precision at the threshold each detector uses on the scoreboard (the one with the lowest car count MAE in a 0.10-0.50 sweep):
+
+| Detector | Conf | Car recall | Car precision | Car count ratio (predicted / labelled) |
+| --- | ---: | ---: | ---: | ---: |
+| COCO YOLO-S @640 | 0.10 | 0.368 | 0.654 | 0.563 |
+| COCO YOLO-S @1280 | 0.10 | 0.548 | 0.815 | 0.672 |
+| Roboflow v6 | 0.30 | 0.696 | 0.730 | 0.953 |
+| YOLO-S trained (freeze) | 0.30 | 0.867 | 0.830 | 1.044 |
+| YOLO-M trained (freeze) | 0.25 | 0.863 | 0.819 | 1.053 |
+
+The `Time per image` column is Ultralytics predict on a T4 at each model's input size; it is not the served latency. The YOLO26s checkpoint's own training log reports mAP50 0.833 / mAP50-95 0.558 on the `valid` split, which is also the split that chose it.
+
+## Speed test
+
+[`speed_benchmark.py`](speed_benchmark.py) times the served ONNX file (`models/yolo26s_v6_boxfix.onnx`, 736 x 1280 input) with onnxruntime. Frames are read before timing, so only preprocessing (decode, letterbox) and inference are measured; NMS and the HTTP handler are not.
+
+| Run | Hardware | onnxruntime | Frames | Preprocess avg | Inference avg (median) | Total avg | Images/s |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| Colab, [`onnx_gpu_speed_test.ipynb`](notebooks/onnx_gpu_speed_test.ipynb) | Colab GPU, `CUDAExecutionProvider` (card not logged) | 1.31.0 | 20 live frames, cameras 2701 and 2702 | 14.7 ms | 4.4 ms (4.4) | 19.2 ms | 52.1 |
+| This repo, 17 Oct 2026 | 4 vCPU Intel Xeon 2.10 GHz, `CPUExecutionProvider` | 1.29.0 | the 15 [`frames/`](frames/README.md) | 55.1 ms | 154.2 ms (159.6) | 209.3 ms | 4.8 |
+
+The Colab run downloaded the 20 most recent frames (every 10 minutes going back from an hour before the run) and did not save them, so that exact set cannot be recovered. To repeat the test on fixed images, run it on the committed test frames:
+
+```bash
+# from camdetect/
+python test-reports/speed_benchmark.py --model models/yolo26s_v6_boxfix.onnx --frames test-reports/frames --n 15
+```
+
+The `swiftbackend` Cloud Run service is CPU-only. The earlier local measurement of the full `model=local` handler is about 0.5 s per frame ([CHANGELOG](../../CHANGELOG.md)).
+
+## Model weights
+
+Trained weights live in the team Drive folder `swiftborder_runs`, not in git. Only the YOLO26s export is in the repo, as ONNX.
+
+| Detector | Where | Files |
+| --- | --- | --- |
+| YOLO-S trained (freeze), Colab run `v6_yolo26s_boxfix` | [Drive `swiftborder_runs/v6_yolo26s_boxfix`](https://drive.google.com/drive/folders/127Ydbf_xvRVQhocb4xrkfTFeMfuAs3Px) | `weights/best.pt` (20,389,957 bytes; sha256 in the [camdetect README](../README.md#in-container-model-modellocal)), `weights/last.pt`, `results.csv`, `results.png`, `confusion_matrix.png`, `BoxR_curve.png`. ONNX export in git: [`models/yolo26s_v6_boxfix.onnx`](../models/yolo26s_v6_boxfix.onnx) |
+| YOLO-M trained (freeze), Colab run `v6_yolo26m_boxfix` | [Drive `swiftborder_runs/v6_yolo26m_boxfix`](https://drive.google.com/drive/folders/1okUFdqub62EdRuy01FwhcyR0wXVLnNWV) | `weights/best.pt` (44,104,281 bytes), `weights/last.pt`, `results.csv`, `BoxR_curve.png`, validation batch images. Not exported, not served |
+| COCO YOLO-S @640 / @1280 | Ultralytics release | stock `yolo26s.pt`, downloaded by Ultralytics; no fine-tuning |
+| Roboflow v6 | Roboflow (hosted) | Workflow `vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic`. Weight download needs a Roboflow Core plan |
+
+`swiftborder_runs` also holds `test_predictions/` (the annotated images in Appendix B, one folder per detector plus `ground_truth`) and the validation runs `val_yolo26s_valid_boxfix` and `val_yolo26m_test_boxfix`.
+
 ## What this does not show
 
-- **No box metrics.** Ground truth here is per-image totals. mAP, precision and recall need the Roboflow box export run through [`eval/layer_a.py`](../../eval/layer_a.py).
-- **Not confirmed held out.** The YOLO26s checkpoint's mAP50 0.833 is its own ~15-image validation split, which also chose the checkpoint. These 15 frames are not shown to be outside that split or the training set.
+- **Box metrics are the notebook's.** AP50, recall and precision come from the Colab scorer above. [`eval/layer_a.py`](../../eval/layer_a.py) has not been run on this split, there is no mAP50-95 here, and the box labels are in Roboflow, not in git.
+- **No direction score.** There are no direction labels, so per-direction count error is not measured.
 - **Small sample.** 15 frames from July and September 2025, one camera. One frame (19 Jul 09:35) dominates the baselines' error.
 - **Counts are not crossing time.** A good count is an input to Layer B, not a forecast result.
 
