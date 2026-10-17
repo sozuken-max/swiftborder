@@ -17,7 +17,7 @@
 | **Layer B §1a: local replicas of BQML models** | [`eval/runs/parity-bqml/run.json`](../eval/runs/parity-bqml/run.json) (`20261004T025016Z_bqml_parity`) | `13–30 Sep 2026` (18 SGT days, 5,184 bins) | `eval/bqml_parity.py`, `eval/bq_replica.py` (`c910a8e`) | `lin_bq[frozen]` (**2.789 min**) vs `lin_h30` (**2.776 min**); `xgb_bq[frozen]` (**2.392 min**) vs `xgb_h30` (**2.487 min**) | Confirmed parity within $\pm 0.5$ min on 18 days ([ADR 0004](adr/0004-serve-local-models.md)) |
 | **Layer A → B §7c: observed camera counts (`local_counts`) correlation & ablation** | [`eval/runs/layer_a_eval/correlation.json`](../eval/runs/layer_a_eval/correlation.json), [`ablation.json`](../eval/runs/layer_a_eval/ablation.json), [`report.md`](../eval/runs/layer_a_eval/report.md) | `6 Sep – 4 Oct 2026` (8,010 joined rows for correlation); `13–30 Sep 2026` (18 daily folds) for ablation | `eval/layer_a_eval.py` over `cam2701.local_counts` (4,052 frames, `local:yolo26s-v6-boxfix` at `0.20 / 0.60`) | Restricted 4-feature contemporaneous Maps tree (**2.8445 min**) vs +camera counts (**2.7618 min**, $\Delta = -0.0827$ min, fold paired-$t$ $p = 0.0067$) | Exploratory fold-level ablation (both restricted trees trail persistence **2.6718** and full `xgb[maps]` **2.275**; no row-level DM vs `maps+mpfc`) |
 | **Layer B §8: TimesFM 2.5, FCM+MLP, and 50/50 `fcm_mlp + xgb[maps]` mix** | [`docs/layer-b-mix-module.md`](../docs/layer-b-mix-module.md), [`docs/layer-b-fcm-mlp-results.md`](../docs/layer-b-fcm-mlp-results.md) | `13–30 Sep 2026` (18 SGT calendar days, 5,184 bins, both directions) | `eval/layer_b_fcm_mlp.py`, `layer_b_fcm_xgb_mix.py` (`backtest-20261010T080013Z-6a139c3f`), `layer_b_timesfm.py` | 30-min `y_30` vs persistence (**2.640**) and `xgb[maps]` (**2.275**); 50/50 mix reaches **2.186 min** (standalone run **2.132 min**) | Exploratory post-hoc mix on 13–30 Sep (no separate October confirmation run under the 17 Oct freeze; within $\pm 0.5$ min bar vs `xgb[maps]`) |
-| **Layer B: 30 min – 24 h horizon study** | [`docs/horizon-study.md`](horizon-study.md), [`docs/images/horizon-study/results.json`](images/horizon-study/results.json), [`forecastapi/horizon_study.json`](../forecastapi/horizon_study.json) | `13–30 Sep 2026` (18 SGT days, 16 horizons from 30 min to 24 h) | `eval/horizon_study.py` | `xgb[maps+prof]` vs persistence and weekday×time-of-day profile (336 comparisons) | Exploratory horizon skill curve (Holm-significant vs profile to **3 h**; uncorrected to **5.5 h**; profile fallback beyond 5.5 h) |
+| **Layer B: 30 min – 24 h horizon study** | [`docs/horizon-study.md`](horizon-study.md), [`docs/images/horizon-study/results.json`](images/horizon-study/results.json), [`forecastapi/horizon_study.json`](../services/forecastapi/horizon_study.json) | `13–30 Sep 2026` (18 SGT days, 16 horizons from 30 min to 24 h) | `eval/horizon_study.py` | `xgb[maps+prof]` vs persistence and weekday×time-of-day profile (336 comparisons) | Exploratory horizon skill curve (Holm-significant vs profile to **3 h**; uncorrected to **5.5 h**; profile fallback beyond 5.5 h) |
 
 Protocol diagrams: [diagrams/eval-layer-a.mmd](diagrams/eval-layer-a.mmd), [diagrams/eval-layer-b.mmd](diagrams/eval-layer-b.mmd) (embedded below). The deck PNGs `images/eval-layer-a.png` and `images/eval-layer-b.png` were regenerated on 4 Oct 2026 ([diagrams/README.md](diagrams/README.md)).
 
@@ -297,7 +297,7 @@ Plots: `eval/runs/report/bqml/mae-by-direction.png`, `bqml/mae-diff-ci.png` (for
 
 **Source:** [`eval/runs/parity-bqml/run.json`](../eval/runs/parity-bqml/run.json), run `20261003T065653Z_bqml-parity`, committed code `89996bd`, clean tree. It uses the same 5,184 rows as section 1.
 
-**Replicas** ([`eval/bq_replica.py`](../eval/bq_replica.py)). Features, settings and training rows are read from `bq show --model` and match [`sql/bigquery/traffic_prediction/bqml_*_h30.sql`](../sql/bigquery/traffic_prediction/):
+**Replicas** ([`eval/bq_replica.py`](../eval/bq_replica.py)). Features, settings and training rows are read from `bq show --model` and match [`sql/bigquery/traffic_prediction/bqml_*_h30.sql`](../data/sql/bigquery/traffic_prediction/):
 
 - **Training rows:** the 1,406 rows whose label was observed by 12 Sep 06:15 UTC, with 11–12 Sep held out as in BQML's custom split.
 - **Linear:** ridge, L2 0.1, on standardised features.
@@ -322,7 +322,7 @@ Plots: `eval/runs/report/bqml/mae-by-direction.png`, `bqml/mae-diff-ci.png` (for
 **Data:**
 
 - **Maps features:** rebuilt in pandas from the `travel_times` export by [`eval/features.py`](../eval/features.py). The run compared them with the live `v_training_set` on 7,172 rows (through 2026-09-30 15:20 UTC); every compared column matched (largest difference 1.4e-14, `joined.dataset.parity_with_live_v_training_set`).
-- **Weather:** rainfall at station S210 (Woodlands Centre Road) and the Woodlands 2-hour forecast, fetched from data.gov.sg ([`eval/`](../weather/README.md)). The experiment reads these CSVs; at run time the BigQuery weather tables ended on 31 Aug SGT (the same rows were appended to BigQuery afterwards; see [inventory.md](inventory.md)).
+- **Weather:** rainfall at station S210 (Woodlands Centre Road) and the Woodlands 2-hour forecast, fetched from data.gov.sg ([`data/weather/README.md`](../data/weather/README.md)). The experiment reads these CSVs; at run time the BigQuery weather tables ended on 31 Aug SGT (the same rows were appended to BigQuery afterwards; see [inventory.md](inventory.md)).
 - **Causality:** rainfall readings stamped at or before the forecast origin; the forecast most recently **acquired by data.gov.sg** (`update_timestamp`) at or before the origin whose valid period covers the target time.
 - **Camera:** observed counts pending the backfill in [handoff-camera-pilot.md](archive/handoff-camera-pilot.md); no Layer A output exists for this window. A Layer A *forecast* is scored in section 7a.
 
@@ -667,7 +667,7 @@ The deep component takes about 10–15 minutes on CPU. With the same TensorFlow 
 
 Adding `--refresh-bq` downloads a newer export: that extends the data and is a new result, not a reproduction. `--allow-dirty` on promotion is only for a recorded reason.
 
-Weather CSVs: see [weather/README.md](../weather/README.md). Camera counts: `python backfill_camera_counts.py --dry-run` (billed against Roboflow credits; see [eval/README.md](../eval/README.md)). Run layout and the manifest schema: [eval/runs/README.md](../eval/runs/README.md).
+Weather CSVs: see [weather/README.md](../data/weather/README.md). Camera counts: `python backfill_camera_counts.py --dry-run` (billed against Roboflow credits; see [eval/README.md](../eval/README.md)). Run layout and the manifest schema: [eval/runs/README.md](../eval/runs/README.md).
 
 ---
 

@@ -13,7 +13,7 @@ Maps columns reproduce ``v_bins_10min`` + ``v_training_set`` in pandas. Two deli
 lags and labels are **time-based** (a missing bin gives NaN rather than the previous row), and
 ``after_gap`` is computed the same way as the view.
 
-Weather (``weather/data/`` CSVs):
+Weather (``data/weather/data/`` CSVs):
 - ``rain_30`` / ``rain_60``: rainfall (mm) at station S210 (Woodlands Centre) in (asof-30, asof] and
   (asof-60, asof].
 - ``fc_rain`` / ``fc_heavy``: the 2-hour forecast for Woodlands whose valid period covers the
@@ -46,9 +46,12 @@ EVAL_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = EVAL_ROOT.parent
 TT_CACHE = EVAL_ROOT / "data" / "causeway_gdata.csv"
 def _weather_data_csv(*parts: str) -> Path:
-    primary = REPO_ROOT / "weather" / "data" / Path(*parts)
-    legacy = REPO_ROOT / "Causeway" / "data" / Path(*parts)
-    return primary if primary.exists() or not legacy.exists() else legacy
+    primary = REPO_ROOT / "data" / "weather" / "data" / Path(*parts)
+    for fallback_root in (REPO_ROOT / "weather" / "data", REPO_ROOT / "Causeway" / "data"):
+        candidate = fallback_root / Path(*parts)
+        if not primary.exists() and candidate.exists():
+            return candidate
+    return primary
 
 
 RAIN_CSV = _weather_data_csv("rainfall", "S210_Woodlands_Centre.csv")

@@ -15,11 +15,12 @@ htmlcov/
 !eval/runs/replay-*/*/*.csv
 # Plotted series of the published horizon-study charts (aggregates, not a data extract).
 !docs/images/horizon-study/*.csv
-# Per-frame model=local counts from camdetect/backfill_local_counts.py (committed output).
-!camdetect/backfill/*.csv
+# Per-frame model=local counts from services/camdetect/backfill_local_counts.py (committed output).
+!services/camdetect/backfill/*.csv
 **/*.log
 # Test fixtures are small, hand-built, and must be committed
 !**/tests/fixtures/**
+data/weather/data/
 weather/data/
 Causeway/data/
 # eval data caches and derived tables (only the README and .gitkeep are tracked)

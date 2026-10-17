@@ -1,0 +1,31 @@
+# Builds the Cloud Run Job image for services/camdetect/backfill_local_counts.py (services/camdetect/backfill.Dockerfile).
+# Used by manual trigger 03aefce3 (cam2701-local-backfill-image, asia-southeast1). It runs offline unit tests
+# first, then builds and pushes the image; the job is created in Cloud Run (services/camdetect/README.md,
+# "Retro-scoring stored frames"). Under jobs/, so swiftbackend's trigger filter does not match it.
+# CLOUD_LOGGING_ONLY: a trigger that runs as a user-chosen service account needs a logging option.
+steps:
+  - id: Test
+    name: mirror.gcr.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install -q --disable-pip-version-check --root-user-action=ignore -r services/camdetect/requirements-dev.txt
+        cd services/camdetect && python -m pytest -q -p no:cacheprovider tests/test_backfill_local_counts.py
+
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=services/camdetect/backfill.Dockerfile
+      - --tag=$_IMAGE:latest
+      - --tag=$_IMAGE:$SHORT_SHA
+      - services/camdetect
+images:
+  - $_IMAGE:latest
+  - $_IMAGE:$SHORT_SHA
+substitutions:
+  _IMAGE: asia-southeast1-docker.pkg.dev/swiftborder/cloud-run-source-deploy/cam2701-local-backfill
+options:
+  logging: CLOUD_LOGGING_ONLY

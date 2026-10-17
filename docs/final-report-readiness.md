@@ -98,7 +98,7 @@ Before submission, score the served YOLO model on an untouched export and report
 
 ### 2. High: the live API uses incomplete origin bins
 
-[`forecastapi/main.py`](../forecastapi/main.py), `_LATEST_SQL`, picks the newest row without requiring `bin_ts + 10 minutes <= now`. The underlying view aggregates all readings currently present in each bin. The evaluation treats a bin's features as available only after the bin closes.
+[`forecastapi/main.py`](../services/forecastapi/main.py), `_LATEST_SQL`, picks the newest row without requiring `bin_ts + 10 minutes <= now`. The underlying view aggregates all readings currently present in each bin. The evaluation treats a bin's features as available only after the bin closes.
 
 This occurred live: a response generated at **23:32:49 SGT** used the **23:30-23:40** origin bin. Later readings can change that bin's features. Therefore fixture agreement between local model definitions does not establish end-to-end serving/evaluation equivalence.
 
@@ -130,7 +130,7 @@ Separate historical BQML benchmark results, local-replica parity, and today's HT
 
 ### 7. Medium: live access policy contradicts the deployment smoke test
 
-The forecast service is anonymously accessible because its invoker check is disabled; a live request during the 3 Oct review returned HTTP 200 with CORS `*`. At that checkout [`forecastapi/cloudbuild.yaml`](../forecastapi/cloudbuild.yaml) expected an anonymous request to return 403.
+The forecast service is anonymously accessible because its invoker check is disabled; a live request during the 3 Oct review returned HTTP 200 with CORS `*`. At that checkout [`forecastapi/cloudbuild.yaml`](../services/forecastapi/cloudbuild.yaml) expected an anonymous request to return 403.
 
 **Follow-up (2026-10-04):** local `main` `7bd94e3` accepts anonymous 200 or 503 for `model=served`, and a fresh anonymous GET returned 200. See [inventory.md](inventory.md). Do not label the API private based only on an empty IAM policy.
 
@@ -208,7 +208,7 @@ A lecturer should open six files and stop. Everything else is an ADR, a runbook,
 - Inventory blocks dated before the latest verification, and body rows that still quote older row counts, revisions, or "not on main".
 - Roadmap steps already marked done (first presentation, published 13–30 Sep Layer B).
 
-**Stay operational. Do not merge into report prose:** ADRs 0001–0004, the forecast-api runbook, [handoff-camera-pilot.md](archive/handoff-camera-pilot.md), [agent-deploy.md](agent-deploy.md), the roadmap freeze and remaining sequence, [../eval/README.md](../eval/README.md), [../sql/README.md](../sql/README.md), the grading lens, and `docs/diagrams/` plus `docs/images/`.
+**Stay operational. Do not merge into report prose:** ADRs 0001–0004, the forecast-api runbook, [handoff-camera-pilot.md](archive/handoff-camera-pilot.md), [agent-deploy.md](agent-deploy.md), the roadmap freeze and remaining sequence, [../eval/README.md](../eval/README.md), [../data/sql/README.md](../data/sql/README.md), the grading lens, and `docs/diagrams/` plus `docs/images/`.
 
 **Do not merge:** `eval/runs/report/` JSON and plots, replay CSVs, or `skills/`. `hosting/` is in this checkout. The per-point `model` fields in `forecastapi/` are a separate code change in the same branch; they are not a report-file merge.
 

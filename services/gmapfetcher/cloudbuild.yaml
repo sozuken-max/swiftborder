@@ -1,0 +1,64 @@
+# CI/CD for Cloud Run service gmap-woodlands-fetcher (services/gmapfetcher/): test, buildpack build + publish, deploy.
+# Trigger 33e4b77e runs this on a push to ^main$ that touches services/gmapfetcher/ runtime files.
+# Env vars (GOOGLE_MAPS_API_KEY, BQ_*, SNAPSHOT_*) stay on the Cloud Run service; `services update --image`
+# leaves them untouched. `engines.node` in package.json pins Node.js 22.
+
+steps:
+  - id: Test
+    name: mirror.gcr.io/library/node:22-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        cd services/gmapfetcher && node --test
+
+  - id: Buildpack
+    name: gcr.io/k8s-skaffold/pack@sha256:221c0c0d9a90f46f108bb888a1da9e99c82ff631e8b1c63b0223ea951752bd53
+    entrypoint: pack
+    args:
+      - build
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --builder=gcr.io/buildpacks/builder:latest
+      - --network=cloudbuild
+      - --publish
+      - --path=services/gmapfetcher
+      - --env=GOOGLE_FUNCTION_TARGET
+    env:
+      - GOOGLE_FUNCTION_TARGET=$_FUNCTION_TARGET
+
+  - id: Deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - $_SERVICE_NAME
+      - --platform=managed
+      - --project=$_AR_PROJECT_ID
+      - --region=$_DEPLOY_REGION
+      - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
+      - --quiet
+
+substitutions:
+  _AR_HOSTNAME: asia-southeast1-docker.pkg.dev
+  _AR_PROJECT_ID: swiftborder
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _DEPLOY_REGION: asia-southeast1
+  _FUNCTION_TARGET: fetchTravelTimes
+  _PLATFORM: managed
+  _SERVICE_NAME: gmap-woodlands-fetcher
+  _TRIGGER_ID: 33e4b77e-dbce-426e-a701-de234ec16d60
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
+
+timeout: 1200s
+
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - gmap-woodlands-fetcher

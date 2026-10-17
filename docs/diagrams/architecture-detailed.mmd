@@ -25,7 +25,7 @@ flowchart LR
     API --> UI
     PUB["swiftborder-public<br/>traffic-24h.json history"] --> UI
     EVAL["eval/ read-only harnesses<br/>run.json and report figures"]
-    WX["NEA weather<br/>weather/ manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
+    WX["NEA weather<br/>data/weather/ manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
     HIST -.->|"historical queue profile"| EVAL
     TT -.->|"read-only export"| EVAL
     CNNRNN -.->|"not in run.json"| EVAL
