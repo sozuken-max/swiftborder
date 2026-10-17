@@ -15,3 +15,5 @@ replay-*/*
 # Layer A evaluation
 !layer_a_eval/
 !layer_a_eval/**
+!layer_a_count/
+!layer_a_count/**

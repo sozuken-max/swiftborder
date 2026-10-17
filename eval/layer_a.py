@@ -20,7 +20,9 @@ Metrics (IoU-matched, class-aware, greedy by confidence as in COCO):
   ``file_name,timestamp``); without a time the mean luminance decides (< 60/255 = night).
 
 Hold-out discipline: score only a split that was not used for training (Roboflow ``test`` or
-``valid``). Result cells in docs/evaluation.md stay ``pending`` until this runs on a real export.
+``valid``). Image-level count totals for 15 frames are recorded separately under
+``eval/runs/layer_a_count/``. mAP, precision, recall and directional count error stay
+unscored until this script runs on a box export.
 
     python layer_a.py --coco tests/fixtures/layer_a/_annotations.coco.json \\
         --predictions tests/fixtures/layer_a/predictions.json \\

@@ -1,0 +1,932 @@
+{
+  "summary": {
+    "live": {
+      "min_confidence": 0.2,
+      "max_overlap": 0.6,
+      "model_id": "local:yolo26s-v6-boxfix",
+      "cars": {
+        "mae": 1.87,
+        "bias": 1.33,
+        "exact": 5,
+        "n": 15
+      },
+      "veh": {
+        "mae": 1.67,
+        "bias": 1.53,
+        "exact": 7,
+        "n": 15
+      },
+      "cars_vs_artifact_trained_s": {
+        "exact": 7,
+        "n": 15
+      },
+      "cars_day_night": {
+        "day": {
+          "mae": 2.86,
+          "bias": 2.86,
+          "exact": 1,
+          "n": 7
+        },
+        "night": {
+          "mae": 1.0,
+          "bias": 0.0,
+          "exact": 4,
+          "n": 8
+        }
+      }
+    },
+    "artifact_conf_overlap_off": {
+      "min_confidence": 0.3,
+      "max_overlap": null,
+      "model_id": "local:yolo26s-v6-boxfix",
+      "cars": {
+        "mae": 1.8,
+        "bias": 1.27,
+        "exact": 6,
+        "n": 15
+      },
+      "veh": {
+        "mae": 1.53,
+        "bias": 1.27,
+        "exact": 6,
+        "n": 15
+      },
+      "cars_vs_artifact_trained_s": {
+        "exact": 14,
+        "n": 15
+      },
+      "cars_day_night": {
+        "day": {
+          "mae": 2.14,
+          "bias": 2.14,
+          "exact": 2,
+          "n": 7
+        },
+        "night": {
+          "mae": 1.5,
+          "bias": 0.5,
+          "exact": 4,
+          "n": 8
+        }
+      }
+    },
+    "artifact_conf_overlap_on": {
+      "min_confidence": 0.3,
+      "max_overlap": 0.6,
+      "model_id": "local:yolo26s-v6-boxfix",
+      "cars": {
+        "mae": 1.13,
+        "bias": -0.33,
+        "exact": 7,
+        "n": 15
+      },
+      "veh": {
+        "mae": 1.27,
+        "bias": -0.73,
+        "exact": 6,
+        "n": 15
+      },
+      "cars_vs_artifact_trained_s": {
+        "exact": 6,
+        "n": 15
+      },
+      "cars_day_night": {
+        "day": {
+          "mae": 1.0,
+          "bias": -0.43,
+          "exact": 4,
+          "n": 7
+        },
+        "night": {
+          "mae": 1.25,
+          "bias": -0.25,
+          "exact": 3,
+          "n": 8
+        }
+      }
+    }
+  },
+  "frames": [
+    {
+      "t": "2025-07-01T03:15:41",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T031541.jpg",
+      "gt": {
+        "cars": 3,
+        "veh": 5
+      },
+      "artifact_trained_s": {
+        "cars": 3,
+        "veh": 5
+      },
+      "pred": {
+        "live": {
+          "cars": 3,
+          "veh": 5,
+          "by_class": {
+            "car": 3,
+            "bus": 2
+          },
+          "by_direction": {
+            "SG-MY": 4,
+            "MY-SG": 1
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 3,
+          "veh": 5,
+          "by_class": {
+            "car": 3,
+            "bus": 2
+          },
+          "by_direction": {
+            "SG-MY": 4,
+            "MY-SG": 1
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 3,
+          "veh": 5,
+          "by_class": {
+            "car": 3,
+            "bus": 2
+          },
+          "by_direction": {
+            "SG-MY": 4,
+            "MY-SG": 1
+          },
+          "overlap_suppressed": 0
+        }
+      }
+    },
+    {
+      "t": "2025-07-01T10:46:09",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T104609.jpg",
+      "gt": {
+        "cars": 75,
+        "veh": 80
+      },
+      "artifact_trained_s": {
+        "cars": 81,
+        "veh": 86
+      },
+      "pred": {
+        "live": {
+          "cars": 82,
+          "veh": 87,
+          "by_class": {
+            "car": 82,
+            "truck": 4,
+            "bus": 1
+          },
+          "by_direction": {
+            "SG-MY": 80,
+            "MY-SG": 7
+          },
+          "overlap_suppressed": 9
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 81,
+          "veh": 86,
+          "by_class": {
+            "car": 81,
+            "truck": 4,
+            "bus": 1
+          },
+          "by_direction": {
+            "SG-MY": 79,
+            "MY-SG": 7
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 75,
+          "veh": 80,
+          "by_class": {
+            "car": 75,
+            "truck": 4,
+            "bus": 1
+          },
+          "by_direction": {
+            "SG-MY": 73,
+            "MY-SG": 7
+          },
+          "overlap_suppressed": 6
+        }
+      }
+    },
+    {
+      "t": "2025-07-01T17:16:15",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T171615.jpg",
+      "gt": {
+        "cars": 33,
+        "veh": 36
+      },
+      "artifact_trained_s": {
+        "cars": 35,
+        "veh": 39
+      },
+      "pred": {
+        "live": {
+          "cars": 37,
+          "veh": 42,
+          "by_class": {
+            "bus": 3,
+            "car": 37,
+            "truck": 2
+          },
+          "by_direction": {
+            "SG-MY": 17,
+            "MY-SG": 25
+          },
+          "overlap_suppressed": 3
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 35,
+          "veh": 39,
+          "by_class": {
+            "bus": 3,
+            "car": 35,
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 15,
+            "MY-SG": 24
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 34,
+          "veh": 38,
+          "by_class": {
+            "bus": 3,
+            "car": 34,
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 15,
+            "MY-SG": 23
+          },
+          "overlap_suppressed": 1
+        }
+      }
+    },
+    {
+      "t": "2025-07-07T00:45:49",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250707T004549.jpg",
+      "gt": {
+        "cars": 9,
+        "veh": 14
+      },
+      "artifact_trained_s": {
+        "cars": 11,
+        "veh": 16
+      },
+      "pred": {
+        "live": {
+          "cars": 11,
+          "veh": 15,
+          "by_class": {
+            "car": 11,
+            "truck": 3,
+            "bus": 1
+          },
+          "by_direction": {
+            "MY-SG": 6,
+            "SG-MY": 9
+          },
+          "overlap_suppressed": 2
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 11,
+          "veh": 16,
+          "by_class": {
+            "car": 11,
+            "truck": 3,
+            "bus": 2
+          },
+          "by_direction": {
+            "MY-SG": 7,
+            "SG-MY": 9
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 11,
+          "veh": 15,
+          "by_class": {
+            "car": 11,
+            "truck": 3,
+            "bus": 1
+          },
+          "by_direction": {
+            "MY-SG": 6,
+            "SG-MY": 9
+          },
+          "overlap_suppressed": 1
+        }
+      }
+    },
+    {
+      "t": "2025-07-11T04:55:32",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250711T045532.jpg",
+      "gt": {
+        "cars": 8,
+        "veh": 12
+      },
+      "artifact_trained_s": {
+        "cars": 8,
+        "veh": 12
+      },
+      "pred": {
+        "live": {
+          "cars": 8,
+          "veh": 12,
+          "by_class": {
+            "car": 8,
+            "bus": 3,
+            "truck": 1
+          },
+          "by_direction": {
+            "MY-SG": 8,
+            "SG-MY": 4
+          },
+          "overlap_suppressed": 1
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 8,
+          "veh": 12,
+          "by_class": {
+            "car": 8,
+            "bus": 3,
+            "truck": 1
+          },
+          "by_direction": {
+            "MY-SG": 7,
+            "SG-MY": 5
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 7,
+          "veh": 11,
+          "by_class": {
+            "car": 7,
+            "bus": 3,
+            "truck": 1
+          },
+          "by_direction": {
+            "MY-SG": 7,
+            "SG-MY": 4
+          },
+          "overlap_suppressed": 1
+        }
+      }
+    },
+    {
+      "t": "2025-07-14T00:15:42",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250714T001542.jpg",
+      "gt": {
+        "cars": 66,
+        "veh": 66
+      },
+      "artifact_trained_s": {
+        "cars": 69,
+        "veh": 70
+      },
+      "pred": {
+        "live": {
+          "cars": 64,
+          "veh": 65,
+          "by_class": {
+            "bus": 1,
+            "car": 64
+          },
+          "by_direction": {
+            "SG-MY": 21,
+            "MY-SG": 44
+          },
+          "overlap_suppressed": 11
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 69,
+          "veh": 70,
+          "by_class": {
+            "bus": 1,
+            "car": 69
+          },
+          "by_direction": {
+            "SG-MY": 23,
+            "MY-SG": 47
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 65,
+          "veh": 66,
+          "by_class": {
+            "bus": 1,
+            "car": 65
+          },
+          "by_direction": {
+            "SG-MY": 21,
+            "MY-SG": 45
+          },
+          "overlap_suppressed": 4
+        }
+      }
+    },
+    {
+      "t": "2025-07-14T10:55:53",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250714T105553.jpg",
+      "gt": {
+        "cars": 56,
+        "veh": 72
+      },
+      "artifact_trained_s": {
+        "cars": 56,
+        "veh": 73
+      },
+      "pred": {
+        "live": {
+          "cars": 56,
+          "veh": 72,
+          "by_class": {
+            "truck": 15,
+            "car": 56,
+            "bus": 1
+          },
+          "by_direction": {
+            "SG-MY": 38,
+            "MY-SG": 34
+          },
+          "overlap_suppressed": 7
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 56,
+          "veh": 73,
+          "by_class": {
+            "truck": 15,
+            "bus": 2,
+            "car": 56
+          },
+          "by_direction": {
+            "SG-MY": 38,
+            "MY-SG": 35
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 56,
+          "veh": 71,
+          "by_class": {
+            "truck": 14,
+            "car": 56,
+            "bus": 1
+          },
+          "by_direction": {
+            "SG-MY": 37,
+            "MY-SG": 34
+          },
+          "overlap_suppressed": 2
+        }
+      }
+    },
+    {
+      "t": "2025-07-15T01:46:08",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250715T014608.jpg",
+      "gt": {
+        "cars": 0,
+        "veh": 1
+      },
+      "artifact_trained_s": {
+        "cars": 0,
+        "veh": 1
+      },
+      "pred": {
+        "live": {
+          "cars": 0,
+          "veh": 1,
+          "by_class": {
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 1
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 0,
+          "veh": 1,
+          "by_class": {
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 1
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 0,
+          "veh": 1,
+          "by_class": {
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 1
+          },
+          "overlap_suppressed": 0
+        }
+      }
+    },
+    {
+      "t": "2025-07-15T14:45:41",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250715T144541.jpg",
+      "gt": {
+        "cars": 10,
+        "veh": 15
+      },
+      "artifact_trained_s": {
+        "cars": 10,
+        "veh": 15
+      },
+      "pred": {
+        "live": {
+          "cars": 11,
+          "veh": 16,
+          "by_class": {
+            "car": 11,
+            "bus": 3,
+            "truck": 2
+          },
+          "by_direction": {
+            "SG-MY": 9,
+            "MY-SG": 7
+          },
+          "overlap_suppressed": 1
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 10,
+          "veh": 15,
+          "by_class": {
+            "car": 10,
+            "bus": 3,
+            "truck": 2
+          },
+          "by_direction": {
+            "SG-MY": 9,
+            "MY-SG": 6
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 10,
+          "veh": 15,
+          "by_class": {
+            "car": 10,
+            "bus": 3,
+            "truck": 2
+          },
+          "by_direction": {
+            "SG-MY": 9,
+            "MY-SG": 6
+          },
+          "overlap_suppressed": 0
+        }
+      }
+    },
+    {
+      "t": "2025-07-18T18:26:05",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250718T182605.jpg",
+      "gt": {
+        "cars": 39,
+        "veh": 45
+      },
+      "artifact_trained_s": {
+        "cars": 41,
+        "veh": 46
+      },
+      "pred": {
+        "live": {
+          "cars": 40,
+          "veh": 45,
+          "by_class": {
+            "bus": 3,
+            "car": 40,
+            "truck": 2
+          },
+          "by_direction": {
+            "MY-SG": 7,
+            "SG-MY": 38
+          },
+          "overlap_suppressed": 12
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 41,
+          "veh": 46,
+          "by_class": {
+            "bus": 3,
+            "car": 41,
+            "truck": 2
+          },
+          "by_direction": {
+            "MY-SG": 8,
+            "SG-MY": 38
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 39,
+          "veh": 43,
+          "by_class": {
+            "bus": 2,
+            "car": 39,
+            "truck": 2
+          },
+          "by_direction": {
+            "MY-SG": 7,
+            "SG-MY": 36
+          },
+          "overlap_suppressed": 3
+        }
+      }
+    },
+    {
+      "t": "2025-07-19T09:35:42",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250719T093542.jpg",
+      "gt": {
+        "cars": 87,
+        "veh": 91
+      },
+      "artifact_trained_s": {
+        "cars": 89,
+        "veh": 93
+      },
+      "pred": {
+        "live": {
+          "cars": 91,
+          "veh": 95,
+          "by_class": {
+            "bus": 3,
+            "car": 91,
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 90,
+            "MY-SG": 5
+          },
+          "overlap_suppressed": 23
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 89,
+          "veh": 93,
+          "by_class": {
+            "bus": 3,
+            "car": 89,
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 88,
+            "MY-SG": 5
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 82,
+          "veh": 86,
+          "by_class": {
+            "bus": 3,
+            "car": 82,
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 81,
+            "MY-SG": 5
+          },
+          "overlap_suppressed": 7
+        }
+      }
+    },
+    {
+      "t": "2025-07-20T02:16:38",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250720T021638.jpg",
+      "gt": {
+        "cars": 1,
+        "veh": 3
+      },
+      "artifact_trained_s": {
+        "cars": 1,
+        "veh": 3
+      },
+      "pred": {
+        "live": {
+          "cars": 1,
+          "veh": 3,
+          "by_class": {
+            "car": 1,
+            "truck": 2
+          },
+          "by_direction": {
+            "MY-SG": 1,
+            "SG-MY": 2
+          },
+          "overlap_suppressed": 1
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 1,
+          "veh": 3,
+          "by_class": {
+            "bus": 1,
+            "car": 1,
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 2,
+            "MY-SG": 1
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 1,
+          "veh": 3,
+          "by_class": {
+            "bus": 1,
+            "car": 1,
+            "truck": 1
+          },
+          "by_direction": {
+            "SG-MY": 2,
+            "MY-SG": 1
+          },
+          "overlap_suppressed": 0
+        }
+      }
+    },
+    {
+      "t": "2025-07-22T07:46:52",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250722T074652.jpg",
+      "gt": {
+        "cars": 24,
+        "veh": 51
+      },
+      "artifact_trained_s": {
+        "cars": 27,
+        "veh": 51
+      },
+      "pred": {
+        "live": {
+          "cars": 27,
+          "veh": 51,
+          "by_class": {
+            "truck": 22,
+            "car": 27,
+            "bus": 2
+          },
+          "by_direction": {
+            "SG-MY": 23,
+            "MY-SG": 28
+          },
+          "overlap_suppressed": 6
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 27,
+          "veh": 51,
+          "by_class": {
+            "truck": 22,
+            "car": 27,
+            "bus": 2
+          },
+          "by_direction": {
+            "SG-MY": 23,
+            "MY-SG": 28
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 25,
+          "veh": 47,
+          "by_class": {
+            "truck": 21,
+            "car": 25,
+            "bus": 1
+          },
+          "by_direction": {
+            "SG-MY": 21,
+            "MY-SG": 26
+          },
+          "overlap_suppressed": 4
+        }
+      }
+    },
+    {
+      "t": "2025-07-22T19:57:03",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250722T195703.jpg",
+      "gt": {
+        "cars": 15,
+        "veh": 26
+      },
+      "artifact_trained_s": {
+        "cars": 12,
+        "veh": 25
+      },
+      "pred": {
+        "live": {
+          "cars": 13,
+          "veh": 29,
+          "by_class": {
+            "truck": 9,
+            "car": 13,
+            "bus": 7
+          },
+          "by_direction": {
+            "SG-MY": 22,
+            "MY-SG": 7
+          },
+          "overlap_suppressed": 4
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 11,
+          "veh": 24,
+          "by_class": {
+            "truck": 8,
+            "car": 11,
+            "bus": 5
+          },
+          "by_direction": {
+            "SG-MY": 18,
+            "MY-SG": 6
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 11,
+          "veh": 24,
+          "by_class": {
+            "truck": 8,
+            "car": 11,
+            "bus": 5
+          },
+          "by_direction": {
+            "SG-MY": 18,
+            "MY-SG": 6
+          },
+          "overlap_suppressed": 0
+        }
+      }
+    },
+    {
+      "t": "2025-09-01T19:06:18",
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-09/2701_20250901T190618.jpg",
+      "gt": {
+        "cars": 25,
+        "veh": 29
+      },
+      "artifact_trained_s": {
+        "cars": 28,
+        "veh": 31
+      },
+      "pred": {
+        "live": {
+          "cars": 27,
+          "veh": 31,
+          "by_class": {
+            "bus": 4,
+            "car": 27
+          },
+          "by_direction": {
+            "MY-SG": 6,
+            "SG-MY": 25
+          },
+          "overlap_suppressed": 2
+        },
+        "artifact_conf_overlap_off": {
+          "cars": 28,
+          "veh": 31,
+          "by_class": {
+            "bus": 3,
+            "car": 28
+          },
+          "by_direction": {
+            "MY-SG": 6,
+            "SG-MY": 25
+          },
+          "overlap_suppressed": 0
+        },
+        "artifact_conf_overlap_on": {
+          "cars": 27,
+          "veh": 30,
+          "by_class": {
+            "bus": 3,
+            "car": 27
+          },
+          "by_direction": {
+            "MY-SG": 6,
+            "SG-MY": 24
+          },
+          "overlap_suppressed": 1
+        }
+      }
+    }
+  ]
+}

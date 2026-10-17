@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-17
+
+- Layer A count comparison recorded from the [detector artifact](https://claude.ai/artifact/5m7x6QfuGrD911BzgVGyVn) into `eval/runs/layer_a_count/`. The same 15 original frames were rescored with `local:yolo26s-v6-boxfix` (confidence 0.2 / overlap 0.6, and confidence 0.30 with overlap off and on) and with live Roboflow v6 at confidence 0.2 (15 billed `swiftbackend` calls). Box mAP and directional count error stay pending. Inventory refreshed from project `swiftborder`: `Gmap-Woodlands` is `0 8 * * *` Asia/Singapore, `swiftbackend-00044-4l9`, `travel_times` 11,289 rows per route through 2026-10-17 00:00 UTC.
+
 ## 2026-10-13
 
 - `hosting/`: AI Vehicle Detection images show the dividing line again: the request adds `line=1`, which swiftbackend honours over its hidden-by-default setting. No backend change.

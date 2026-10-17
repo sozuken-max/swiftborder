@@ -1,0 +1,503 @@
+{
+  "models": [
+    {
+      "key": "coco_s@640",
+      "name": "COCO YOLO-S @640",
+      "short": "C640",
+      "conf": 0.1
+    },
+    {
+      "key": "coco_s@1280",
+      "name": "COCO YOLO-S @1280",
+      "short": "C1280",
+      "conf": 0.1
+    },
+    {
+      "key": "roboflow_v6",
+      "name": "Roboflow v6",
+      "short": "RF6",
+      "conf": 0.3
+    },
+    {
+      "key": "trained_s",
+      "name": "YOLO-S trained (freeze)",
+      "short": "S",
+      "conf": 0.3
+    },
+    {
+      "key": "trained_m",
+      "name": "YOLO-M trained (freeze)",
+      "short": "M",
+      "conf": 0.25
+    }
+  ],
+  "images": [
+    {
+      "file": "2701_20250701T031541_jpg.rf.305d8ff6133a3042f867f23ec741ae18.jpg",
+      "t": "2025-07-01T03:15:41",
+      "gt": {
+        "cars": 3,
+        "veh": 5
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 5,
+          "veh": 6
+        },
+        "coco_s@1280": {
+          "cars": 3,
+          "veh": 5
+        },
+        "roboflow_v6": {
+          "cars": 4,
+          "veh": 4
+        },
+        "trained_s": {
+          "cars": 3,
+          "veh": 5
+        },
+        "trained_m": {
+          "cars": 3,
+          "veh": 5
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T031541.jpg"
+    },
+    {
+      "file": "camera_id-2701_month-2025-07_2701_20250701T104609_jpg.rf.ac3643752e84aa54a25355ffb165f008.jpg",
+      "t": "2025-07-01T10:46:09",
+      "gt": {
+        "cars": 75,
+        "veh": 80
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 32,
+          "veh": 39
+        },
+        "coco_s@1280": {
+          "cars": 45,
+          "veh": 56
+        },
+        "roboflow_v6": {
+          "cars": 73,
+          "veh": 75
+        },
+        "trained_s": {
+          "cars": 81,
+          "veh": 86
+        },
+        "trained_m": {
+          "cars": 84,
+          "veh": 90
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T104609.jpg"
+    },
+    {
+      "file": "2701_20250701T171615_jpg.rf.2c614559e4c9ff55ed03ec2de9d135e9.jpg",
+      "t": "2025-07-01T17:16:15",
+      "gt": {
+        "cars": 33,
+        "veh": 36
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 44,
+          "veh": 47
+        },
+        "coco_s@1280": {
+          "cars": 37,
+          "veh": 42
+        },
+        "roboflow_v6": {
+          "cars": 37,
+          "veh": 38
+        },
+        "trained_s": {
+          "cars": 35,
+          "veh": 39
+        },
+        "trained_m": {
+          "cars": 36,
+          "veh": 42
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250701T171615.jpg"
+    },
+    {
+      "file": "2701_20250707T004549_jpg.rf.c77044050d670fc2bfffa93675c6da80.jpg",
+      "t": "2025-07-07T00:45:49",
+      "gt": {
+        "cars": 9,
+        "veh": 14
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 10,
+          "veh": 11
+        },
+        "coco_s@1280": {
+          "cars": 12,
+          "veh": 16
+        },
+        "roboflow_v6": {
+          "cars": 11,
+          "veh": 13
+        },
+        "trained_s": {
+          "cars": 11,
+          "veh": 16
+        },
+        "trained_m": {
+          "cars": 13,
+          "veh": 17
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250707T004549.jpg"
+    },
+    {
+      "file": "2701_20250711T045532_jpg.rf.678d451f4415b965cd680ea85ad15882.jpg",
+      "t": "2025-07-11T04:55:32",
+      "gt": {
+        "cars": 8,
+        "veh": 12
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 18,
+          "veh": 19
+        },
+        "coco_s@1280": {
+          "cars": 9,
+          "veh": 11
+        },
+        "roboflow_v6": {
+          "cars": 9,
+          "veh": 12
+        },
+        "trained_s": {
+          "cars": 8,
+          "veh": 12
+        },
+        "trained_m": {
+          "cars": 8,
+          "veh": 12
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250711T045532.jpg"
+    },
+    {
+      "file": "2701_20250714T001542_jpg.rf.3090aa01df1162d781004f6e01eddaee.jpg",
+      "t": "2025-07-14T00:15:42",
+      "gt": {
+        "cars": 66,
+        "veh": 66
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 36,
+          "veh": 38
+        },
+        "coco_s@1280": {
+          "cars": 42,
+          "veh": 46
+        },
+        "roboflow_v6": {
+          "cars": 57,
+          "veh": 58
+        },
+        "trained_s": {
+          "cars": 69,
+          "veh": 70
+        },
+        "trained_m": {
+          "cars": 68,
+          "veh": 69
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250714T001542.jpg"
+    },
+    {
+      "file": "2701_20250714T105553_jpg.rf.f73246c6a77913a22e247d3b2ae89c6c.jpg",
+      "t": "2025-07-14T10:55:53",
+      "gt": {
+        "cars": 56,
+        "veh": 72
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 23,
+          "veh": 40
+        },
+        "coco_s@1280": {
+          "cars": 37,
+          "veh": 66
+        },
+        "roboflow_v6": {
+          "cars": 57,
+          "veh": 64
+        },
+        "trained_s": {
+          "cars": 56,
+          "veh": 73
+        },
+        "trained_m": {
+          "cars": 56,
+          "veh": 72
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250714T105553.jpg"
+    },
+    {
+      "file": "2701_20250715T014608_jpg.rf.a2c117d8afe7ba47b46288008083e93b.jpg",
+      "t": "2025-07-15T01:46:08",
+      "gt": {
+        "cars": 0,
+        "veh": 1
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 2,
+          "veh": 2
+        },
+        "coco_s@1280": {
+          "cars": 0,
+          "veh": 0
+        },
+        "roboflow_v6": {
+          "cars": 0,
+          "veh": 1
+        },
+        "trained_s": {
+          "cars": 0,
+          "veh": 1
+        },
+        "trained_m": {
+          "cars": 0,
+          "veh": 2
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250715T014608.jpg"
+    },
+    {
+      "file": "2701_20250715T144541_jpg.rf.35b63305e56bfae4ea16bc6ad81ca58d.jpg",
+      "t": "2025-07-15T14:45:41",
+      "gt": {
+        "cars": 10,
+        "veh": 15
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 8,
+          "veh": 13
+        },
+        "coco_s@1280": {
+          "cars": 5,
+          "veh": 12
+        },
+        "roboflow_v6": {
+          "cars": 10,
+          "veh": 15
+        },
+        "trained_s": {
+          "cars": 10,
+          "veh": 15
+        },
+        "trained_m": {
+          "cars": 10,
+          "veh": 15
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250715T144541.jpg"
+    },
+    {
+      "file": "2701_20250718T182605_jpg.rf.809298121812af11927ea2b6fb7b096c.jpg",
+      "t": "2025-07-18T18:26:05",
+      "gt": {
+        "cars": 39,
+        "veh": 45
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 11,
+          "veh": 13
+        },
+        "coco_s@1280": {
+          "cars": 21,
+          "veh": 26
+        },
+        "roboflow_v6": {
+          "cars": 33,
+          "veh": 34
+        },
+        "trained_s": {
+          "cars": 41,
+          "veh": 46
+        },
+        "trained_m": {
+          "cars": 39,
+          "veh": 43
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250718T182605.jpg"
+    },
+    {
+      "file": "2701_20250719T093542_jpg.rf.40c97a80db5f5b7eb25b18ffc2665168.jpg",
+      "t": "2025-07-19T09:35:42",
+      "gt": {
+        "cars": 87,
+        "veh": 91
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 17,
+          "veh": 20
+        },
+        "coco_s@1280": {
+          "cars": 31,
+          "veh": 47
+        },
+        "roboflow_v6": {
+          "cars": 68,
+          "veh": 72
+        },
+        "trained_s": {
+          "cars": 89,
+          "veh": 93
+        },
+        "trained_m": {
+          "cars": 86,
+          "veh": 90
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250719T093542.jpg"
+    },
+    {
+      "file": "2701_20250720T021638_jpg.rf.0209baf89dfb6e4eb51b3a9414f482db.jpg",
+      "t": "2025-07-20T02:16:38",
+      "gt": {
+        "cars": 1,
+        "veh": 3
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 1,
+          "veh": 3
+        },
+        "coco_s@1280": {
+          "cars": 2,
+          "veh": 4
+        },
+        "roboflow_v6": {
+          "cars": 3,
+          "veh": 3
+        },
+        "trained_s": {
+          "cars": 1,
+          "veh": 3
+        },
+        "trained_m": {
+          "cars": 0,
+          "veh": 2
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250720T021638.jpg"
+    },
+    {
+      "file": "2701_20250722T074652_jpg.rf.726f91de5a9c04d4507b0be46bb14f17.jpg",
+      "t": "2025-07-22T07:46:52",
+      "gt": {
+        "cars": 24,
+        "veh": 51
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 6,
+          "veh": 12
+        },
+        "coco_s@1280": {
+          "cars": 17,
+          "veh": 42
+        },
+        "roboflow_v6": {
+          "cars": 26,
+          "veh": 38
+        },
+        "trained_s": {
+          "cars": 27,
+          "veh": 51
+        },
+        "trained_m": {
+          "cars": 28,
+          "veh": 52
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250722T074652.jpg"
+    },
+    {
+      "file": "2701_20250722T195703_jpg.rf.dc042f89e0c9ca98ebdc67197f07a798.jpg",
+      "t": "2025-07-22T19:57:03",
+      "gt": {
+        "cars": 15,
+        "veh": 26
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 10,
+          "veh": 11
+        },
+        "coco_s@1280": {
+          "cars": 13,
+          "veh": 23
+        },
+        "roboflow_v6": {
+          "cars": 14,
+          "veh": 21
+        },
+        "trained_s": {
+          "cars": 12,
+          "veh": 25
+        },
+        "trained_m": {
+          "cars": 16,
+          "veh": 27
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-07/2701_20250722T195703.jpg"
+    },
+    {
+      "file": "camera_id-2701_month-2025-09_2701_20250901T190618_jpg.rf.646c1fea1ba2d48f432680f3cf43ff09.jpg",
+      "t": "2025-09-01T19:06:18",
+      "gt": {
+        "cars": 25,
+        "veh": 29
+      },
+      "pred": {
+        "coco_s@640": {
+          "cars": 31,
+          "veh": 38
+        },
+        "coco_s@1280": {
+          "cars": 29,
+          "veh": 34
+        },
+        "roboflow_v6": {
+          "cars": 28,
+          "veh": 29
+        },
+        "trained_s": {
+          "cars": 28,
+          "veh": 31
+        },
+        "trained_m": {
+          "cars": 28,
+          "veh": 32
+        }
+      },
+      "gcs_path": "gs://sg-lta-traffic-cameras/camera_id=2701/month=2025-09/2701_20250901T190618.jpg"
+    }
+  ],
+  "source": "https://claude.ai/artifact/5m7x6QfuGrD911BzgVGyVn",
+  "note": "Caption totals. Car totals match test_counts.csv. Photos on the page are 1280x720; gcs_path is the 1920x1080 original."
+}

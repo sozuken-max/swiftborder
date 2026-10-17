@@ -10,7 +10,7 @@ Reviewed 2026-10-03 (SGT), checkout `be9281d`, against repository code, committe
 
 | # | Finding | Status | Where |
 | --- | --- | --- | --- |
-| 1 | No Layer A quality evidence | **Open (team).** Needs a scored Roboflow export. BigQuery `cam2701` / `cam2702` hold Mar–Apr model detections without a model version, not ground truth, and live calls are not stored. Until scored, the report calls Layer A an unvalidated prototype | [findings.md](findings.md) items 7–8, README |
+| 1 | Layer A box metrics | **Partial (17 Oct).** Image-level count error is scored on 15 frames ([evaluation.md](evaluation.md#layer-a--vision)). mAP, precision, recall and directional count error still need a box export in `eval/layer_a.py`. `cam2701` / `cam2702` remain Mar–Apr model detections, not ground truth | [findings.md](findings.md) item 8 |
 | 2 | Live API uses incomplete origin bins | **Fixed in code.** The origin is the newest bin closed for at least 60 s. The response carries `origin_closed_at`, `forecast_window_end` and `lead_min`. The target is described as the bin 30–40 min after the origin, 9–19 min ahead of the request | `forecastapi/main.py`, [runbook](runbooks/forecast-api.md), [ADR 0004](adr/0004-serve-local-models.md) amendment |
 | 3 | Stale observations served as current | **Fixed in code.** A direction answers 503 once its target bin has started or within an hour of a >25 min gap, and a cached answer expires with its target. Tests cover each case, per direction | `forecastapi/tests/test_forecast.py` |
 | 4 | Pooled inference ignores shared days | **Fixed in code; sensitivity re-run.** The gate counts shared calendar days, and the decision needs the joint calendar-day bootstrap CI; a day-clustered p is reported. 30-min pooled decisions are unchanged; the three fuzzy decisions become "insufficient data" | `eval/significance.py`, [findings.md](findings.md#pooled-significance-sensitivity-2026-10-04), [evaluation.md](evaluation.md#significance) |
@@ -27,7 +27,7 @@ Reviewed 2026-10-03 (SGT), checkout `be9281d`, against repository code, committe
 | --- | --- | --- |
 | Tools, techniques and model design | Substantial | Consolidate the model/data descriptions and current serving architecture |
 | Layer B performance | Strong preliminary evidence | Frozen Runs A/B; resolve inference concerns below; publish exact windows per experiment |
-| Layer A performance | Not ready | Held-out detector and directional-count results, dataset/model version and split provenance |
+| Layer A performance | Count error on 15 frames; box metrics open | mAP, precision, recall, directional count error, and whether those 15 images selected the checkpoint |
 | Runnable MVP | Backend demonstrated; `hosting/` is in git | Full browser rehearsal, freshness handling, and a Hosting release taken from `hosting/` |
 | Findings and discussion | Good foundation | Correct significance wording; distinguish historical BQML results from current local serving |
 | Final figures | Fail | Refresh topology and regenerate all four deck PNGs |
@@ -38,9 +38,11 @@ The project can name at least three required categories: **supervised learning**
 
 ## Priority findings
 
-### 1. High: no empirical Layer A quality evidence
+### 1. High: Layer A box metrics are still open
 
-The results table in [evaluation.md](evaluation.md#layer-a--vision) is entirely pending. The scorer exists and its fixtures pass, but neither held-out detector accuracy nor directional count accuracy has been established. The live image demonstration cannot substitute for those measurements. The observed-count Layer B experiment also remains unscored; a March-April camera-derived daily profile is not simultaneous camera/Maps integration.
+Image-level count error on 15 labelled frames is now in [evaluation.md](evaluation.md#layer-a--vision). The paragraph below is the 3 Oct review. Its "entirely pending" sentence described that date. mAP, precision, recall and directional count error are still pending, and the 15-frame set is not shown to be the checkpoint-selection split.
+
+The results table in [evaluation.md](evaluation.md#layer-a--vision) was entirely pending on 3 Oct. The scorer exists and its fixtures pass. The live image demonstration cannot substitute for box measurements.
 
 Before submission, score the served YOLO model on an untouched export and report mAP50, mAP50-95, precision/recall, count MAE by direction, day/night sample counts, and representative failures. Record dataset version, model/workflow version, class mapping, confidence threshold, and how near-duplicate frames were separated across splits. Compare a pretrained detector if feasible. If this cannot be completed, describe Layer A explicitly as an unvalidated prototype and narrow the report's claims. Optional ResNet work should not displace this.
 

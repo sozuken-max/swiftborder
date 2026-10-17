@@ -107,11 +107,11 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 
 | Category | Where it shows up | Scored here |
 | --- | --- | --- |
-| Supervised learning | Roboflow labels; regression of future Maps duration | Layer B tables below; Layer A pending |
+| Supervised learning | Roboflow labels; regression of future Maps duration | Layer B tables below; Layer A count error on 15 frames (mAP and direction still pending) |
 | Machine learning / deep learning | YOLO via Roboflow; BQML `lin_h30`, `xgb_h30`; offline XGBoost and ridge | Layer B tables below |
 | Deep learning (LSTM, GRU, patch Transformer) | [`eval/deep_forecast.py`](../eval/deep_forecast.py), [`eval/timeseries_transformer.py`](../eval/timeseries_transformer.py); same rows as offline XGB | Section 4 |
 | Fuzzy logic | Light / moderate / heavy traffic-level classifier with a learned fuzzy rule base ([`eval/fuzzy_traffic.py`](../eval/fuzzy_traffic.py)) | Section 5 |
-| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A detector metrics pending. Section 7a scores a March-April queue forecast as a Layer B input. **Section 7c scores observed `cam2701.local_counts` counts (6 Sep – 4 Oct 2026, 4,052 frames, 29 days) against the Maps label: correlation r = 0.46–0.62 per direction, ablation −0.08 min MAE, fold-t p = 0.007.** |
+| Intelligent sensing | LTA frames to directional occupancy (camera 2701 line in `camdetect`); a queue forecast learned from those detections feeds Layer B | Layer A image-level count error is scored on 15 labelled frames. mAP, precision, recall and directional count error are still pending. Section 7a scores a March-April queue forecast as a Layer B input. Section 7c scores observed `cam2701.local_counts` (6 Sep – 4 Oct 2026, 4,052 frames) against the Maps label. |
 | Hybrid / ensemble | `ensemble_mean`; ridge + XGBoost; rolling LAD stack, rolling selection and a fuzzy-gated stack over BQML and daily-refit models; XGBoost regression defuzzified into traffic levels | Sections 1, 2, 5, 6 |
 
 ---
@@ -122,18 +122,43 @@ References: Diebold & Mariano (1995), *J. Bus. Econ. Stat.* 13(3); Harvey, Leybo
 
 **Procedure:** export a Roboflow dataset version (Public allows dataset export; weight download is Core), hold out the `test` split, and score each candidate with [`eval/layer_a.py`](../eval/layer_a.py): mAP@0.5, mAP@0.5:0.95 (101-point, class-aware), precision and recall at confidence 0.1, count error overall and per direction using the 2701 dividing line, split day (07:00–18:59 SGT) versus night. The scorer is tested on hand-computed fixtures (`eval/tests/test_layer_a.py`).
 
-**Status:** labels live in Roboflow; `traffic_images.labels` has 0 rows; `traffic_images.metadata` is populated and is not a label table. **No export has been scored.**
+**Status:** labels live in Roboflow; `traffic_images.labels` has 0 rows; `traffic_images.metadata` is populated and is not a label table. Image-level car and vehicle **count error** is scored on 15 camera-2701 frames (1 Jul 2025 03:15 SGT through 1 Sep 2025 19:06 SGT). Box mAP, precision, recall and directional count error are not: the box export is not in git, and `eval/layer_a.py` has not been run on it.
 
-**Which detectors are live (2026-10-10, `swiftbackend-00035-5dg`, commit `f72b8b2`, 2 GiB).** Three detectors are available:
+**Canonical comparison.** [Causeway detector comparison, camera 2701](https://claude.ai/artifact/5m7x6QfuGrD911BzgVGyVn). Counts are in [`eval/runs/layer_a_count/artifact_counts.json`](../eval/runs/layer_a_count/artifact_counts.json). Error is predicted minus the caption total. Car totals match `test_counts.csv` on all 15 images. The page shows 1280 x 720 copies; the originals in `traffic_images.metadata` are 1920 x 1080, and those paths are the files rescored below. Day is 07:00-18:59 SGT (7 frames); night is the other 8. That split is computed here. The page does not publish it.
+
+| Model | Conf | Cars MAE | Cars bias | Vehicle MAE | Vehicle bias | Exact cars | Within ±2 cars |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| YOLO-S trained (freeze) | 0.30 | 1.73 | +1.33 | 1.47 | +1.33 | 6/15 | 10/15 |
+| YOLO-M trained (freeze) | 0.25 | 1.87 | +1.60 | 2.13 | +1.60 | 6/15 | 10/15 |
+| Roboflow v6 | 0.30 | 3.53 | -1.40 | 4.87 | -4.60 | 2/15 | 10/15 |
+| COCO YOLO-S @1280 | 0.10 | 11.60 | -9.87 | 9.60 | -7.73 | 2/15 | 5/15 |
+| COCO YOLO-S @640 | 0.10 | 17.40 | -13.13 | 19.47 | -15.60 | 1/15 | 5/15 |
+
+The fine-tuned models over-count. Roboflow v6 and both COCO models under-count, and the miss is in dense daytime queues. On 19 Jul 09:35 (87 cars) COCO @640 is off by 70 cars, Roboflow v6 by 19, and freeze-S by +2. Freeze-S car MAE is 2.14 by day and 1.38 at night. Roboflow v6 is 4.86 by day and 2.38 at night.
+
+**Which weights those rows are.** "YOLO-S trained (freeze)" is the in-container checkpoint `local:yolo26s-v6-boxfix` (Colab `v6_yolo26s_boxfix`, `freeze=10`, ONNX in `camdetect/models/yolo26s_v6_boxfix.onnx`). Scored on the original frames at confidence 0.30 with overlap suppression off, its car count matches the artifact on 14 of 15 images. The exception is 22 Jul 19:57: the artifact says 12 cars and the ONNX run says 11. That is the same weights and the artifact's threshold, not a second model. YOLO-M is only in the artifact. It is not in git and it is not served, so it was not rescored. The Colab log's mAP50 0.833 is still the run's own ~15-image validation split, which also chose the checkpoint. These 15 files are not shown to be that split, so the 1.73 car MAE is the published count comparison, not a confirmed held-out box score.
+
+**Live operating points, same 15 originals** ([`local_rescore.json`](../eval/runs/layer_a_count/local_rescore.json), [`roboflow_v6_conf02.json`](../eval/runs/layer_a_count/roboflow_v6_conf02.json)). `model=local` as served is confidence 0.2 and overlap 0.6. Roboflow v6 as served is confidence 0.2 and overlap off. The v6 rescore is 15 calls to live `swiftbackend` `model=v6`. On the 03:15 frame the data.gov.sg bytes match the GCS object. `cam2701.local_counts` uses the local point, not the artifact's 0.30 / overlap-off point, so 1.73 does not describe those rows.
+
+| Setting | Cars MAE | Cars bias | Day car MAE (n=7) | Night car MAE (n=8) |
+| --- | ---: | ---: | ---: | ---: |
+| `local:yolo26s-v6-boxfix`, conf 0.2, overlap 0.6 (served `model=local`, and `local_counts`) | 1.87 | +1.33 | 2.86 | 1.00 |
+| same weights, conf 0.30, overlap off (artifact freeze-S point) | 1.80 | +1.27 | 2.14 | 1.50 |
+| same weights, conf 0.30, overlap 0.6 (not served) | 1.13 | -0.33 | 1.00 | 1.25 |
+| Roboflow v6, conf 0.2, overlap off (served default) | 4.40 | -2.53 | 6.57 | 2.50 |
+
+**Which detectors are live (2026-10-17, `swiftbackend-00044-4l9`).** Three detectors are available:
 - **Roboflow workflow v6** is the default (`vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic`, commit `d34cc1d`). The service has no `ROBOFLOW_WORKFLOW_ID` override.
-- **`model=local`** runs a YOLO26s exported to ONNX (`local:yolo26s-v6-boxfix`, Colab run `v6_yolo26s_boxfix`, dataset v6). It runs in the container with no Roboflow call. Overlap suppression is on (`LOCAL_MAX_OVERLAP` 0.6, set by eye on five frames). Its mAP50 of 0.833 is from the Colab run's own split of about 15 images, not a harness score.
+- **`model=local`** runs a YOLO26s exported to ONNX (`local:yolo26s-v6-boxfix`, Colab run `v6_yolo26s_boxfix`, dataset v6). It runs in the container with no Roboflow call. Overlap suppression is on (`LOCAL_MAX_OVERLAP` 0.6). The count table above is this checkpoint. Its mAP50 of 0.833 remains the Colab validation log, not a box score from `eval/layer_a.py`.
 - **`model=v4`** still calls the earlier workflow.
 
-The page's AI panel compares v6 with `model=local`, which costs one billed Roboflow call per view.
-- **What to score:** v6 and `model=local`, the two the demo shows, and v4 if the export allows. Score them on a `test` split that none of them trained on. The local model was trained on dataset v6, so the export must exclude v6's training images. Each score records the workflow or model id, the dataset version, and the overlap setting; suppression changes the counts.
-- **Older detections:** the March–April detections in `cam2701` / `cam2702` came from an earlier model and do not record which, so they are not comparable with v6 output.
+The checked-in `hosting/` page scores camera frames with `model=local` and does not call v6 (CHANGELOG 2026-10-11). Whether the live Hosting release matches that tree was not re-checked on 17 Oct.
+- **Still to score with `eval/layer_a.py`:** mAP, precision, recall and directional count error, on a box export that this checkpoint did not train on. v4 is not in the 15-frame count comparison. Overlap changes the counts, so a box score has to record the overlap setting.
+- **Older detections:** the March–April detections in `cam2701` / `cam2702` came from an earlier model and do not record which, so they are not comparable with v6 or with `model=local`.
 - **Congestion labels are a heuristic:** the page's labels are count bands per direction (< 20 Free Flow, 20–39 Quarter Way, 40–70 Half Way, > 70 Back to Back; commit `644bc25`). They were set from 14 v6 frames and are not an evaluated classifier.
-- **Cost:** one billed call per page view (v6). `model=local` is free, which also makes it the cheaper engine for the 6–11 Sep backfill once it is scored.
+- **Cost:** a live v6 call is billed. `model=local` is free. The 6 Sep–4 Oct backfill already used `model=local` (`cam2701.local_counts`, 4,052 frames).
+
+![Layer A evaluation protocol. The PNG is the 4 Oct 2026 drawing; the Mermaid status line is the 17 Oct text.](images/eval-layer-a.png)
 
 <!-- mermaid:eval-layer-a -->
 ```mermaid
@@ -148,7 +173,7 @@ flowchart LR
   subgraph STATUS["Status"]
     S1["labels in Roboflow"]
     S2["traffic_images.labels empty in BQ"]
-    S3["scorer tested on fixtures<br/>results pending: no export scored"]
+    S3["count error scored on 15 frames<br/>mAP precision recall direction pending"]
     S4["Public export OK weights Core"]
   end
 
@@ -156,15 +181,16 @@ flowchart LR
 ```
 <!-- /mermaid:eval-layer-a -->
 
-![Layer A evaluation protocol, refreshed 4 Oct 2026](images/eval-layer-a.png)
+### Box metrics
 
-### Results table
+| Candidate | Split | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | Directional count MAE |
+| --- | --- | --- | --- | --- | --- | --- |
+| COCO YOLO-S | test | pending | pending | pending | pending | pending |
+| `local:yolo26s-v6-boxfix` | test | pending | pending | pending | pending | pending |
+| Roboflow v6 | test | pending | pending | pending | pending | pending |
+| YOLO-M trained (freeze) | not served | pending | pending | pending | pending | pending |
 
-| Candidate | Split | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | Count MAE | Day | Night |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Pretrained | test | pending | pending | pending | pending | pending | pending | pending |
-| Fine-tuned YOLO (served) | test | pending | pending | pending | pending | pending | pending | pending |
-| ResNet (optional) | test | pending | pending | pending | pending | pending | pending | pending |
+Image-level count error for the first three, and for YOLO-M, is in the tables above. Directional count error needs labelled directions. This export's captions are totals only.
 
 ---
 
@@ -181,7 +207,7 @@ flowchart LR
   subgraph INPUTS["Offline feature experiments"]
     WX["Weather: scored"] --> MODELS
     PROFILE["Mar-Apr camera queue profile: scored"] --> MODELS
-    CAMERA["Observed camera counts: scored 7c<br/>cam2701.local_counts 4052 frames<br/>6 Sep - 4 Oct 2026"] --> MODELS
+    CAMERA["Observed counts scored offline<br/>section 7c, not in v_training_set"] -.-> MODELS
   end
   subgraph LIMITS["Interpretation"]
     L1["Maps estimates are the label<br/>not independent crossing time"]
@@ -480,7 +506,7 @@ By regime (observed 30-min change of more than 5 min; diagnostic), XGBoost MAE:
 | steady | 1.650 | 1.639 | 1.741 |
 | falling | 5.566 | 5.366 | 4.644 |
 
-**Finding:** the Layer A queue forecast is a **meaningful but small input**: about 4 seconds of MAE for XGBoost, below any practical threshold (see Significance). It reduces 30-minute MAE significantly for both model types (for XGBoost only within its family; ridge also under run-wide Holm), most at queue onsets (−0.47 min when traffic is rising). The gain is the same as a Maps-derived daily profile, however, and adding the camera forecast on top of that profile adds nothing. What transfers from March–April camera data is **the shape of the daily queue cycle**: when queues build and clear, which Layer B does not get from its time-of-day features alone. It is not information the Maps series lacks. The camera forecast does have one practical property: it is fixed from a separate sensor and period and needs no Maps history. Testing whether **observed** counts add information beyond that profile still needs the backfill.
+**Finding:** the Layer A queue forecast is a **meaningful but small input**: about 4 seconds of MAE for XGBoost, below any practical threshold (see Significance). It reduces 30-minute MAE significantly for both model types (for XGBoost only within its family; ridge also under run-wide Holm), most at queue onsets (−0.47 min when traffic is rising). The gain is the same as a Maps-derived daily profile, however, and adding the camera forecast on top of that profile adds nothing. What transfers from March–April camera data is **the shape of the daily queue cycle**: when queues build and clear, which Layer B does not get from its time-of-day features alone. It is not information the Maps series lacks. The camera forecast does have one practical property: it is fixed from a separate sensor and period and needs no Maps history. Whether the observed counts in section 7c add anything beyond that profile is still open: the ablation there is against maps-only features, not against `maps+mpfc`.
 
 Caveats:
 - The congestion view drops frames with zero vehicles, so night counts are biased up.
@@ -508,13 +534,7 @@ Why a substitute is a larger step than an input:
 - **A substitute still needs a label.** Any count-to-duration model is calibrated against something, and today that is Maps. Without an independent ground truth, the realistic role for Layer A is a fallback or complement (for example during a Distance Matrix outage or to cap API cost), not a replacement.
 - **Visibility.** Fog, haze, heavy rain, night glare, lens obstruction, and stale or missing LTA frames make frames unusable. The dangerous case is a frame where nothing is visible: it scores as "0 vehicles" and would read as free-flowing traffic. The backfill records missing and stale frames as missing, but it cannot yet tell a foggy frame from an empty road; a visibility check is needed before any substitute use.
 
-**What would test it:** raw camera 2701 frames exist for 6–11 Sep in `traffic_images.metadata` and on data.gov.sg (about 144 per day), and they overlap the Maps label. Scoring them costs about 864 Roboflow calls (`backfill_camera_counts.py --mode full --start 2026-09-06 --end 2026-09-11`). With those counts, three checks become possible:
-
-1. Row-level correlation of count and `extent` with Maps travel time, per direction, with day-block intervals.
-2. A camera-only estimate of the current travel time (counts, extent and calendar), against a calendar-only baseline. This is the direct test of substitution.
-3. A visibility flag (image brightness or contrast, or no detections at a time when some are expected), so unusable frames are counted as missing and reported separately.
-
-Six days is short. Significance decisions will probably be "insufficient data", but the correlation and the camera-only error would show whether substitution is worth pursuing. The harness for these checks is not built yet.
+**What would test a substitute:** a camera-only estimate of current travel time (counts plus calendar) against a calendar-only baseline, plus a visibility flag so a foggy frame is missing rather than "0 vehicles". Section 7c is the correlation and the maps-plus-camera ablation. It is not that substitute test. `cam2701.local_counts` already covers 6 Sep–4 Oct 2026, so the old "864 Roboflow calls for 6–11 Sep" step is done by the local backfill.
 
 #### 7c. Observed counts (scored 2026-10-10)
 
@@ -547,7 +567,7 @@ Rolling-origin daily folds, 13–30 Sep 2026 (18 folds), same window as the sect
 Paired fold t-test: t = −3.09, p = 0.0067, n = 18 folds. The improvement is statistically significant at α = 0.05.
 
 > [!NOTE]
-> This is a fold-level paired t-test (not DM). Row-level Diebold–Mariano (the standard in this document's section 2) requires the full 5,184 paired rows. The fold-t result is directionally consistent and has p well below 0.05. It does not replace a row-level DM run against `maps+mpfc`.
+> This is a fold-level paired t-test (not DM). Row-level Diebold–Mariano (the standard in this document's section 2) requires the full paired rows. The fold-t result is directionally consistent and has p well below 0.05. It does not replace a row-level DM run against `maps+mpfc`. The camera features are `local:yolo26s-v6-boxfix` at confidence 0.2 and overlap 0.6. On the 15 labelled frames that point has car MAE 1.87 (bias +1.33). The artifact's 1.73 is confidence 0.30 with overlap off, so it does not describe these rows.
 
 **Interpretation.** Camera queue depth carries signal beyond the Maps lags. The gain of 0.08 min (about 5 seconds) is smaller than the 0.5-minute practical threshold used for model selection in section 2, so it does not meet the proposed bar for a serving change alone. Combined with the `fcm_mlp` mix (section 8, which achieves −0.508 min vs persistence), camera features are a supporting input, not the headline claim.
 
