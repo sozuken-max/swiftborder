@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemented in `forecastapi/` with CI/CD in `forecastapi/cloudbuild.yaml`; see [runbooks/forecast-api.md](../runbooks/forecast-api.md). The `served` selection is interim until the frozen run (on or after 20 Oct).
+Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemented in `services/forecastapi/` with CI/CD in `services/forecastapi/cloudbuild.yaml`; see [runbooks/forecast-api.md](../runbooks/forecast-api.md). The 30-minute `served` selection is `mix[fcm_mlp+xgb]` in both directions (equal mix of `fcm_mlp` and `xgb[maps]`). Live revision is whatever [inventory.md](../inventory.md) last recorded; this page does not name a revision that has not been queried.
 
 ## Context
 
@@ -48,7 +48,7 @@ Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemen
 **Implemented (2026-10-03, catalog as of local `main` `7bd94e3`):**
 - Callable HTTP ids: `served`, `persistence`, `profile`, and the local models `ridge[maps]`, `xgb[maps]`, `xgb[maps+prof]`, `lin_bq[daily]`, `xgb_bq[daily]`, `lin_bq[frozen]`, `xgb_bq[frozen]`. The example names in the decision (`xgb_maps_daily`) were not the ids that shipped. Catalog ids with `deploy_state` `artifact` or `code-only` (including `lstm`) are listed and return 400. BQML ids `lin_h30` and `xgb_h30` are not HTTP ids.
 - `forecastapi/local_models.py` holds those local models. The 30-minute daily and frozen models are six; `xgb[maps+prof]` is the seventh, exploratory.
-- `main.py` has the `served` selection (`SERVED_SELECTION`, interim: `lin_bq[frozen]` for `SG_TO_MY`, `persistence` for `MY_TO_SG`, the 12 Sep registry rebuilt locally), the versions, `model_meta`, and `commit`.
+- `services/forecastapi/main.py` has the `served` selection (`SERVED_SELECTION`), the versions, `model_meta`, and `commit`. The 12 Sep registry rebuilt locally (`lin_bq[frozen]` for `SG_TO_MY`, persistence for `MY_TO_SG`) was the interim value. The frozen-run amendment below replaces it.
 - BigQuery ML ids and SQL are removed.
 - `eval/tests/test_forecastapi_models.py` proves that a service fit equals the harness prediction.
 - Cloud Build: test, build, deploy a no-traffic candidate, smoke-test it, promote.
@@ -61,7 +61,9 @@ Accepted (2026-10-03, signed off by the team with the frozen-run plan). Implemen
 - **Response:** reports `lead_min` and `observation_age_min`.
 - **Frozen replicas:** their 12 Sep training rows still number 1,406 in a live read after the change.
 
-**Amendment (2026-10-04, exploratory horizons).** The service also answers every 30-minute horizon from 60 min to 24 h, a forecast curve (`?curve=forecast`: the model to 5.5 h, the profile after), and a calendar-profile baseline, from [horizon-study.md](../horizon-study.md). The selection rule above governs only the 30-minute `served`. At other horizons `served` is the study's lower-MAE model (`EXPLORATORY_SELECTION`), not a confirmed one. Every such response says `"status": "exploratory"`, and the profile is always labelled as a baseline, not a forecast. Claiming any of it needs the frozen-run claims extended before 19 Oct.
+**Amendment (2026-10-04, exploratory horizons).** The service also answers every 30-minute horizon from 60 min to 24 h, a forecast curve (`?curve=forecast`: the model to 5.5 h, the profile after), and a calendar-profile baseline, from [horizon-study.md](../horizon-study.md). The selection rule above governs only the 30-minute `served`. At other horizons `served` is the study's lower-MAE model (`EXPLORATORY_SELECTION`), not a confirmed one. Every such response says `"status": "exploratory"`, and the profile is always labelled as a baseline, not a forecast. Those points are not a measured 24-hour win.
+
+**Amendment (2026-10-17, equal mix).** The 30-minute default is `mix[fcm_mlp+xgb]` for both directions. It is `0.5 * fcm_mlp + 0.5 * xgb[maps]`, the same `mix_of` as `eval/layer_b_fcm_xgb_mix.py`. On 13-30 Sep that mix has the lowest measured Maps MAE in the section 8 table (2.134 min) and on backtest `backtest-20261010T080013Z-6a139c3f` (2.132 min). Directional point estimates also beat persistence and `xgb[maps]` in both directions (SG to MY 2.277 vs 2.777 and 2.399; MY to SG 1.988 vs 2.504 and 2.150). The weights were chosen after that window was scored. A pre-registered Holm test did not crown it, and the response says `exploratory` for that reason. It is a 30-minute Maps-duration forecast, not a 24-hour forecast and not a crossing-time error. `xgb[maps]` stays callable. `fcm_mlp` alone and `timesfm` stay "Not served." Longer horizons stay the horizon-study selection. The image cannot import `eval/`, so Cloud Build copies `layer_b_fcm_mlp.py` and `layer_b_fcm_xgb_mix.py` into `services/forecastapi/shipped_eval/` before `pack`. No TimesFM weights are added. Before this amendment the live revision was `forecast-api-00018-dij` (commit `2579a15`), which selected `lin_bq[frozen]` / persistence. The revision after deploy is recorded in [inventory.md](../inventory.md) from a live query.
 
 ## Consequences
 

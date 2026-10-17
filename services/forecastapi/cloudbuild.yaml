@@ -19,6 +19,17 @@ steps:
         # the served models must equal the harness models (eval/joined.py, eval/bq_replica.py)
         cd eval && python -m pytest -q tests/test_forecastapi_models.py
 
+  - id: Vendor-mix
+    name: python:3.11@sha256:50ffeeb3884b139e654d2ce95300cf67d016febfb93d54ecf68a00d723fa6fc6
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        mkdir -p services/forecastapi/shipped_eval
+        cp eval/layer_b_fcm_mlp.py eval/layer_b_fcm_xgb_mix.py services/forecastapi/shipped_eval/
+        test -s services/forecastapi/shipped_eval/layer_b_fcm_xgb_mix.py
+
   - id: Buildpack
     name: gcr.io/k8s-skaffold/pack@sha256:221c0c0d9a90f46f108bb888a1da9e99c82ff631e8b1c63b0223ea951752bd53
     entrypoint: pack
@@ -47,7 +58,7 @@ steps:
         args=(
           --project=$_AR_PROJECT_ID --region=$_DEPLOY_REGION --platform=managed
           --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-          --min-instances=0 --max-instances=$_MAX_INSTANCES --memory=$_MEMORY --cpu=1 --timeout=120
+          --min-instances=0 --max-instances=$_MAX_INSTANCES --memory=$_MEMORY --cpu=2 --timeout=600
           --service-account=$_RUNTIME_SERVICE_ACCOUNT
           # Public, as set live on 2026-10-03 (invoker IAM check disabled) so the Firebase page can call
           # it from the browser. The IAM-only flag for private services does not control this setting.
@@ -94,8 +105,8 @@ steps:
         test "$$code" = "200" || { echo "list=models returned $$code"; exit 1; }
         grep -qi '^access-control-allow-origin:' /workspace/list.headers || { echo "no CORS header"; exit 1; }
         grep -q '"id": "served"' /workspace/list.json
-        # first call fits the daily models (one BigQuery read plus a fit): allow two minutes
-        code=$$(curl -s -o /workspace/served.json -w '%{http_code}' --max-time 120 -H "Origin: $$origin" "$$url/?model=served")
+        # first call fits the daily models, including the FCM+MLP ensemble: allow nine minutes
+        code=$$(curl -s -o /workspace/served.json -w '%{http_code}' --max-time 540 -H "Origin: $$origin" "$$url/?model=served")
         cat /workspace/served.json; echo
         case "$$code" in
           200) grep -q '"source": "local model"' /workspace/served.json && grep -q '"lead_min"' /workspace/served.json ;;
@@ -125,7 +136,7 @@ substitutions:
   _FUNCTION_TARGET: forecast
   _SERVICE_NAME: forecast-api
   _RUNTIME_SERVICE_ACCOUNT: forecast-api@swiftborder.iam.gserviceaccount.com
-  _MEMORY: 1Gi
+  _MEMORY: 2Gi
   # public endpoint: bound the instances (and with them the BigQuery reads) an anonymous caller can start
   _MAX_INSTANCES: "3"
 

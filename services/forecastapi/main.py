@@ -6,6 +6,7 @@ deploys Cloud Run forecast-api from main.
 Callable ids:
 
 - ``served`` (``production``): the per-direction selection in ``SERVED_SELECTION``.
+- ``mix[fcm_mlp+xgb]`` (``production``): 0.5 * fcm_mlp + 0.5 * xgb[maps], via eval/layer_b_fcm_xgb_mix.py.
 - ``persistence`` and the six local models in ``local_models.LOCAL_MODELS`` (``local``). Each is fitted
   in this process from ``v_training_set`` rows, once per SGT day for the daily models, and scores the
   latest ``v_training_set`` row per direction. The fit uses the same rows, settings and seeds as the
@@ -44,6 +45,7 @@ import functions_framework
 import pandas as pd
 
 import local_models as lm
+import mix_bridge
 
 logger = logging.getLogger("forecastapi")
 
@@ -56,11 +58,16 @@ DIRECTIONS = ("SG_TO_MY", "MY_TO_SG")
 SOURCES = frozenset({"local model", "bigquery view", "fixture"})
 CALLABLE_STATES = frozenset({"production", "local", "exploratory", "baseline"})
 
-# What ``served`` returns per direction. Interim value (until the frozen run, docs/roadmap.md): the
-# 2026-09-12 registry choice rebuilt from local replicas (lin_h30 for SG_TO_MY, persistence for
-# MY_TO_SG). After the frozen run it is set by the ADR 0004 selection rule.
-SERVED_SELECTION = {"SG_TO_MY": "lin_bq[frozen]", "MY_TO_SG": "persistence"}
-SELECTION_ID = "registry-2026-09-12-local-replica"
+# What ``served`` returns per direction at 30 minutes. Equal mix of fcm_mlp and
+# xgb[maps] (eval/layer_b_fcm_xgb_mix.py). On 13-30 Sep it is the lowest measured
+# Maps MAE in both directions (section 8: 2.134 min; backtest
+# backtest-20261010T080013Z-6a139c3f: 2.132 min; SG->MY 2.277, MY->SG 1.988).
+# The weights were chosen after that window was scored. This is not a
+# pre-registered Holm crown, not a 24 h result, and not a crossing-time error.
+# Longer horizons stay exploratory (EXPLORATORY_SELECTION). fcm_mlp alone and
+# TimesFM stay off the allow-list. xgb[maps] stays callable.
+SERVED_SELECTION = {"SG_TO_MY": mix_bridge.MIX_ID, "MY_TO_SG": mix_bridge.MIX_ID}
+SELECTION_ID = "mix-equal-20261010T080013Z"
 
 # Exploratory horizons (docs/horizon-study.md). ``served`` at a horizon other than 30 minutes is the
 # lower-MAE model of eval/horizon_study.py on 13-30 Sep (both directions): xgb[maps] up to 1 h,
@@ -170,6 +177,12 @@ def _build_models():
     rows.append(_spec("XGB (sklearn)", "sklearn", REPORT_RUN_ID, 60, MY_ONLY, "artifact"))
     for model_id in ("lstm", "gru", "transformer", "transformer_raw"):
         rows.append(_spec(model_id, "deep", REPORT_RUN_ID, 60, MY_ONLY, "artifact"))
+    rows.append(
+        _spec(
+            mix_bridge.MIX_ID, "ensemble", SELECTION_ID, 30, BOTH, "production",
+            "mix:fcm_mlp+xgb[maps]",
+        )
+    )
     rows.append(_spec("rules", "fuzzy", REPORT_RUN_ID, 60, BOTH, "artifact"))
     rows.append(_spec("xgb_to_fuzzy", "fuzzy", REPORT_RUN_ID, 60, BOTH, "artifact"))
     for model_id in ("mean[XGB+deep]", "mean[deep]", "stack[XGB+deep]"):
@@ -177,8 +190,8 @@ def _build_models():
     ids = [row["id"] for row in rows]
     if len(ids) != len(set(ids)):
         raise RuntimeError("duplicate model id")
-    if set(SERVED_SELECTION) != set(DIRECTIONS) or not set(SERVED_SELECTION.values()) <= local | {"persistence"}:
-        raise RuntimeError("SERVED_SELECTION must name a local model or persistence for each direction")
+    if set(SERVED_SELECTION) != set(DIRECTIONS) or not set(SERVED_SELECTION.values()) <= local | {"persistence", mix_bridge.MIX_ID}:
+        raise RuntimeError("SERVED_SELECTION must name a local model, the mix, or persistence for each direction")
     if set(EXPLORATORY_SELECTION) != set(lm.HORIZONS) - {30} or not set(EXPLORATORY_SELECTION.values()) <= set(lm.MULTI_HORIZON_MODELS):
         raise RuntimeError("EXPLORATORY_SELECTION must name a multi-horizon model for every horizon but 30")
     return {row["id"]: row for row in rows}
@@ -203,6 +216,7 @@ def _serving_now():
     return pinned if pinned is not None else _now()
 _fitted = {}
 _training = {}
+_raw_bins = {}
 
 
 def current_version(model_id, horizon=30):
@@ -213,6 +227,8 @@ def current_version(model_id, horizon=30):
         return PERSISTENCE_VERSION
     if model_id == "profile":
         return profile_version(_serving_now())
+    if model_id == mix_bridge.MIX_ID:
+        return mix_bridge.version_for(_serving_now())
     if model_id in lm.LOCAL_MODELS:
         return lm.version_for(model_id, _serving_now())
     return spec["default_version"]
@@ -226,7 +242,9 @@ def status_for(model_id, horizon):
     """``evaluated``: a 30-minute model of the report harness; otherwise ``exploratory`` or ``baseline``."""
     if model_id == "profile":
         return "baseline"
-    if horizon != 30 or model_id in EXPLORATORY_MODELS:
+    # The mix is the 30-minute default because it had the lowest September error.
+    # It was formed after that window was scored, so a response does not say "evaluated".
+    if model_id == mix_bridge.MIX_ID or horizon != 30 or model_id in EXPLORATORY_MODELS:
         return "exploratory"
     return "evaluated"
 
@@ -264,6 +282,15 @@ def fetch_training(labels_before):
 # --- fitting --------------------------------------------------------------------------------
 
 
+def training_bins(day_start):
+    """Closed bins before ``day_start``, one read per SGT day. The mix fits on these rows."""
+    key = day_start.isoformat()
+    if key not in _raw_bins:
+        _raw_bins.clear()
+        _raw_bins[key] = fetch_training(day_start)
+    return _raw_bins[key]
+
+
 def _training_frame(day_start):
     """All labelled rows observed before ``day_start``; one read per SGT day per process."""
     key = day_start.isoformat()
@@ -287,6 +314,22 @@ def fitted_profile():
             _fitted.pop(k)
         _fitted[key] = profile
         return profile
+
+
+def fitted_mix():
+    """The equal mix for the serving day. One fit per SGT day; prediction rebuilds features per request."""
+    now = _serving_now()
+    day_start = lm.serving_day_start(now)
+    key = (mix_bridge.MIX_ID, mix_bridge.version_for(now), 30)
+    with _fit_lock:
+        hit = _fitted.get(key)
+        if hit is not None:
+            return hit
+        fitted = mix_bridge.fit_models(training_bins(day_start), day_start, protect_labels=True)
+        for k in [k for k in _fitted if k[0] == mix_bridge.MIX_ID]:
+            _fitted.pop(k)
+        _fitted[key] = fitted
+        return fitted
 
 
 def fitted_model(model_id, horizon=30):
@@ -367,7 +410,8 @@ def query_selection(chosen, horizon=30):
     """
     directions = list(chosen)
     now = _serving_now()
-    origins = servable_origins(fetch_latest(directions, now), now)
+    latest = fetch_latest(directions, now)
+    origins = servable_origins(latest, now)
     shift = datetime.timedelta(minutes=int(horizon))
     profile = fitted_profile()
     rows, meta, baseline = [], {}, {}
@@ -377,16 +421,17 @@ def query_selection(chosen, horizon=30):
             continue
         mid = chosen[direction]
         origin = sub["bin_ts"].iloc[0]
-        value, target_value, meta[mid] = _predict_one(mid, sub, horizon, profile, now)
+        value, target_value, meta[mid] = _predict_one(mid, sub, horizon, profile, now, latest)
         baseline[direction] = ({"forecast_min": round(target_value, 1)} if target_value is not None
                                else {"forecast_min": None, "unavailable": "no profile history before the serving day"})
+        fields = _model_fields(mid, mix_bridge.COMPONENTS if mid == mix_bridge.MIX_ID else None)
         rows.append(
             {
                 "direction": direction,
                 "forecast_min": value,
                 "forecast_for": _iso(origin + shift),
                 "origin_ts": _iso(origin),
-                **_model_fields(mid),
+                **fields,
             }
         )
     return {
@@ -398,7 +443,7 @@ def query_selection(chosen, horizon=30):
     }
 
 
-def _predict_one(mid, sub, horizon, profile, now):
+def _predict_one(mid, sub, horizon, profile, now, latest_bins=None):
     """(forecast, profile baseline at the same target, meta) for one origin row and horizon."""
     origin = sub["bin_ts"].iloc[0]
     direction = sub["direction"].iloc[0]
@@ -410,6 +455,22 @@ def _predict_one(mid, sub, horizon, profile, now):
         target_value = None  # the forecast stands; only its comparison baseline is unavailable
     if mid == "persistence":
         return float(sub["y_persistence"].iloc[0]), target_value, {"eval_id": "persistence", "version": PERSISTENCE_VERSION}
+    if mid == mix_bridge.MIX_ID:
+        if int(horizon) != 30:
+            raise RuntimeError("the mix is a 30-minute model")
+        day_start = lm.serving_day_start(now)
+        latest = latest_bins if latest_bins is not None else fetch_latest([direction], now)
+        value, parts = mix_bridge.predict_value(
+            fitted_mix(), training_bins(day_start), latest, direction, origin
+        )
+        if value is None:
+            raise NoRecentForecast(direction)
+        return value, target_value, {
+            "eval_id": parts["eval_id"],
+            "version": mix_bridge.version_for(now),
+            "training_rows": parts["training_rows"],
+            "weights": dict(mix_bridge.WEIGHTS),
+        }
     if mid == "profile":
         return target_value, target_value, {"eval_id": "horizon_study:profile", "version": profile_version(now), "training_rows": profile.n_rows}
     model = fitted_model(mid, horizon)
@@ -433,7 +494,8 @@ def curve_model(direction, horizon):
 def forecast_curve(directions, hours):
     """Forecasts every 30 minutes from the same origin, plus the profile baseline at each target. Tests replace this."""
     now = _serving_now()
-    origins = servable_origins(fetch_latest(directions, now), now)
+    latest = fetch_latest(directions, now)
+    origins = servable_origins(latest, now)
     profile = fitted_profile()
     horizons = [h for h in lm.HORIZONS if h <= int(hours) * 60]
     out, meta = {}, {}
@@ -447,7 +509,7 @@ def forecast_curve(directions, hours):
             mid = curve_model(direction, h)
             # one fit per (model, horizon): key the metadata by both so no fit's metadata is overwritten
             meta_key = "%s@%dmin" % (mid, h)
-            value, base, meta[meta_key] = _predict_one(mid, sub, h, profile, now)
+            value, base, meta[meta_key] = _predict_one(mid, sub, h, profile, now, latest)
             meta[meta_key] = dict(meta[meta_key], model=mid, horizon_min=h)
             target = origin + datetime.timedelta(minutes=h)
             point = {
@@ -467,7 +529,9 @@ def forecast_curve(directions, hours):
         out[direction] = {"origin_ts": _iso(origin), "origin_closed_at": _iso(origin + BIN), "points": points}
     return {
         "kind": "forecast curve",
-        "status": "exploratory" if any(h != 30 for h in horizons) else "evaluated",
+        "status": "exploratory" if any(
+            h != 30 or curve_model(directions[0], h) == mix_bridge.MIX_ID for h in horizons
+        ) else "evaluated",
         "generated_at": _iso(now),
         "source": "local model",
         "label": "maps_duration_in_traffic_min",
@@ -685,10 +749,12 @@ def _authored_cards():
         "served": _card(
             "served",
             "Served default",
-            "Predicts Maps travel time in traffic. At 30 minutes it is the registry choice for each direction "
-            "(SG_TO_MY lin_bq[frozen], MY_TO_SG persistence), with no weights applied. The public curve uses that "
-            "choice at 30 minutes, xgb[maps] at 60 minutes, xgb[maps+prof] from 90 minutes through 5.5 hours, then "
-            "the typical-day profile; only the 30-minute point is evaluated, and later points are exploratory.",
+            "Predicts Maps travel time in traffic. At 30 minutes both directions use mix[fcm_mlp+xgb], "
+            "half Fuzzy C-Means MLP and half daily-refit xgb[maps]. That mix had the lowest measured "
+            "September mean absolute error on this Maps series. The weights were chosen after that window "
+            "was scored: not a pre-registered Holm result, not a 24-hour forecast, and not a crossing-time error. "
+            "The public curve uses the mix at 30 minutes, xgb[maps] at 60 minutes, xgb[maps+prof] from 90 minutes "
+            "through 5.5 hours, then the typical-day profile. Points after 30 minutes are exploratory.",
             "mix",
             "request with no model parameter; public curve (?curve=forecast)",
             _served_member_ids(),
@@ -698,7 +764,6 @@ def _authored_cards():
             "Persistence",
             "Repeats the latest observed Maps travel time for that direction.",
             "single",
-            "MY_TO_SG inside the 30-minute served default",
         ),
         "profile": _card(
             "profile",
@@ -718,10 +783,23 @@ def _authored_cards():
         "xgb[maps]": _card(
             "xgb[maps]",
             "XGBoost (Maps)",
-            "An XGBoost model on Maps features, refitted each Singapore day. Served and the public curve use it "
-            "at 60 minutes. That point is exploratory.",
+            "An XGBoost model on Maps features, refitted each Singapore day. Callable on its own. "
+            "The 30-minute default uses it as half of mix[fcm_mlp+xgb]. The public curve uses this model "
+            "alone at 60 minutes. That 60-minute point is exploratory.",
             "single",
-            "served and the public curve at 60 min",
+            "public curve at 60 min (exploratory)",
+        ),
+        mix_bridge.MIX_ID: _card(
+            mix_bridge.MIX_ID,
+            "FCM + XGBoost mix",
+            "Half the Fuzzy C-Means MLP and half daily-refit xgb[maps], the same 0.5/0.5 mix as "
+            "eval/layer_b_fcm_xgb_mix.py. It is the 30-minute default in both directions because it had "
+            "the lowest measured September mean absolute error on the Maps series (about 2.13 minutes; "
+            "SG to MY about 2.28, MY to SG about 1.99). The weights were chosen after that window was "
+            "scored. This is not a pre-registered Holm result, not a 24-hour forecast, and not a crossing-time error.",
+            "mix",
+            "30-minute served default, both directions",
+            ["fcm_mlp", "xgb[maps]"],
         ),
         "lin_bq[daily]": _card(
             "lin_bq[daily]",
@@ -738,10 +816,9 @@ def _authored_cards():
         "lin_bq[frozen]": _card(
             "lin_bq[frozen]",
             "Linear (frozen)",
-            "A linear model frozen on the 12 Sep training rows. It is the SG_TO_MY choice inside the 30-minute "
+            "A linear model frozen on the 12 Sep training rows. Callable on request. It is not the 30-minute "
             "served default.",
             "single",
-            "SG_TO_MY inside the 30-minute served default",
         ),
         "xgb_bq[frozen]": _card(
             "xgb_bq[frozen]",
@@ -857,9 +934,9 @@ def _layer_b_cards():
         _card(
             "fcm_mlp",
             "Fuzzy C-Means + MLP",
-            "Not served. Fuzzy C-Means plus an MLP, from eval/layer_b_fcm_mlp.py. "
-            "A local day-disjoint test had five calendar days, which is insufficient data to join the served mix. "
-            "The camera variant was not scored. This API does not call it.",
+            "Not served. Fuzzy C-Means plus an MLP is not its own query id. The 30-minute default calls "
+            "the same network only as half of mix[fcm_mlp+xgb]. A day-disjoint test of the network alone "
+            "had five calendar days. The camera variant is not served.",
             "single",
         ),
     ]

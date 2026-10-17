@@ -145,6 +145,29 @@ def test_repo_relpath_and_fingerprint(tmp_path: Path):
         ra.repo_relpath(tmp_path / "outside.csv")
 
 
+def test_code_fingerprint_uses_data_sql_and_keeps_frozen_paths(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(ra, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(ra, "EVAL_ROOT", tmp_path / "eval")
+    monkeypatch.setattr(ra, "SQL_ROOT", tmp_path / "data" / "sql")
+    (tmp_path / "eval").mkdir()
+    (tmp_path / "sql").mkdir()
+    (tmp_path / "sql" / "legacy.sql").write_text("select 1\n", encoding="utf-8")
+    current = tmp_path / "data" / "sql"
+    current.mkdir(parents=True)
+    (current / "live.sql").write_text("select 2\n", encoding="utf-8")
+    first = ra.code_fingerprint()
+    (tmp_path / "sql" / "legacy.sql").write_text("select 9\n", encoding="utf-8")
+    assert ra.code_fingerprint() == first
+    (current / "live.sql").write_text("select 3\n", encoding="utf-8")
+    assert ra.code_fingerprint() != first
+    recorded = {row["from"] for row in ra.PATH_RELOCATION}
+    assert "sql/**/*.sql" in recorded
+    assert any(row.get("via") == "weather/data/..." for row in ra.PATH_RELOCATION)
+    report = json.loads((ra.RUNS_ROOT / "report" / "run.json").read_text(encoding="utf-8"))
+    assert report["provenance"]["code_sha256"] == "39fa1c24397f475a1ad5274b80d71736719c1227bc75529592dfe86d2b38f72e"
+    assert "weather/data/" in json.dumps(report)
+
+
 def test_code_fingerprint_changes_with_content(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(ra, "REPO_ROOT", tmp_path)
     a = tmp_path / "a.py"

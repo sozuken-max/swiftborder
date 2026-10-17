@@ -3,7 +3,7 @@
 Schema v2 (``SCHEMA_VERSION``) records enough provenance to reproduce or audit a run:
 
 - top level: ``schema_version``, ``run_id``, ``created_at_utc``, ``components``, ``provenance``
-  (git SHA, dirty flag, SHA-256 of the eval/sql source files, Python and package versions);
+  (git SHA, dirty flag, SHA-256 of eval/*.py and data/sql/**/*.sql, Python and package versions);
 - one block per component (``offline``, ``bqml``, ``joined``, ``layer_a``) with ``dataset``,
   ``window``, ``models``, ``horizon_minutes``, ``metrics`` (rows of candidate x slice),
   ``significance`` (``ComparisonResult.to_dict()`` rows) and ``artifacts`` (paths relative to the
@@ -28,6 +28,25 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 EVAL_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = EVAL_ROOT.parent
 RUNS_ROOT = EVAL_ROOT / "runs"
+# Warehouse SQL lives here. Frozen manifests were fingerprinted against ``sql/``; do not rewrite those hashes.
+SQL_ROOT = REPO_ROOT / "data" / "sql"
+# Recorded paths in frozen artifacts, and where those files live now. Promotion does not recompute
+# ``provenance.code_sha256`` or rewrite weather paths inside an already promoted ``run.json``.
+PATH_RELOCATION = (
+    {
+        "recorded_in": "provenance.code_sha256 (eval/runs/report and eval/runs/parity-bqml)",
+        "from": "sql/**/*.sql",
+        "to": "data/sql/**/*.sql",
+        "note": "Future fingerprints hash data/sql. Stored code_sha256 values stay as recorded.",
+    },
+    {
+        "recorded_in": "eval/runs/report/run.json joined dataset file paths",
+        "from": "Causeway/data/...",
+        "via": "weather/data/...",
+        "to": "data/weather/data/...",
+        "note": "The frozen manifest still names weather/data/rainfall and weather/data/forecast.",
+    },
+)
 LATEST_POINTER = RUNS_ROOT / "LATEST.json"
 SCHEMA_VERSION = 2
 KNOWN_COMPONENTS = ("offline", "bqml", "joined", "deep", "fuzzy", "ensemble", "parity", "layer_a")
@@ -100,9 +119,13 @@ def file_fingerprint(path: Path) -> Dict[str, Any]:
 
 
 def code_fingerprint(paths: Optional[Iterable[Path]] = None) -> str:
-    """SHA-256 over eval/*.py and sql/**/*.sql (names + contents): identifies code even when dirty."""
+    """SHA-256 over eval/*.py and data/sql/**/*.sql (names + contents): identifies code even when dirty.
+
+    Historical fingerprints hashed ``sql/**/*.sql``. See ``PATH_RELOCATION``. This function does not
+    recompute hashes stored in promoted manifests.
+    """
     if paths is None:
-        paths = sorted(EVAL_ROOT.glob("*.py")) + sorted((REPO_ROOT / "sql").rglob("*.sql"))
+        paths = sorted(EVAL_ROOT.glob("*.py")) + sorted(SQL_ROOT.rglob("*.sql"))
     h = hashlib.sha256()
     for p in paths:
         p = Path(p)

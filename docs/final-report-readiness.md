@@ -1,5 +1,17 @@
 # Final-report readiness review
 
+## Still open after the 17 Oct honesty pass
+
+The evidence-index cells (CNN-RNN protocol, speed timings, pooled parity, mix MAE 2.134 / 2.132), the Layer A notebook-versus-Ultralytics box tables, the fuzzy insufficient-data wording, and the `data/sql/` fingerprint path are updated in this tree. Detector CSVs under `eval/test-reports/runs/` are on `main`. The 30-minute HTTP default is `mix[fcm_mlp+xgb]`.
+
+Still open, and not fixed here:
+
+- The four deck PNGs were not regenerated. Their older captions can still disagree with the text.
+- The submission package (recorded demo, slides, reflections) is out of scope for this change.
+- Section 8's camera-overlap sentence is about `fcm_mlp_layer_a` and `timesfm_layer_a` (detections end 22 Apr). Section 7c's `local_counts` overlap is a different window. Do not collapse those two statements.
+
+No experiment was rerun.
+
 ## Current review: 17 Oct 2026, frozen submission
 
 **Verdict: request changes to report claims and packaging; no further experiments required.** The project has enough substantive evidence to assemble a defensible final report. It is not yet ready to submit unchanged, because its documents mix historical, exploratory and confirmed results. This is a substantially stronger position than the 3 Oct review.
