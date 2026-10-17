@@ -10,6 +10,7 @@ The unit tests for the service itself are in [`services/camdetect/tests/`](../..
 | [`eval/runs/layer_a_count/artifact_counts.json`](../runs/layer_a_count/artifact_counts.json) | Ground truth and the five detectors' counts below, plus each frame's GCS path |
 | [`eval/runs/layer_a_count/local_rescore.json`](../runs/layer_a_count/local_rescore.json) | `local:yolo26s-v6-boxfix` rescored on the 1920 x 1080 originals at three settings |
 | [`eval/runs/layer_a_count/roboflow_v6_conf02.json`](../runs/layer_a_count/roboflow_v6_conf02.json) | Live `swiftbackend` `model=v6` at its served setting (confidence 0.2), 17 Oct 2026 |
+| [`eval/runs/layer_a_count/annotations_with_predictions.json`](../runs/layer_a_count/annotations_with_predictions.json) | Roboflow dataset v6 labels for all 90 images (train 60 / valid 15 / test 15; boxes, plus polygons where labelled), each with the YOLO-S `best.pt` predictions (class, confidence, box) at confidence >= 0.01 after class-aware NMS, no overlap dedupe. Exported from Colab, 17 Oct 2026 |
 | [`images/`](images/) | The annotated prediction images from the comparison page, one folder per frame |
 | [`frames/`](frames/README.md) | The 15 test frames themselves (1920 x 1080 JPEG, unannotated) and a manifest |
 | [`speed_benchmark.py`](speed_benchmark.py) | The ONNX speed test (CPU or GPU), from the speed-test notebook |
