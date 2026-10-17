@@ -96,7 +96,7 @@ python run.py layer_a --coco <export>/_annotations.coco.json --predictions preds
 
 ## Window-feature ablation (offline XGB)
 
-Chad's day-2 note: a discrete wavelet gives trees a trend and a bend that raw lags do not. This is an extra comparison in [`timeseries_xgb.py`](timeseries_xgb.py), not a change to the model in [`runs/report/`](runs/report/). `use_dwt` stays off for that snapshot.
+Chad's day-2 note: a discrete wavelet gives trees a trend and a bend that raw lags do not. This is an extra comparison in [`timeseries/timeseries_xgb.py`](timeseries/timeseries_xgb.py), not a change to the model in [`runs/report/`](runs/report/). `use_dwt` stays off for that snapshot.
 
 Same chronological split, same `XGBTrainConfig`, same raw labels, same persistence baseline as the offline 60-minute path. The three sets are only the window columns (calendar, D-1/D-7, and origin `duration_sec` stay on the default model and out of this comparison):
 
@@ -114,7 +114,7 @@ python run.py timeseries_xgb
 python run.py timeseries_xgb --dwt-level 3 --json-out runs/wavelet-ablation.json
 ```
 
-The cache is `data/causeway_gdata.csv` (gitignored). The command prints MAE and RMSE in minutes against persistence. Significance follows [`significance.py`](significance.py): Diebold-Mariano, day-block bootstrap, Holm. Below 10 day-blocks the decision is **insufficient data** and the command reports point estimates only (no p-values). Leave those estimates out of `docs/evaluation.md` and `runs/report/` unless a promoted run produced them.
+The cache is `data/causeway_gdata.csv` (gitignored). The command prints MAE and RMSE in minutes against persistence. Significance follows [`harness/significance.py`](harness/significance.py): Diebold-Mariano, day-block bootstrap, Holm. Below 10 day-blocks the decision is **insufficient data** and the command reports point estimates only (no p-values). Leave those estimates out of `docs/evaluation.md` and `runs/report/` unless a promoted run produced them.
 
 Local run of `python timeseries_xgb.py --json-out runs/wavelet-ablation.json` on `data/causeway_gdata.csv` (sha256 `13a119980c640061a2b7d9cc8cae7909787771314bf6a1391c7cfb492b9bbf07`, 3,484,144 bytes). Route `jb_to_woodlands`, 7,183 rows, observed 2026-09-06 01:53:30 to 2026-10-01 00:30:03 SGT. Split boundary 2026-09-26 01:35 (5,710 train / 1,428 test), the same boundary as section 3 of [docs/evaluation.md](../docs/evaluation.md). A/B/C use only the window columns above. Persistence T-60 on that hold-out: MAE 4.6770 min, RMSE 6.3858 min.
 
