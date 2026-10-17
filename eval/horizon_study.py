@@ -21,10 +21,10 @@ Candidates (one direct model per horizon; nothing is chained):
 
 Charts (always written): ``mae-by-horizon.png``, ``skill-vs-profile.png``, ``example-days.png``, each
 with a CSV of the plotted series. ``--publish`` also copies the charts to ``docs/images/horizon-study/``
-and writes the compact summary ``forecastapi/horizon_study.json`` that ``forecast-api`` serves.
+and writes the compact summary ``services/forecastapi/horizon_study.json`` that ``forecast-api`` serves.
 
     python horizon_study.py                         # 30 min .. 24 h, charts in runs/horizon-study/
-    python horizon_study.py --publish               # + docs/images and forecastapi/horizon_study.json
+    python horizon_study.py --publish               # + docs/images and services/forecastapi/horizon_study.json
     python horizon_study.py --horizons 60 120 360
 """
 
@@ -57,7 +57,7 @@ REPO = EVAL_ROOT.parent
 CACHE = EVAL_ROOT / "data" / "causeway_gdata.csv"
 OUT = EVAL_ROOT / "runs" / "horizon-study"
 PUBLISH_IMAGES = REPO / "docs" / "images" / "horizon-study"
-PUBLISH_JSON = REPO / "forecastapi" / "horizon_study.json"
+PUBLISH_JSON = REPO / "services" / "forecastapi" / "horizon_study.json"
 EXAMPLE_DAYS = ("2026-09-24", "2026-09-25", "2026-09-26")  # Thu, Fri, Sat (SGT)
 EXAMPLE_HORIZONS = (60, 240, 1440)
 CANDIDATES = {
@@ -365,7 +365,7 @@ def main(argv=None) -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--horizons", type=int, nargs="+", default=list(DEFAULT_HORIZONS))
     p.add_argument("--n-bootstrap", type=int, default=999)
-    p.add_argument("--publish", action="store_true", help="copy charts to docs/images/horizon-study/ and write forecastapi/horizon_study.json")
+    p.add_argument("--publish", action="store_true", help="copy charts to docs/images/horizon-study/ and write services/forecastapi/horizon_study.json")
     args = p.parse_args(argv)
     try:
         args.horizons = [check_horizon(h) for h in args.horizons]  # fail before the slow work

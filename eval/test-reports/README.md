@@ -2,7 +2,7 @@
 
 Detector test results for camera 2701 (Woodlands Causeway). One test set so far: the 15 frames of the Roboflow dataset v6 **test split**, scored on image-level car and vehicle **counts**, plus box AP50 and car recall/precision from the Colab notebook that produced the comparison. Per-direction count error is not scored: there are no direction labels.
 
-The unit tests for the service itself are in [`camdetect/tests/`](../../camdetect/tests/) and are described in [the camdetect README](../../camdetect/README.md#tests).
+The unit tests for the service itself are in [`services/camdetect/tests/`](../../services/camdetect/tests/) and are described in [the camdetect README](../../services/camdetect/README.md#tests).
 
 | Source | What it holds |
 | --- | --- |
@@ -185,8 +185,8 @@ The `Time per image` column is Ultralytics predict on a T4 at each model's input
 The Colab run downloaded the 20 most recent frames (every 10 minutes going back from an hour before the run) and did not save them, so that exact set cannot be recovered. To repeat the test on fixed images, run it on the committed test frames:
 
 ```bash
-# from camdetect/
-python test-reports/speed_benchmark.py --model models/yolo26s_v6_boxfix.onnx --frames test-reports/frames --n 15
+# from repo root
+python eval/test-reports/speed_benchmark.py --model services/camdetect/models/yolo26s_v6_boxfix.onnx --frames eval/test-reports/frames --n 15
 ```
 
 The `swiftbackend` Cloud Run service is CPU-only. The earlier local measurement of the full `model=local` handler is about 0.5 s per frame ([CHANGELOG](../../CHANGELOG.md)).
@@ -197,7 +197,7 @@ Trained weights live in the team Drive folder `swiftborder_runs`, not in git. On
 
 | Detector | Where | Files |
 | --- | --- | --- |
-| YOLO-S trained (freeze), Colab run `v6_yolo26s_boxfix` | [Drive `swiftborder_runs/v6_yolo26s_boxfix`](https://drive.google.com/drive/folders/127Ydbf_xvRVQhocb4xrkfTFeMfuAs3Px) | `weights/best.pt` (20,389,957 bytes; sha256 in the [camdetect README](../../camdetect/README.md#in-container-model-modellocal)), `weights/last.pt`, `results.csv`, `results.png`, `confusion_matrix.png`, `BoxR_curve.png`. ONNX export in git: [`models/yolo26s_v6_boxfix.onnx`](../../camdetect/models/yolo26s_v6_boxfix.onnx) |
+| YOLO-S trained (freeze), Colab run `v6_yolo26s_boxfix` | [Drive `swiftborder_runs/v6_yolo26s_boxfix`](https://drive.google.com/drive/folders/127Ydbf_xvRVQhocb4xrkfTFeMfuAs3Px) | `weights/best.pt` (20,389,957 bytes; sha256 in the [camdetect README](../../services/camdetect/README.md#in-container-model-modellocal)), `weights/last.pt`, `results.csv`, `results.png`, `confusion_matrix.png`, `BoxR_curve.png`. ONNX export in git: [`models/yolo26s_v6_boxfix.onnx`](../../services/camdetect/models/yolo26s_v6_boxfix.onnx) |
 | YOLO-M trained (freeze), Colab run `v6_yolo26m_boxfix` | [Drive `swiftborder_runs/v6_yolo26m_boxfix`](https://drive.google.com/drive/folders/1okUFdqub62EdRuy01FwhcyR0wXVLnNWV) | `weights/best.pt` (44,104,281 bytes), `weights/last.pt`, `results.csv`, `BoxR_curve.png`, validation batch images. Not exported, not served |
 | COCO YOLO-S @640 / @1280 | Ultralytics release | stock `yolo26s.pt`, downloaded by Ultralytics; no fine-tuning |
 | Roboflow v6 | Roboflow (hosted) | Workflow `vehicle-detection-proejct-vvehicle-detection-proejct-6-yolo26s-t1-logic`. Weight download needs a Roboflow Core plan |

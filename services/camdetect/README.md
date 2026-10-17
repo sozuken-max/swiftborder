@@ -8,7 +8,7 @@ Roboflow vehicle-detection workflow over it (or, with `model=local`, the
 YOLO26s ONNX model shipped in the image) -> filter by confidence -> classify
 each detection by direction -> return JSON or an annotated JPEG.
 
-**Separate research (not served):** [`eval/cnn_rnn_congestion/`](../eval/cnn_rnn_congestion/README.md) holds Colab notebooks that train a ResNet18 + BiGRU model on camera 2701 frames against Google Maps duration (and human congestion ratings in v10a). That path does not call `main.py` and is documented in [architecture.md](../docs/architecture.md#offline-image-to-duration-research-cnn-rnn).
+**Separate research (not served):** [`eval/cnn_rnn_congestion/`](../../eval/cnn_rnn_congestion/README.md) holds Colab notebooks that train a ResNet18 + BiGRU model on camera 2701 frames against Google Maps duration (and human congestion ratings in v10a). That path does not call `main.py` and is documented in [architecture.md](../../docs/architecture.md#offline-image-to-duration-research-cnn-rnn).
 
 ## Request parameters
 
@@ -43,7 +43,7 @@ same as for `v4`/`v6`. `workflow_id` / `X-Workflow-Id` read
 | Classes | `bus`, `car`, `truck` |
 | Checkpoint | `best.pt`, sha256 `de7d105b380dbe1b1f4aa962487920b6cbb3128704f337591a8043d3b38abf0e`, 20.4 MB (not in git; it lives in the team Drive under `swiftborder_runs/v6_yolo26s_boxfix/weights/`) |
 | Export | `YOLO("best.pt").export(format="onnx", imgsz=[736, 1280], simplify=True)`; sha256 `dc43db2fe30ab8cf08b6d7056bd7d20d0f111f0a5ec577a51ed86cb593f65fe8`, 38 MB |
-| Validation (from the checkpoint) | mAP50 0.833, mAP50-95 0.558, P 0.797, R 0.734 (Colab, best epoch). This is the run's own validation split of about 15 images, which also picked the checkpoint. On the separate 15-frame `test` split the notebook gives car AP50 0.899 and mAP50 0.827. That split's frames and image-level count error (including this ONNX file at the served confidence and overlap) are in [eval/test-reports/](../eval/test-reports/README.md) and [docs/evaluation.md](../docs/evaluation.md#layer-a--vision). |
+| Validation (from the checkpoint) | mAP50 0.833, mAP50-95 0.558, P 0.797, R 0.734 (Colab, best epoch). This is the run's own validation split of about 15 images, which also picked the checkpoint. On the separate 15-frame `test` split the notebook gives car AP50 0.899 and mAP50 0.827. That split's frames and image-level count error (including this ONNX file at the served confidence and overlap) are in [eval/test-reports/](../../eval/test-reports/README.md) and [docs/evaluation.md](../../docs/evaluation.md#layer-a--vision). |
 
 How it matches Ultralytics' `model.predict(imgsz=1280)`:
 
@@ -160,9 +160,9 @@ available`. No upstream inference call is made.
 To ship a new model: export with the same arguments, replace the file (or set
 `LOCAL_MODEL_PATH`), change `LOCAL_MODEL_ID` so responses say which weights
 scored them, update `LOCAL_MODEL_CLASSES` if the classes changed, and update
-the table above. `camdetect/models/**` is **not** in the trigger's
-`includedFiles`, so a model-only commit does not redeploy. Touch `main.py`
-in the same commit, or add the path to the trigger.
+the table above. `services/camdetect/models/**` is in the trigger's
+`includedFiles` (updated 17 Oct 2026), so replacing the ONNX weights on `main`
+redeploys `swiftbackend` automatically.
 
 ## Retro-scoring stored frames (`model=local`)
 
@@ -175,7 +175,7 @@ partitions are both listed). A dry run on 10 Oct found 4,054 frames in that wind
 
 Output goes to a CSV (default `backfill/cam2701_local_counts_20260906_20261004.csv`, tracked by
 git) or, with `--bq-table`, to BigQuery. The table is created on first use with the schema in
-[`sql/bigquery/cam2701/local_counts.sql`](../sql/bigquery/cam2701/local_counts.sql) (`BQ_SCHEMA`
+[`data/sql/bigquery/cam2701/local_counts.sql`](../../data/sql/bigquery/cam2701/local_counts.sql) (`BQ_SCHEMA`
 in the script): `camera_id`, `frame_datetime_sgt` (DATETIME, SGT), `frame_ts` (TIMESTAMP),
 `sg_my`, `my_sg`, `unknown`, `total` (INT64), `model_id`, `min_confidence`, `max_overlap`,
 `source` (the `gs://` frame) and `scored_at`. Rows go in with load jobs of 100 (no streaming
@@ -203,8 +203,8 @@ The job's service account needs Storage Object Viewer on `sg-lta-traffic-cameras
 Editor on dataset `cam2701` and BigQuery Job User on the project.
 
 ```bash
-# from the repo root; the build context is camdetect/ with backfill.Dockerfile as its Dockerfile
-mkdir -p /tmp/bf && cp -r camdetect/. /tmp/bf/ && cp camdetect/backfill.Dockerfile /tmp/bf/Dockerfile
+# from the repo root; the build context is services/camdetect/ with backfill.Dockerfile as its Dockerfile
+mkdir -p /tmp/bf && cp -r services/camdetect/. /tmp/bf/ && cp services/camdetect/backfill.Dockerfile /tmp/bf/Dockerfile
 gcloud run jobs deploy cam2701-local-backfill --source /tmp/bf \
   --project swiftborder --region asia-southeast1 \
   --tasks 4 --cpu 4 --memory 2Gi --task-timeout 1h --max-retries 1 \
@@ -380,8 +380,8 @@ empty result.
 ## Security (live service)
 
 The deployed `swiftbackend` accepts unauthenticated calls from any origin
-(recorded in [docs/inventory.md](../docs/inventory.md) and
-[docs/findings.md](../docs/findings.md)). Every call can trigger a billed
+(recorded in [docs/inventory.md](../../docs/inventory.md) and
+[docs/findings.md](../../docs/findings.md)). Every call can trigger a billed
 Roboflow inference. The code does not check the `Authorization` header it
 lists in CORS. Lock-down is a separate, approved change; set `ALLOWED_ORIGIN`
 to the demo origin at minimum.
@@ -437,32 +437,33 @@ it defaults to both.
 `python:3.11-slim`, so the base is already on the build machine), `Deploy`
 (`gcloud run services update --image`). The container runs
 `functions-framework --target=detect` on `$PORT`. Trigger `76bbca35` points at
-this file (switched in the Console on 2026-10-08). Repo changes to the trigger are recorded in
-[CHANGELOG.md](../CHANGELOG.md).
+this file (`services/camdetect/cloudbuild.yaml`, updated 2026-10-17). Repo changes to the trigger are recorded in
+[CHANGELOG.md](../../CHANGELOG.md).
 
 | | |
 | --- | --- |
 | Trigger | `76bbca35-c1b4-4836-9f34-d7adda53ea17` |
 | Name | `rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc` |
 | Event | push to `^main$` on `sozuken-max/swiftborder` |
-| Deploy | Cloud Run `swiftbackend`, `europe-west1`, function target `detect`, Dockerfile, path `camdetect` |
+| Deploy | Cloud Run `swiftbackend`, `europe-west1`, function target `detect`, Dockerfile, path `services/camdetect` |
 
-Step `Test` runs `pip install -r camdetect/requirements-dev.txt` and
-`python -m pytest` in `camdetect/` before the image build. A failing test
+Step `Test` runs `pip install -r services/camdetect/requirements-dev.txt` and
+`python -m pytest` in `services/camdetect/` before the image build. A failing test
 stops the deploy.
 
 `includedFiles` starts a build only when these change:
 
-- `camdetect/main.py`, `camdetect/requirements.txt`
-- `camdetect/Dockerfile`, `camdetect/cloudbuild.yaml`
-- `camdetect/*.yaml`, `camdetect/*.yml`, `camdetect/*.json`, `camdetect/*.toml`
+- `services/camdetect/main.py`, `services/camdetect/requirements.txt`
+- `services/camdetect/Dockerfile`, `services/camdetect/cloudbuild.yaml`
+- `services/camdetect/models/**`
 
-Test-only files (`camdetect/tests/**`, `pytest.ini`, `requirements-dev.txt`) and
-`camdetect/README.md` do **not** start a deploy. Run pytest locally or rely on
-the next `main.py` / `requirements.txt` push to exercise CI tests.
+Test-only and backfill files (`services/camdetect/tests/**`, `pytest.ini`, `requirements-dev.txt`,
+`requirements-backfill.txt`, `backfill_local_counts.py`, `backfill.Dockerfile`, `jobs/**`) and
+`services/camdetect/README.md` are in `ignoredFiles` and do **not** start a `swiftbackend` deploy.
+The manual trigger `03aefce3` (`asia-southeast1`) builds the backfill job image from
+[`jobs/backfill.cloudbuild.yaml`](jobs/backfill.cloudbuild.yaml).
 
-Re-check or re-apply from an exported trigger JSON (add `includedFiles`, then
-import). Do not create a second trigger for `swiftbackend`.
+Re-check or re-apply from an exported trigger JSON. Do not create a second trigger for `swiftbackend`.
 
 ```bash
 gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder
@@ -491,7 +492,7 @@ the repo root). `requirements.txt` is the pinned Cloud Run dependency set;
 
 Detector accuracy is not a unit test. The 15-frame count comparison on camera
 2701 (five detectors, per-frame errors, the served operating points and the
-annotated frames) is in [eval/test-reports/](../eval/test-reports/README.md), with the
+annotated frames) is in [eval/test-reports/](../../eval/test-reports/README.md), with the
 15 test frames, box AP50, the ONNX speed test and where the trained weights are.
 
 ## Reuse outside the handler
@@ -501,4 +502,4 @@ validation, inference and direction attribution on raw bytes and returns
 `kept`, `summary`, `image_size` and `points`. Pass
 `workflow_id=main.LOCAL_MODEL_ID` to score with the in-container model, which
 is unbilled. The offline camera backfill in
-[`eval/`](../eval/README.md) uses it.
+[`eval/`](../../eval/README.md) uses it.

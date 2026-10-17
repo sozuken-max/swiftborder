@@ -1,12 +1,13 @@
-# CI/CD for Cloud Run service swiftbackend (camdetect): test, docker build + push, deploy. Not forecast-api.
-# Trigger 76bbca35 runs this on a push to ^main$ once its configuration points at this file
-# (until then the trigger's inline config still runs). No keys: the Roboflow key and other env vars
-# stay on the service, and `services update --image` leaves them untouched.
-# The image comes from camdetect/Dockerfile, on the same python:3.11-slim the Test step pulls, so the
+# CI/CD for Cloud Run service swiftbackend (services/camdetect): test, docker build + push, deploy. Not forecast-api.
+# Trigger 76bbca35 runs this on a push to ^main$ when services/camdetect runtime files change
+# (services/camdetect/main.py, services/camdetect/requirements.txt, services/camdetect/Dockerfile,
+# services/camdetect/cloudbuild.yaml, services/camdetect/models/**). No keys: the Roboflow key and other
+# env vars stay on the service, and `services update --image` leaves them untouched.
+# The image comes from services/camdetect/Dockerfile, on the same python:3.11-slim the Test step pulls, so the
 # build reuses that download. Buildpacks were dropped: build d949348e spent most of a minute pulling
 # builder google-22 and its lifecycle image (cold on the build machine) for about 8 s of real work.
 # python:3.11-slim (here and in the Dockerfile) resolved 2026-10-08 from mirror.gcr.io; cloud-sdk:slim
-# is the digest forecastapi/cloudbuild.yaml uses (2026-10-03). Refresh the digests deliberately.
+# is the digest services/forecastapi/cloudbuild.yaml uses (2026-10-03). Refresh the digests deliberately.
 
 steps:
   - id: Test
@@ -17,8 +18,8 @@ steps:
       - -c
       - |
         set -euo pipefail
-        pip install -q --disable-pip-version-check --root-user-action=ignore -r camdetect/requirements-dev.txt
-        cd camdetect && python -m pytest -q -p no:cacheprovider
+        pip install -q --disable-pip-version-check --root-user-action=ignore -r services/camdetect/requirements-dev.txt
+        cd services/camdetect && python -m pytest -q -p no:cacheprovider
 
   - id: Build
     # Not pinned by digest on purpose: Cloud Build machines already hold the current docker builder
@@ -27,7 +28,7 @@ steps:
     args:
       - build
       - --tag=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - camdetect
+      - services/camdetect
 
   - id: Push
     name: gcr.io/cloud-builders/docker

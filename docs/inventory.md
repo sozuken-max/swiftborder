@@ -2,6 +2,23 @@
 
 Dated copy of GCP project `swiftborder`. When this file and the project disagree, the project wins; re-query and update this file. Older blocks below are history. They keep the revisions and sentences that were true at their own timestamps.
 
+## Trigger paths: 2026-10-17, approximately 13:50-14:05 SGT
+
+Read with `gcloud builds triggers list` / `describe` (`--region=global`, `asia-southeast1`, `europe-west1`), `gcloud run services list`, and `gcloud run jobs describe` for `cam2701-local-backfill` and `traffic-backfill`. Cloud Audit Logs for `UpdateBuildTrigger` the same day (05:39-05:47 UTC) are the before/after for the path edit. No revision, row count, or bucket list was repeated.
+
+Push triggers live in **global**, not in the Cloud Run region. `europe-west1` had no triggers.
+
+| Id | Name | Region | Filename after | Included files after |
+| --- | --- | --- | --- | --- |
+| `76bbca35-c1b4-4836-9f34-d7adda53ea17` | `rmgpgab-swiftbackend-europe-west1-sozuken-max-swiftborder--mtkc` | global | `services/camdetect/cloudbuild.yaml` | `services/camdetect/main.py`, `requirements.txt`, `Dockerfile`, `cloudbuild.yaml`, `models/**` |
+| `949ff029-31c9-4521-8ff4-d0e8d16dfa25` | `forecast-api` | global | `services/forecastapi/cloudbuild.yaml` | `services/forecastapi/**` |
+| `33e4b77e-dbce-426e-a701-de234ec16d60` | `rmgpgab-gmap-woodlands-fetcher-asia-southeast1-sozuken-max-szsd` | global | `services/gmapfetcher/cloudbuild.yaml` | `services/gmapfetcher/**` |
+| `03aefce3-94e7-4840-afab-1d5797fdff76` | `cam2701-local-backfill-image` | asia-southeast1 | none (manual `gitFileSource.path` `services/camdetect/jobs/backfill.cloudbuild.yaml`) | none |
+
+Before the 05:47 UTC update, audit requests for `76bbca35` and `949ff029` still named `camdetect/…` and `forecastapi/…` (filenames `camdetect/cloudbuild.yaml` and `forecastapi/cloudbuild.yaml` on the 05:40-05:41 updates). Trigger `33e4b77e` has no earlier `UpdateBuildTrigger` in that window. Its last successful build (`8a76e3b3`, 2026-10-13) used `--path=gmapfetcher` and steps Buildpack, Pull, Push, Deploy, with no test step. The backfill trigger's `gitFileSource.path` was set to `camdetect/backfill.cloudbuild.yaml` at 05:39 UTC, then to `services/camdetect/jobs/backfill.cloudbuild.yaml` at 05:47 UTC. That same update left `sourceToBuild.ref` and `gitFileSource.revision` as `refs/heads/^main$`. A follow-up import set both to `refs/heads/main` (re-read after the import). Ignored files on `76bbca35` now include `services/camdetect/jobs/**` so the backfill file does not start a `swiftbackend` build. The checked-in fetcher file is what trigger `33e4b77e` will run once this path is on `main`.
+
+Runtime service accounts at the same query: `forecast-api` uses `forecast-api@swiftborder.iam.gserviceaccount.com`; `swiftbackend`, `gmap-woodlands-fetcher`, `weather-backfill-tmp`, `cam2701-local-backfill`, and `traffic-backfill` use `1095552466513-compute@developer.gserviceaccount.com`. `cam2701-local-backfill` image repository is `cloud-run-source-deploy/cam2701-local-backfill`. `traffic-backfill` image repository is `traffic-backfill/traffic-backfill`. All four triggers build as the default compute service account.
+
 ## Review verification: 2026-10-17, approximately 11:10-11:20 SGT (read-only)
 
 The team subsequently confirmed that live operation was curtailed to reduce costs and that **all currently committed results are frozen; no more experiment runs**. The availability observation below is intentional operational status, not a final-report blocker. It does not supersede the historical evaluation windows.
@@ -129,12 +146,12 @@ Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, `weatherforecast`
 
 ### `rainfall` / `weatherforecast`
 
-Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 2025-09-01 to 2026-08-31 SGT (last modified 3 Sep). On **2026-10-01 ~01:50 SGT** the rows for **1–30 Sep 2026 SGT** were appended with [`weather/load_bigquery.py`](../weather/load_bigquery.py) from complete data.gov.sg day files (verified after load: no duplicate timestamps).
+Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 2025-09-01 to 2026-08-31 SGT (last modified 3 Sep). On **2026-10-01 ~01:50 SGT** the rows for **1–30 Sep 2026 SGT** were appended with [`weather/load_bigquery.py`](../data/weather/load_bigquery.py) from complete data.gov.sg day files (verified after load: no duplicate timestamps).
 
 - **`rainfall.rainfall`** -- **103,922 rows** (+8,640), station `Woodlands Centre Road` (S210), 5-minute readings, 2025-08-31 16:00 to 2026-09-30 15:55 UTC. The appended rows first went in as `Woodlands Centre` (data.gov.sg's current name for S210); a one-off `UPDATE` restricted to those 8,640 appended rows restored `Woodlands Centre Road` so the view keeps one station. The loader now pins that name.
 - **`weatherforecast.weatherforecast`** -- **24,482 rows** (+1,876), area Woodlands, one row per issue, to 2026-09-30 15:30 UTC. New nullable column **`update_timestamp`** (data.gov.sg acquisition time) is set on the appended rows and NULL on older rows.
 - **Snapshots** (expire 2026-10-31): `rainfall.rainfall_snapshot_20261001`, `weatherforecast.weatherforecast_snapshot_20261001` hold the pre-load tables. Revert with `CREATE OR REPLACE TABLE <table> CLONE <snapshot>`.
-- **No scheduled loader** keeps these tables current; re-run the [`weather/`](../weather/README.md) fetchers and `load_bigquery.py --execute` (it refuses overlapping ranges).
+- **No scheduled loader** keeps these tables current; re-run the [`weather/`](../data/weather/README.md) fetchers and `load_bigquery.py --execute` (it refuses overlapping ranges).
 - **View `v_weather_features_10min`** -- Woodlands forecast flags plus Woodlands Centre Road rainfall on 10-minute bins; now returns bins to 2026-09-30. It bins forecasts by **issue** time, not valid period. **Not referenced by `v_training_set`.**
 
 ### `traffic_images`
@@ -145,12 +162,12 @@ Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 20
 
 ### `traffic_prediction`
 
-- **`model_registry`** -- 2 rows, decided 2026-09-12 on the 11–12 Sep window: `SG_TO_MY` -> `lin_h30`; `MY_TO_SG` -> `persistence`. Snapshot: [model_registry_reference.sql](../sql/bigquery/traffic_prediction/model_registry_reference.sql).
+- **`model_registry`** -- 2 rows, decided 2026-09-12 on the 11–12 Sep window: `SG_TO_MY` -> `lin_h30`; `MY_TO_SG` -> `persistence`. Snapshot: [model_registry_reference.sql](../data/sql/bigquery/traffic_prediction/model_registry_reference.sql).
 - **Models (BigQuery ML)**, trained once, never retrained:
   - `lin_h30` -- `LINEAR_REGRESSION`, created **2026-09-12 06:15 UTC**.
   - `xgb_h30` -- `BOOSTED_TREE_REGRESSOR`, created **2026-09-12 06:19 UTC**; early stop at iteration 28; adds `tod_block`. Not used in `v_forecast_recent`.
   - Both: `dataSplitMethod = CUSTOM`, `dataSplitColumn = is_val` (11–12 Sep), label `y_30`. BQML-internal eval MAE 3.04 (lin) / 2.87 (xgb) on that split; these are not harness results. Every date from **13 Sep** is out-of-sample for both.
-- **`v_bins_10min`**, **`v_training_set`** (last modified 2026-09-12 13:58 SGT), **`v_forecast_recent`** (2026-09-12 14:16 SGT) -- live SQL matches [sql/](../sql/) (2026-09-30 check). `v_training_set` uses Maps columns only; `LEAD(bin_ts, 3)` was exactly 30 min on every row (0 of 3,572 per direction differ, 2026-09-30).
+- **`v_bins_10min`**, **`v_training_set`** (last modified 2026-09-12 13:58 SGT), **`v_forecast_recent`** (2026-09-12 14:16 SGT) -- live SQL matches [sql/](../data/sql/) (2026-09-30 check). `v_training_set` uses Maps columns only; `LEAD(bin_ts, 3)` was exactly 30 min on every row (0 of 3,572 per direction differ, 2026-09-30).
 - `v_forecast_recent` serves **30 minutes** ahead: `lin_h30` where the registry says so, otherwise persistence.
 - **2026-10-03 ~11:20 SGT** (read-only, historical): `bq ls --models` still only `lin_h30` and `xgb_h30`. `model_registry` still the two rows above. `INFORMATION_SCHEMA.VIEWS` for `v_forecast_recent` still matches the checked-in SQL (`ML.PREDICT` on `lin_h30`, `INTERVAL 30 MINUTE`). `bq show --model` has one training run each and no version list. Resource `creationTime`: `lin_h30` `2026-09-12T06:15:33.163Z`, `xgb_h30` `2026-09-12T06:19:18.783Z`. `gcloud run services list` at that minute returned only `gmap-woodlands-fetcher` and `swiftbackend`. `forecast-api` exists in later listings.
 

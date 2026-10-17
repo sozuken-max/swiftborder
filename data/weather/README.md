@@ -1,9 +1,9 @@
 # weather — NEA data.gov.sg ingestion (offline)
 
 Day-by-day **CSV** downloads from data.gov.sg for rainfall and the 2-hour forecast.
-Output goes under `weather/data/`, which is gitignored.
+Output goes under `data/weather/data/`, which is gitignored.
 
-They feed the offline joined-feature experiment in [`../eval/`](../eval/README.md), and
+They feed the offline joined-feature experiment in [`../../eval/`](../../eval/README.md), and
 `load_bigquery.py` appends the Woodlands rows to `rainfall.rainfall` and
 `weatherforecast.weatherforecast` in project `swiftborder`. Nothing runs these scripts on a schedule.
 
@@ -48,7 +48,7 @@ Credentials with write access to the two datasets.
 
 ## Layer B forecasting modules (moved)
 
-FCM-MLP, TimesFM, and the 50/50 XGBoost mix modules now live under [`../eval/`](../eval/) (`layer_b_fcm_mlp.py`, `layer_b_timesfm.py`, `layer_b_fcm_xgb_mix.py`). Results and verification: [`../docs/layer-b-fcm-mlp-results.md`](../docs/layer-b-fcm-mlp-results.md), [`../docs/layer-b-mix-module.md`](../docs/layer-b-mix-module.md).
+FCM-MLP, TimesFM, and the 50/50 XGBoost mix modules now live under [`../../eval/`](../../eval/) (`layer_b_fcm_mlp.py`, `layer_b_timesfm.py`, `layer_b_fcm_xgb_mix.py`). Results and verification: [`../../docs/layer-b-fcm-mlp-results.md`](../../docs/layer-b-fcm-mlp-results.md), [`../../docs/layer-b-mix-module.md`](../../docs/layer-b-mix-module.md).
 
 ## Setup and tests
 

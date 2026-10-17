@@ -34,13 +34,13 @@ def fast_cfg(lookback_days=7, validation_days=3, history_start=HISTORY_START, **
 
 
 def _local_models():
-    """forecastapi/local_models.py, the copy of eval/joined.py and eval/features.py that forecast-api serves."""
+    """services/forecastapi/local_models.py, the copy of eval/joined.py and eval/features.py that forecast-api serves."""
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(REPO / "forecastapi"))
+    sys.path.insert(0, str(REPO / "services" / "forecastapi"))
     try:
         import local_models
     finally:
-        sys.path.remove(str(REPO / "forecastapi"))
+        sys.path.remove(str(REPO / "services" / "forecastapi"))
     return local_models
 
 
@@ -177,8 +177,8 @@ def test_config_rejects_bad_environment(env):
 
 
 def test_constants_equal_the_harness_copy_in_forecast_api():
-    """forecastapi/local_models.py is tested equal to eval/joined.py; the mix must use the same xgb[maps]."""
-    tree = ast.parse((REPO / "forecastapi" / "local_models.py").read_text(encoding="utf-8"))
+    """services/forecastapi/local_models.py is tested equal to eval/joined.py; the mix must use the same xgb[maps]."""
+    tree = ast.parse((REPO / "services" / "forecastapi" / "local_models.py").read_text(encoding="utf-8"))
     found = {}
     for node in tree.body:
         if isinstance(node, (ast.Assign, ast.AnnAssign)):

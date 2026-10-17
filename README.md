@@ -19,8 +19,8 @@ All reported metrics are pinned to the **17 Oct 2026 final-report freeze** (`mai
 | --- | --- |
 | Supervised learning | Roboflow-labelled YOLO26s/m; regression of future Maps duration (BQML, XGBoost, ridge, MLP); traffic-level classification; ResNet18 + BiGRU congestion sequence classifier ([eval/cnn_rnn_congestion/](eval/cnn_rnn_congestion/README.md)) |
 | Unsupervised learning & fuzzy logic | Fuzzy C-Means clustering on historical traffic profiles (`eval/layer_b_fcm_mlp.py`); Mamdani light / moderate / heavy partition and learned Wang–Mendel fuzzy rule base (`eval/fuzzy_traffic.py`) |
-| Machine learning / deep learning | YOLO26s ONNX (`camdetect`); `lin_h30`, `xgb_h30` & local replicas (`forecastapi`); offline XGBoost, LSTM, GRU, TCN and patch Transformer ([deep-learning assessment](docs/deep-learning-assessment.md)) |
-| Intelligent sensing | LTA camera frames -> directional occupancy with camera 2701 & 2702 dividing lines (`camdetect/main.py`) and `traffic-backfill` Cloud Run Job (`camdetect/backfill_local_counts.py`) |
+| Machine learning / deep learning | YOLO26s ONNX (`services/camdetect`); `lin_h30`, `xgb_h30` & local replicas (`services/forecastapi`); offline XGBoost, LSTM, GRU, TCN and patch Transformer ([deep-learning assessment](docs/deep-learning-assessment.md)) |
+| Intelligent sensing | LTA camera frames -> directional occupancy with camera 2701 & 2702 dividing lines (`services/camdetect/main.py`) and `traffic-backfill` Cloud Run Job (`services/camdetect/backfill_local_counts.py`) |
 | Hybrid / ensemble | Mean of `lin_h30` + `xgb_h30`; ridge + XGBoost; rolling LAD stack, rolling selection and fuzzy-gated stack; XGBoost forecast defuzzified into traffic levels; 50/50 `fcm_mlp` + `xgb[maps]` mix ([docs/layer-b-mix-module.md](docs/layer-b-mix-module.md)). All scored against single models |
 
 ## Run the MVP
@@ -53,27 +53,24 @@ All reported metrics are pinned to the **17 Oct 2026 final-report freeze** (`mai
 
 | Path | Contents |
 | --- | --- |
-| [`camdetect/`](camdetect/README.md) | Layer A HTTP service (`swiftbackend` on Cloud Run), `traffic-backfill` Cloud Run Job (`backfill_local_counts.py`), and local ONNX YOLO26s (`models/`) |
-| [`forecastapi/`](forecastapi/README.md) | Layer B HTTP service (`forecast-api` on Cloud Run): serves 30-min crossings from in-process local models (`lin_bq[frozen]`, `xgb_bq[frozen]`, persistence) plus exploratory horizons up to 24 h ([ADR 0004](docs/adr/0004-serve-local-models.md)) |
-| [`gmapfetcher/`](gmapfetcher/README.md) | Layer B Google Maps Distance Matrix ingestion service (`gmap-woodlands-fetcher` on Cloud Run, Node 22): writes `causeway.travel_times` and `traffic-24h.json` (deployed by Cloud Build trigger `33e4b77e`) |
-| [`weather/`](weather/README.md) | Offline NEA data.gov.sg rainfall and 2-hour forecast fetchers plus manual BigQuery loader (`load_bigquery.py`) |
-| [`eval/`](eval/README.md) | Layer A and B harnesses (DM + Holm), FCM-MLP / TimesFM / mix modules, 15-frame detector benchmark ([`test-reports/`](eval/test-reports/README.md)), CNN-RNN study ([`cnn_rnn_congestion/`](eval/cnn_rnn_congestion/README.md)), and frozen evidence (`eval/runs/report/`, `layer_a_count/`, `layer_a_eval/`) |
-| [`sql/`](sql/README.md) | BigQuery view DDL (`v_bins_10min`, `v_training_set`, `v_forecast_recent`, weather and congestion views), `cam2701.local_counts` schema, and historical BQML definitions exported from project `swiftborder` |
+| [`services/`](services/README.md) | Deployed Cloud Run endpoints and jobs: [`services/camdetect/`](services/camdetect/README.md) (`swiftbackend` + `traffic-backfill` job + local ONNX YOLO26s), [`services/forecastapi/`](services/forecastapi/README.md) (`forecast-api` local-model serving, [ADR 0004](docs/adr/0004-serve-local-models.md)), and [`services/gmapfetcher/`](services/gmapfetcher/README.md) (`gmap-woodlands-fetcher` Distance Matrix ingestion, Node 22) |
 | [`hosting/`](hosting/index.html) | Firebase Hosting web client (`index.html`, `app.js`, `style.css`), deployed to `swiftborder-92b45` via `firebase.json`, `.firebaserc`, and [`.github/workflows/firebase-hosting.yml`](.github/workflows/firebase-hosting.yml) ([ADR 0002](docs/adr/0002-firebase-hosting-source.md)) |
+| [`data/`](data/README.md) | BigQuery warehouse DDL and offline data ingestion: [`data/sql/`](data/sql/README.md) (views `v_bins_10min`, `v_training_set`, `v_forecast_recent`, `cam2701.local_counts`, and historical BQML definitions) and [`data/weather/`](data/weather/README.md) (NEA data.gov.sg rainfall/forecast fetchers and `load_bigquery.py`) |
+| [`eval/`](eval/README.md) | Layer A and B harnesses (DM + Holm), FCM-MLP / TimesFM / mix modules, 15-frame detector benchmark ([`test-reports/`](eval/test-reports/README.md)), CNN-RNN study ([`cnn_rnn_congestion/`](eval/cnn_rnn_congestion/README.md)), and frozen evidence (`eval/runs/report/`, `layer_a_count/`, `layer_a_eval/`) |
 | [`docs/`](docs/README.md) | Report spine (architecture, evaluation, findings, GCP inventory, final-report readiness, grading alignment), deep-learning & horizon studies, ADRs, runbooks, and planning archive |
-| [`scripts/`](scripts/run_tests.ps1) | Cross-suite test runners (`run_tests.ps1`, `run_tests.sh`) and repository documentation/diagram/Cloud Build gate tests (`scripts/tests/`) |
+| [`scripts/`](scripts/run_tests.ps1) & [`skills/`](skills/documentation-generation/SKILL.md) | Cross-suite test runners (`run_tests.ps1`, `run_tests.sh`), repository doc/diagram/Cloud Build gate tests (`scripts/tests/`), and agent review/documentation skills |
 
-GCP project `swiftborder` is the source of truth for what is deployed; [docs/inventory.md](docs/inventory.md) is the dated copy. Weather tables can be appended manually with `weather/load_bigquery.py`.
+GCP project `swiftborder` is the source of truth for what is deployed; [docs/inventory.md](docs/inventory.md) is the dated copy. Weather tables can be appended manually with `data/weather/load_bigquery.py`.
 
 ## Testing
 
 ```bash
 py -3.11 -m venv .venv
-.venv\Scripts\pip install -r camdetect/requirements-dev.txt -r weather/requirements-dev.txt -r eval/requirements-dev.txt -r forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
+.venv\Scripts\pip install -r services/camdetect/requirements-dev.txt -r data/weather/requirements-dev.txt -r eval/requirements-dev.txt -r services/forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
 scripts\run_tests.ps1            # all fast suites (camdetect, weather, eval, forecastapi, repo doc checks)
 scripts\run_tests.ps1 -Slow      # + TensorFlow tests (needs eval/requirements-notebook.txt)
 scripts\run_tests.ps1 -Coverage
-cd gmapfetcher && npm test       # Node 22 unit tests for traffic-24h.json snapshot builder
+cd services/gmapfetcher && npm test  # Node 22 unit tests for traffic-24h.json snapshot builder
 ```
 
 On Linux/macOS use `scripts/run_tests.sh [--slow] [--coverage]`. GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs the fast suites on Python 3.11 for every push and PR; it deploys nothing. Dependencies are pinned per suite; the full resolved environment is [requirements-lock-py311.txt](requirements-lock-py311.txt).
