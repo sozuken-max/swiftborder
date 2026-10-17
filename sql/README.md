@@ -19,7 +19,7 @@ Run in BigQuery (location **US** for `traffic_prediction`; **asia-southeast1** f
 | — | [bigquery/weatherforecast/v_weather_features_10min.sql](bigquery/weatherforecast/v_weather_features_10min.sql) | Not joined to training today |
 | — | [bigquery/cam2701/v_congestion_index_10min.sql](bigquery/cam2701/v_congestion_index_10min.sql) | Not joined to training today |
 
-**Not in this folder:** `causeway.travel_times` ingest (Maps fetcher), `traffic_images` backfill. The weather tables are appended by [`Causeway/load_bigquery.py`](../Causeway/load_bigquery.py) (manual; adds nullable `weatherforecast.update_timestamp`). See [docs/roadmap.md](../docs/roadmap.md).
+**Not in this folder:** `causeway.travel_times` ingest (Maps fetcher), `traffic_images` backfill. The weather tables are appended by [`weather/load_bigquery.py`](../weather/load_bigquery.py) (manual; adds nullable `weatherforecast.update_timestamp`). See [docs/roadmap.md](../docs/roadmap.md).
 
 ## Models vs evaluation
 

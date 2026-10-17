@@ -64,13 +64,13 @@ pre-registered frozen run.
 
 Deployment (Cloud Run Job triggered by Cloud Scheduler)
 -------------------------------------------------------
-Two companion lines are needed for a source deploy of ``Causeway/`` with Google Cloud buildpacks.
-``Causeway/requirements.txt`` must contain::
+Two companion lines are needed for a source deploy of ``eval/`` with Google Cloud buildpacks.
+``eval/requirements.txt`` must contain::
 
     google-cloud-bigquery==3.45.2
     requests==2.34.2
 
-and ``Causeway/Procfile`` must name the start command (buildpacks read it; overriding
+and ``eval/Procfile`` must name the start command (buildpacks read it; overriding
 ``--command`` would bypass the buildpack launcher)::
 
     web: python3 layer_b_timesfm.py run-cycle
@@ -89,7 +89,7 @@ Environment variables::
 
 Example::
 
-    gcloud run jobs deploy layer-b-timesfm --source Causeway --region asia-southeast1 \\
+    gcloud run jobs deploy layer-b-timesfm --source eval --region asia-southeast1 \\
         --max-retries 1 --task-timeout 600s \\
         --service-account layer-b@swiftborder.iam.gserviceaccount.com \\
         --set-env-vars SWIFTBORDER_PROJECT=swiftborder,LAYER_A_URL=https://<swiftbackend-url>

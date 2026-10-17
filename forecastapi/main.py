@@ -851,13 +851,13 @@ def _layer_b_cards():
             "timesfm",
             "TimesFM 2.5",
             "Not served. TimesFM 2.5 was scored on a five-day Maps window and stays out of the served mix. "
-            "This API does not call Causeway/layer_b_timesfm.py.",
+            "This API does not call eval/layer_b_timesfm.py.",
             "single",
         ),
         _card(
             "fcm_mlp",
             "Fuzzy C-Means + MLP",
-            "Not served. Fuzzy C-Means plus an MLP, from Causeway/layer_b_fcm_mlp.py. "
+            "Not served. Fuzzy C-Means plus an MLP, from eval/layer_b_fcm_mlp.py. "
             "A local day-disjoint test had five calendar days, which is insufficient data to join the served mix. "
             "The camera variant was not scored. This API does not call it.",
             "single",

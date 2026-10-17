@@ -13,7 +13,7 @@ Maps columns reproduce ``v_bins_10min`` + ``v_training_set`` in pandas. Two deli
 lags and labels are **time-based** (a missing bin gives NaN rather than the previous row), and
 ``after_gap`` is computed the same way as the view.
 
-Weather (Causeway CSVs):
+Weather (``weather/data/`` CSVs):
 - ``rain_30`` / ``rain_60``: rainfall (mm) at station S210 (Woodlands Centre) in (asof-30, asof] and
   (asof-60, asof].
 - ``fc_rain`` / ``fc_heavy``: the 2-hour forecast for Woodlands whose valid period covers the
@@ -45,8 +45,14 @@ import pandas as pd
 EVAL_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = EVAL_ROOT.parent
 TT_CACHE = EVAL_ROOT / "data" / "causeway_gdata.csv"
-RAIN_CSV = REPO_ROOT / "Causeway" / "data" / "rainfall" / "S210_Woodlands_Centre.csv"
-FORECAST_CSV = REPO_ROOT / "Causeway" / "data" / "forecast" / "Woodlands.csv"
+def _weather_data_csv(*parts: str) -> Path:
+    primary = REPO_ROOT / "weather" / "data" / Path(*parts)
+    legacy = REPO_ROOT / "Causeway" / "data" / Path(*parts)
+    return primary if primary.exists() or not legacy.exists() else legacy
+
+
+RAIN_CSV = _weather_data_csv("rainfall", "S210_Woodlands_Centre.csv")
+FORECAST_CSV = _weather_data_csv("forecast", "Woodlands.csv")
 CAMERA_CSV = EVAL_ROOT / "data" / "camera" / "cam2701_counts.csv"
 OUT = EVAL_ROOT / "data" / "features_10min.parquet"
 

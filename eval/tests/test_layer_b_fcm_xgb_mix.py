@@ -1,4 +1,4 @@
-"""Offline tests for layer_b_fcm_xgb_mix.py (no network, no GCP). Run from Causeway/: python -m pytest"""
+"""Offline tests for layer_b_fcm_xgb_mix.py (no network, no GCP). Run from eval/: python -m pytest"""
 import ast
 import dataclasses
 import datetime as dt

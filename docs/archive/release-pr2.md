@@ -4,14 +4,14 @@ PR #2 touches four live things: a `swiftbackend` redeploy and a first `forecast-
 
 | Item | State | Owner | Deadline |
 | --- | --- | --- | --- |
-| `swiftbackend` credential / public access ([findings.md](findings.md#known-risk-public-swiftbackend-documented-not-changed)) | **Accepted as is** (team decision 2026-10-03): settings unchanged, not a merge blocker | — | Revisit if credit use looks abnormal |
+| `swiftbackend` credential / public access ([findings.md](../findings.md#known-risk-public-swiftbackend-documented-not-changed)) | **Accepted as is** (team decision 2026-10-03): settings unchanged, not a merge blocker | — | Revisit if credit use looks abnormal |
 | `swiftbackend` redeploy on merge | Pending merge | _team to assign_ | At merge |
 | `forecast-api` first deploy on merge (trigger `949ff029`) | Pending merge | _team to assign_ | At merge |
 | Weather append (1–30 Sep 2026) | Applied 2026-10-01 ~01:50 SGT | _team to assign_ | Retention decision before snapshots expire |
 | Snapshots `*_snapshot_20261001` | Expire **2026-10-31 01:41 SGT** | same | 2026-10-30 |
-| Deck PNGs `docs/images/*.png` | Stale; **handled separately from this PR** (team decision 2026-10-03). Regenerate per [diagram skill](../skills/diagram-image-generation/SKILL.md) | Implementer; Yingzhao signs off | Before the next deck |
+| Deck PNGs `docs/images/*.png` | Stale; **handled separately from this PR** (team decision 2026-10-03). Regenerate per [diagram skill](../../skills/diagram-image-generation/SKILL.md) | Implementer; Yingzhao signs off | Before the next deck |
 
-Commands below assume the Windows gcloud setup in [inventory.md](inventory.md#querying-this-project-from-a-windows-dev-box) and `--project swiftborder`.
+Commands below assume the Windows gcloud setup in [inventory.md](../inventory.md#querying-this-project-from-a-windows-dev-box) and `--project swiftborder`.
 
 ## 1. `swiftbackend` redeploy (on merge to `main`)
 
@@ -52,7 +52,7 @@ The redeploy does not change authentication. The service stays public until item
 
 ## 1b. `forecast-api` first deploy (on merge to `main`)
 
-**Later correction (2026-10-04).** The checklist below is what PR #2 expected at first deploy: a private service, anonymous 403, and `xgb[maps]` not callable. Live `forecast-api` is public. The checked-in smoke test accepts anonymous 200 or 503 for `model=served`. Callable ids include `xgb[maps]`, `xgb[maps+prof]`, and `profile`. Current revision and smoke result: [inventory.md](inventory.md). Do not treat the curl comments below as the current contract.
+**Later correction (2026-10-04).** The checklist below is what PR #2 expected at first deploy: a private service, anonymous 403, and `xgb[maps]` not callable. Live `forecast-api` is public. The checked-in smoke test accepts anonymous 200 or 503 for `model=served`. Callable ids include `xgb[maps]`, `xgb[maps+prof]`, and `profile`. Current revision and smoke result: [inventory.md](../inventory.md). Do not treat the curl comments below as the current contract.
 
 The merge commit adds `forecastapi/**`, which starts Cloud Build trigger `forecast-api` (`949ff029`). The build:
 
@@ -61,7 +61,7 @@ The merge commit adds `forecastapi/**`, which starts Cloud Build trigger `foreca
 3. **creates** Cloud Run `forecast-api` in `asia-southeast1` (private, serving local models, ADR 0004);
 4. runs a smoke test inside the build.
 
-Merging therefore deploys two services. Later builds deploy a no-traffic candidate and move traffic only after the smoke test passes. The first deploy has no earlier revision, so it takes traffic directly. Full detail: [runbooks/forecast-api.md](runbooks/forecast-api.md).
+Merging therefore deploys two services. Later builds deploy a no-traffic candidate and move traffic only after the smoke test passes. The first deploy has no earlier revision, so it takes traffic directly. Full detail: [runbooks/forecast-api.md](../runbooks/forecast-api.md).
 
 **After the build succeeds.** The build's `Smoke` step already checked: no token gives 403, `list=models` 200, `model=served` 200 or 503, `model=lstm` 400. Then, by hand:
 
@@ -79,7 +79,7 @@ Merging therefore deploys two services. Later builds deploy a no-traffic candida
    curl.exe -s -H "Authorization: Bearer $t" "$u/?model=served"                                # expect 200, both directions; equals v_forecast_recent
    curl.exe -g -s -w "`n%{http_code}`n" -H "Authorization: Bearer $t" "$u/?model=xgb[maps]"     # expect 400 model is not deployed
    ```
-   A 502 on `served` means the runtime identity cannot read a dataset the views use; check the dataset grants in [inventory.md](inventory.md).
+   A 502 on `served` means the runtime identity cannot read a dataset the views use; check the dataset grants in [inventory.md](../inventory.md).
 3. **Rollback:** `gcloud run services delete forecast-api --region asia-southeast1 --project swiftborder` (service only; the image and trigger stay). Then revert `forecastapi/` on `main`, or disable trigger `949ff029`, so the next push does not recreate it.
 
 ## GCP changes made for this PR

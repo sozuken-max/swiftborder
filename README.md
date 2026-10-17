@@ -9,19 +9,19 @@ Woodlands-only causeway crossing-time forecasting (NUS-ISS Practice Module, Grou
 
 **Principal risk:** queue counts are not crossing duration, and the label is Maps' own estimate. Every Layer B score is skill over persistence on the Maps series; there is no independent wait-time measurement.
 
-## Results (13–30 Sep 2026, out-of-sample)
+## Results (13–30 Sep 2026, out-of-sample, frozen 17 Oct 2026)
 
-These are the committed snapshot's numbers. They come from the BQML era, and `forecast-api` now serves local replicas instead; final numbers come from the frozen run ([roadmap](docs/roadmap.md)). 30-minute MAE on the Maps series, both directions: persistence 2.64 min, BQML-era served forecast (registry) 2.54, `lin_h30` 2.78, `xgb_h30` 2.49, ensemble 2.46, daily-refit XGBoost 2.28. The ensemble is significantly better than persistence (`xgb_h30` too within its test family, not under a run-wide check); all 30-minute gains are under half a minute, so none is claimed as a product-relevant win; `lin_h30` (the model currently served for some directions) is not significantly different from persistence across both directions. "Significant" means a Diebold–Mariano test (do two forecasts' errors differ more than chance?) with a Holm correction for testing several models at once, and confidence intervals from a bootstrap that resamples whole days so that correlated 5-minute errors are not counted as independent. Weather features gave no significant gain. Stacking or gating the models adds nothing over the daily-refit XGBoost, which would beat the served forecast by about 0.27 min. At 60 minutes on one route, LSTM, GRU and a patch Transformer trail XGBoost. An exploratory horizon study (13-30 Sep, Maps duration, every 30 min to 24 h, not a report run) finds `xgb[maps+prof]` ahead of a calendar profile to 5.5 h on uncorrected steps, and only to 3 h under Holm over 336 comparisons. The public curve uses that 5.5 h mark as its generous end and draws the profile after it. That is not a confirmed 24-hour forecast ([docs/horizon-study.md](docs/horizon-study.md)). A fuzzy light / moderate / heavy forecast is best as a hybrid on point estimates (XGBoost defuzzified into levels, 0.785 accuracy vs 0.690 for persistence). Its 6-day hold-out is too short for a significance claim under the pooled-direction rule ([findings](docs/findings.md#pooled-significance-sensitivity-2026-10-04)). No Layer A box metrics (mAP, precision, recall, directional count error) are scored. Image-level count error on 15 labelled camera-2701 frames is in [evaluation.md](docs/evaluation.md#layer-a--vision): served `model=local` car MAE 1.87, served Roboflow v6 car MAE 4.40. `cam2701.local_counts` overlaps the Maps window (6 Sep–4 Oct 2026). Those counts correlate with Maps duration and change a maps-only XGBoost by about −0.08 min on a fold-level test; that is not a substitute for Distance Matrix data ([evaluation.md §7b](docs/evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)). A queue forecast learned from the March–April detections lowers XGBoost 30-min MAE by 0.065 min inside its own Holm family only; the run-wide Holm check does not keep that XGBoost result. Ridge's improvement survives the run-wide check. Neither beats a daily profile learned from Maps itself. Details, slices and caveats: [docs/evaluation.md](docs/evaluation.md); evidence bundle: [`eval/runs/report/`](eval/runs/report/).
+All reported metrics are pinned to the **17 Oct 2026 final-report freeze** (`main` merge `199c2e5`; [final-report-readiness.md](docs/final-report-readiness.md)). 30-minute MAE on the Maps series, both directions: persistence 2.64 min, BQML-era served forecast (registry, now served via local replicas in `forecast-api`) 2.54, `lin_h30` 2.78, `xgb_h30` 2.49, ensemble 2.46, daily-refit XGBoost (`xgb[maps]`) 2.28, and an exploratory 50/50 `fcm_mlp` + `xgb[maps]` mix 2.19 ([docs/layer-b-mix-module.md](docs/layer-b-mix-module.md)). The ensemble is significantly better than persistence (`xgb_h30` too within its test family, not under a run-wide check); all 30-minute gains are under half a minute, so none is claimed as a product-relevant win; `lin_h30` (the model currently served for `SG_TO_MY`) is not significantly different from persistence across both directions. "Significant" means a Diebold–Mariano test (do two forecasts' errors differ more than chance?) with a Holm correction for testing several models at once, and confidence intervals from a bootstrap that resamples whole days so that correlated 5-minute errors are not counted as independent. Weather features gave no significant gain on this window. Stacking or gating in the original §6 combiners adds nothing over daily-refit `xgb[maps]`, which lowers MAE relative to the served registry forecast by about 0.27 min. At 60 minutes on one route, LSTM, GRU and a patch Transformer trail XGBoost. An exploratory horizon study (13-30 Sep, Maps duration, every 30 min to 24 h, not a report run) finds `xgb[maps+prof]` ahead of a calendar profile to 5.5 h on uncorrected steps, and only to 3 h under Holm over 336 comparisons. The public curve uses that 5.5 h mark as its generous end and draws the profile after it. That is not a confirmed 24-hour forecast ([docs/horizon-study.md](docs/horizon-study.md)). A fuzzy light / moderate / heavy forecast is best as a hybrid on point estimates (XGBoost defuzzified into levels, 0.785 accuracy vs 0.690 for persistence). Its 6-day hold-out is too short for a significance claim under the pooled-direction rule ([findings](docs/findings.md#pooled-significance-sensitivity-2026-10-04)). On the 15-frame camera-2701 `test` split ([eval/test-reports/](eval/test-reports/README.md) and [evaluation.md](docs/evaluation.md#layer-a--vision)), served `model=local` (`conf=0.20, overlap=0.60`) has car MAE 1.87 (1.73 at the test-swept `conf=0.30, overlap=off` operating point; notebook IoU-0.5 test-split AP50 is 0.562), whereas served Roboflow v6 has car MAE 4.40 (`eval/layer_a.py` directional crossing-line accuracy remains unscored). `cam2701.local_counts` overlaps the Maps window (6 Sep–4 Oct 2026). Those counts correlate with Maps duration and lower MAE in a restricted 4-feature contemporaneous-Maps XGBoost by about 0.083 min on a fold-level test, though both restricted trees remain worse than persistence and full `xgb[maps]`; that is not a substitute for Distance Matrix data ([evaluation.md §7b](docs/evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data), [§7c](docs/evaluation.md#7c-observed-camera-counts--correlation-and-layer-b-ablation-evallayer_a_evalpy)). A queue forecast learned from the March–April detections lowers XGBoost 30-min MAE by 0.065 min inside its own Holm family only; the run-wide Holm check does not keep that XGBoost result. Ridge's improvement survives the run-wide check. Neither improves on a daily profile learned from Maps itself. Details, slices and caveats: [docs/evaluation.md](docs/evaluation.md); evidence bundle: [`eval/runs/report/`](eval/runs/report/).
 
 ## Techniques (Practice Module)
 
 | Category | Where |
 | --- | --- |
-| Supervised learning | Roboflow-labelled YOLO; regression of future Maps duration (BQML, XGBoost, ridge); traffic-level classification |
-| Machine learning / deep learning | YOLO; `lin_h30`, `xgb_h30`; offline XGBoost; LSTM, GRU and a patch Transformer (scored, [deep-learning assessment](docs/deep-learning-assessment.md)) |
-| Intelligent sensing | LTA frames -> directional occupancy with the camera 2701 dividing line |
-| Hybrid / ensemble | Mean of `lin_h30` + `xgb_h30`; ridge + XGBoost; rolling LAD stack, rolling selection and fuzzy-gated stack; XGBoost forecast defuzzified into traffic levels. All scored against the single models |
-| Fuzzy logic | Light / moderate / heavy partition and a learned fuzzy rule-based classifier |
+| Supervised learning | Roboflow-labelled YOLO26s/m; regression of future Maps duration (BQML, XGBoost, ridge, MLP); traffic-level classification; ResNet18 + BiGRU congestion sequence classifier ([eval/cnn_rnn_congestion/](eval/cnn_rnn_congestion/README.md)) |
+| Unsupervised learning & fuzzy logic | Fuzzy C-Means clustering on historical traffic profiles (`eval/layer_b_fcm_mlp.py`); Mamdani light / moderate / heavy partition and learned Wang–Mendel fuzzy rule base (`eval/fuzzy_traffic.py`) |
+| Machine learning / deep learning | YOLO26s ONNX (`camdetect`); `lin_h30`, `xgb_h30` & local replicas (`forecastapi`); offline XGBoost, LSTM, GRU, TCN and patch Transformer ([deep-learning assessment](docs/deep-learning-assessment.md)) |
+| Intelligent sensing | LTA camera frames -> directional occupancy with camera 2701 & 2702 dividing lines (`camdetect/main.py`) and `traffic-backfill` Cloud Run Job (`camdetect/backfill_local_counts.py`) |
+| Hybrid / ensemble | Mean of `lin_h30` + `xgb_h30`; ridge + XGBoost; rolling LAD stack, rolling selection and fuzzy-gated stack; XGBoost forecast defuzzified into traffic levels; 50/50 `fcm_mlp` + `xgb[maps]` mix ([docs/layer-b-mix-module.md](docs/layer-b-mix-module.md)). All scored against single models |
 
 ## Run the MVP
 
@@ -53,35 +53,45 @@ These are the committed snapshot's numbers. They come from the BQML era, and `fo
 
 | Path | Contents |
 | --- | --- |
-| [`camdetect/`](camdetect/) | `swiftbackend` source: Roboflow detection + directional counts (deployed by Cloud Build on push to `main`) |
-| [`Causeway/`](Causeway/) | data.gov.sg rainfall / 2-hour forecast history fetchers (CSV) and `load_bigquery.py` (manual append to the weather tables) |
-| [`eval/`](eval/) | Layer A and B harnesses, significance, feature builder, camera backfill; report snapshot `eval/runs/report/` |
-| [`sql/`](sql/) | BigQuery view and BQML definitions exported from project `swiftborder` |
-| [`hosting/`](hosting/) | Firebase Hosting client (`index.html`, `app.js`, `style.css`). Deploy stays manual ([ADR 0002](docs/adr/0002-firebase-hosting-source.md)) |
-| [`docs/`](docs/) | Report drafts (design, evaluation, findings), GCP inventory, roadmap, work plan |
-| [`scripts/`](scripts/) | Test runners and repo doc checks |
+| [`camdetect/`](camdetect/README.md) | Layer A HTTP service (`swiftbackend` on Cloud Run), `traffic-backfill` Cloud Run Job (`backfill_local_counts.py`), and local ONNX YOLO26s (`models/`) |
+| [`forecastapi/`](forecastapi/README.md) | Layer B HTTP service (`forecast-api` on Cloud Run): serves 30-min crossings from in-process local models (`lin_bq[frozen]`, `xgb_bq[frozen]`, persistence) plus exploratory horizons up to 24 h ([ADR 0004](docs/adr/0004-serve-local-models.md)) |
+| [`gmapfetcher/`](gmapfetcher/README.md) | Layer B Google Maps Distance Matrix ingestion service (`gmap-woodlands-fetcher` on Cloud Run, Node 22): writes `causeway.travel_times` and `traffic-24h.json` (deployed by Cloud Build trigger `33e4b77e`) |
+| [`weather/`](weather/README.md) | Offline NEA data.gov.sg rainfall and 2-hour forecast fetchers plus manual BigQuery loader (`load_bigquery.py`) |
+| [`eval/`](eval/README.md) | Layer A and B harnesses (DM + Holm), FCM-MLP / TimesFM / mix modules, 15-frame detector benchmark ([`test-reports/`](eval/test-reports/README.md)), CNN-RNN study ([`cnn_rnn_congestion/`](eval/cnn_rnn_congestion/README.md)), and frozen evidence (`eval/runs/report/`, `layer_a_count/`, `layer_a_eval/`) |
+| [`sql/`](sql/README.md) | BigQuery view DDL (`v_bins_10min`, `v_training_set`, `v_forecast_recent`, weather and congestion views), `cam2701.local_counts` schema, and historical BQML definitions exported from project `swiftborder` |
+| [`hosting/`](hosting/index.html) | Firebase Hosting web client (`index.html`, `app.js`, `style.css`), deployed to `swiftborder-92b45` via `firebase.json`, `.firebaserc`, and [`.github/workflows/firebase-hosting.yml`](.github/workflows/firebase-hosting.yml) ([ADR 0002](docs/adr/0002-firebase-hosting-source.md)) |
+| [`docs/`](docs/README.md) | Report spine (architecture, evaluation, findings, GCP inventory, final-report readiness, grading alignment), deep-learning & horizon studies, ADRs, runbooks, and planning archive |
+| [`scripts/`](scripts/run_tests.ps1) | Cross-suite test runners (`run_tests.ps1`, `run_tests.sh`) and repository documentation/diagram/Cloud Build gate tests (`scripts/tests/`) |
 
-GCP project `swiftborder` is the source of truth for what is deployed; [docs/inventory.md](docs/inventory.md) is the dated copy. The Maps fetcher is [`gmapfetcher/`](gmapfetcher/). Weather tables can be appended with `Causeway/load_bigquery.py` (manual).
-
-The camera 2701 backfill for the joined experiment is run by the Roboflow key holder: [docs/handoff-camera-pilot.md](docs/handoff-camera-pilot.md).
+GCP project `swiftborder` is the source of truth for what is deployed; [docs/inventory.md](docs/inventory.md) is the dated copy. Weather tables can be appended manually with `weather/load_bigquery.py`.
 
 ## Testing
 
 ```bash
 py -3.11 -m venv .venv
-.venv\Scripts\pip install -r camdetect/requirements-dev.txt -r Causeway/requirements-dev.txt -r eval/requirements-dev.txt -r scripts/requirements-dev.txt
-scripts\run_tests.ps1            # all suites (camdetect, Causeway, eval, repo doc checks)
+.venv\Scripts\pip install -r camdetect/requirements-dev.txt -r weather/requirements-dev.txt -r eval/requirements-dev.txt -r forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
+scripts\run_tests.ps1            # all fast suites (camdetect, weather, eval, forecastapi, repo doc checks)
 scripts\run_tests.ps1 -Slow      # + TensorFlow tests (needs eval/requirements-notebook.txt)
 scripts\run_tests.ps1 -Coverage
+cd gmapfetcher && npm test       # Node 22 unit tests for traffic-24h.json snapshot builder
 ```
 
 On Linux/macOS use `scripts/run_tests.sh [--slow] [--coverage]`. GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs the fast suites on Python 3.11 for every push and PR; it deploys nothing. Dependencies are pinned per suite; the full resolved environment is [requirements-lock-py311.txt](requirements-lock-py311.txt).
 
-## Documentation
+## Documentation & Lecturer Review Guide
 
-- [Docs index](docs/README.md) · [Design](docs/architecture.md) · [Evaluation](docs/evaluation.md) · [Findings and claims register](docs/findings.md)
-- [Roadmap](docs/roadmap.md) · [Deep-learning assessment](docs/deep-learning-assessment.md) · [Active work plan](docs/plan-eval-integrity.md) · [Agent deploy instructions](docs/agent-deploy.md)
-- [GCP inventory](docs/inventory.md) · [Release checklist for PR #2](docs/release-pr2.md) · [Changelog](CHANGELOG.md)
+Start with the six core files below for the NUS-ISS Practice Module (Pattern Recognition Systems) final review; see [docs/README.md](docs/README.md) for the complete index:
+
+| Review area | Document | What to verify |
+| --- | --- | --- |
+| **1. Grading alignment** | [docs/grading/nus-iss-practice-module.md](docs/grading/nus-iss-practice-module.md) | How the repository satisfies all four Practice Module technique categories (Intelligent Sensing, Supervised/Unsupervised Learning, ML/DL, Hybrid/Ensemble) and rubric deliverables |
+| **2. Final-report readiness & freeze** | [docs/final-report-readiness.md](docs/final-report-readiness.md) | 17 Oct 2026 submission freeze at `199c2e5`, reproducibility audit, claim hygiene, and lecturer reading guide |
+| **3. System architecture** | [docs/architecture.md](docs/architecture.md) | High-level & detailed GCP architecture, Layer A (`camdetect`) and Layer B (`forecastapi`, `gmapfetcher`, BigQuery) contracts, and active vs unused paths |
+| **4. Empirical evaluation** | [docs/evaluation.md](docs/evaluation.md) | Frozen Evidence Index, Layer A 15-frame detector comparison + box AP50, Layer B 18-day rolling backtests, DM + Holm significance, fuzzy/deep/ensemble ablations, and Layer A → B correlation & ablation |
+| **5. Findings & claims register** | [docs/findings.md](docs/findings.md) | Six numbered technical findings, explicit negative results, and the safe-claims register |
+| **6. Live GCP inventory** | [docs/inventory.md](docs/inventory.md) | Dated read-only query snapshot of GCP project `swiftborder` (BigQuery tables/views/models, Cloud Run revisions, Cloud Build triggers, Cloud Scheduler, GCS) |
+| **Supporting studies** | [docs/deep-learning-assessment.md](docs/deep-learning-assessment.md) · [docs/horizon-study.md](docs/horizon-study.md) · [eval/test-reports/](eval/test-reports/README.md) · [eval/cnn_rnn_congestion/](eval/cnn_rnn_congestion/README.md) · [docs/layer-b-mix-module.md](docs/layer-b-mix-module.md) | Sequence model trade-offs, 30 min – 24 h horizon skill curve, annotated YOLO test frames & GPU latency benchmark, CNN-RNN auxiliary vision study, and FCM-MLP + XGBoost 50/50 mix |
+| **Full index & changelog** | [docs/README.md](docs/README.md) · [CHANGELOG.md](CHANGELOG.md) · [docs/agent-deploy.md](docs/agent-deploy.md) | Complete index including ADRs (`docs/adr/`), runbooks (`docs/runbooks/`), historical roadmap/plans, and repository history |
 
 ## Agents and grading
 

@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-  Run the camdetect, Causeway, eval, and forecastapi test suites (and repo doc checks).
+  Run the camdetect, weather, eval, and forecastapi test suites (and repo doc checks).
 
 .DESCRIPTION
   Uses .venv\Scripts\python.exe at the repo root when present, otherwise
   `py -3.11`. Create the venv once:
 
     py -3.11 -m venv .venv
-    .venv\Scripts\pip install -r camdetect/requirements-dev.txt -r Causeway/requirements-dev.txt -r eval/requirements-dev.txt
+    .venv\Scripts\pip install -r camdetect/requirements-dev.txt -r weather/requirements-dev.txt -r eval/requirements-dev.txt -r forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
     # slow tests (TensorFlow):
     .venv\Scripts\pip install -r eval/requirements-notebook.txt
 
@@ -18,7 +18,7 @@
   Print a coverage report per suite.
 
 .PARAMETER Suite
-  Limit to one or more of: camdetect, Causeway, eval, forecastapi, repo.
+  Limit to one or more of: camdetect, weather, eval, forecastapi, repo.
 
 .EXAMPLE
   scripts\run_tests.ps1
@@ -28,7 +28,7 @@
 param(
     [switch]$Slow,
     [switch]$Coverage,
-    [string[]]$Suite = @('camdetect', 'Causeway', 'eval', 'forecastapi', 'repo')
+    [string[]]$Suite = @('camdetect', 'weather', 'eval', 'forecastapi', 'repo')
 )
 
 $ErrorActionPreference = 'Stop'

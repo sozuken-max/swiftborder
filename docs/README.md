@@ -1,45 +1,58 @@
-# SwiftBorder docs
+# Documentation Index
 
-**Source of truth for deployed state:** GCP project `swiftborder`. Dated query results live in [inventory.md](inventory.md). Repo and deploy history live in [CHANGELOG.md](../CHANGELOG.md). When these pages disagree with the project, the project wins.
+Start at the repository [README](../README.md) for a one-page overview. All reported metrics are pinned to the **17 Oct 2026 final-report freeze** (`main` merge `199c2e5`; see [final-report-readiness.md](final-report-readiness.md)).
 
-They are drafted as final-report sections (Practice Module: tools and design, performance, findings). The rubric is in [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md).
+## 1. Core Report Spine (Start Here — Lecturer Review)
 
-| Report section | Doc |
-| --- | --- |
-| Final-report readiness review (3 Oct 2026) | [final-report-readiness.md](final-report-readiness.md) |
-| Tools, techniques, system design | [architecture.md](architecture.md) |
-| Performance: methods, reasoning, result tables | [evaluation.md](evaluation.md) |
-| Findings and what may be claimed | [findings.md](findings.md) |
-| What remains, and the order to do it | [roadmap.md](roadmap.md) |
-| Next steps after the TimesFM / FCM, horizon and Roboflow v6 updates (10 Oct) | [plan-next-steps.md](plan-next-steps.md) |
-| Evaluation data cutoff (19 Oct 2026 23:59 SGT) | [roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03) |
-| LSTM, GRU and Transformer forecasters: design, results, when to revisit | [deep-learning-assessment.md](deep-learning-assessment.md) |
-| Horizon study, 30 min to 24 h, with a calendar-profile baseline (exploratory) | [horizon-study.md](horizon-study.md) |
-| Active work plan (evaluation integrity, hardening, joined experiment) | [plan-eval-integrity.md](plan-eval-integrity.md) |
-| Handoff: camera 2701 backfill for the Roboflow key holder | [handoff-camera-pilot.md](handoff-camera-pilot.md) |
-| How a teammate's agent checks a local deploy into CI | [agent-deploy.md](agent-deploy.md) |
-| Forecast HTTP API (deployed, public): evaluated 30-minute forecast, exploratory horizons and forecast curve, profile baseline | [runbooks/forecast-api.md](runbooks/forecast-api.md); serving local models: [adr/0004](adr/0004-serve-local-models.md) |
-| Release checklist for PR #2: redeploy smoke test and rollback, weather-append verification and retention, credential risk | [release-pr2.md](release-pr2.md) |
-| Evidence appendix (dated GCP copy) | [inventory.md](inventory.md) |
-| Layer B harness and report figures | [../eval/README.md](../eval/README.md), committed snapshot [../eval/runs/report/](../eval/runs/report/) |
-| BigQuery views and BQML | [../sql/README.md](../sql/README.md) |
-| Repo and deploy history | [../CHANGELOG.md](../CHANGELOG.md) |
-| Rubric | [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md) |
+A reviewer can read these six documents in order to verify system design, empirical methodology, negative/positive findings, live cloud state, and NUS-ISS Practice Module grading alignment:
 
-## Images and diagrams
-
-**Mermaid source of truth:** [diagrams/](diagrams/) (`*.mmd`). [architecture.md](architecture.md) and [evaluation.md](evaluation.md) embed synced copies; run `python docs/diagrams/sync_mermaid.py` after editing a `.mmd` file. **Deck PNGs** under `images/` are exports for slides—refresh them when Mermaid topology changes ([diagrams/README.md](diagrams/README.md), [diagram-image-generation](../skills/diagram-image-generation/SKILL.md)).
-
-Design figures are **high-level** and **detailed** views of one system, not an as-is / to-be pair. Live training (`v_training_set`) is Maps-only; the weather and camera-2701 congestion views exist and are not joined. Weather is joined only in the offline experiment (`eval/joined.py`), where it gave no gain. `traffic_images.metadata` is populated; `traffic_images.labels` is empty. See [architecture.md](architecture.md) and [inventory.md](inventory.md) for counts.
-
-| Mermaid (edit first) | PNG export | Report use |
+| Section | Document | Summary |
 | --- | --- | --- |
-| `diagrams/architecture-high-level.mmd` | `architecture-high-level.png` | High-level design |
-| `diagrams/architecture-detailed.mmd` | `architecture-detailed.png` | Detailed design |
-| `diagrams/eval-layer-a.mmd` | `eval-layer-a.png` | Performance: Layer A method |
-| `diagrams/eval-layer-b.mmd` | `eval-layer-b.png` | Performance: Layer B method |
-| — | `../eval/runs/report/{offline,bqml,joined,deep,fuzzy,ensemble}/*.png` | Performance: scored comparison plots (see [evaluation.md](evaluation.md)) |
+| **Grading & methods** | [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md) | NUS-ISS Practice Module (Pattern Recognition Systems) rubric mapping across Intelligent Sensing, Supervised/Unsupervised Learning, ML/DL, and Hybrid/Ensemble methods |
+| **Readiness & freeze** | [final-report-readiness.md](final-report-readiness.md) | Final-report readiness review (updated **17 Oct 2026**): submission freeze record, claim-hygiene audit, reproducibility assessment, and report structure |
+| **Architecture** | [architecture.md](architecture.md) | High-level and detailed GCP architecture (`swiftborder`), Layer A (`camdetect`) and Layer B (`forecastapi`, `gmapfetcher`, BigQuery) contracts, and active vs unused paths |
+| **Evaluation** | [evaluation.md](evaluation.md) | Frozen Evidence Index, Layer A 15-frame detector comparison + box AP50, Layer B 18-day rolling-origin backtests, Diebold–Mariano + Holm significance, deep/fuzzy/ensemble ablations, and Layer A → B correlation & ablation |
+| **Findings & risks** | [findings.md](findings.md) | Six numbered technical findings, explicit negative results, risk register, and the safe-claims register |
+| **GCP inventory** | [inventory.md](inventory.md) | Dated read-only query snapshot of GCP project `swiftborder` (BigQuery datasets/views/models, Cloud Run services/jobs, Cloud Build triggers, Cloud Scheduler, Cloud Storage) |
 
-The four deck PNGs were regenerated on 4 Oct 2026 from the topology then current. A later serving change (features from closed bins, public access) left two labels stale; this refresh does not redraw them. See [final-report-readiness.md](final-report-readiness.md) item 10 and [diagrams/README.md](diagrams/README.md).
+## 2. Technical Studies & Component Evidence Reports
 
-Region layout is not part of the graded story.
+| Topic | Document | Summary |
+| --- | --- | --- |
+| **Layer A detector benchmark (15 frames)** | [../eval/test-reports/README.md](../eval/test-reports/README.md) | Per-frame car/vehicle counts, box AP50 (IoU 0.50), WebP visual comparisons, and ONNX CPU/GPU speed benchmark on the Roboflow v6 `test` split ([raw frame manifest](../eval/test-reports/frames/README.md)) |
+| **Layer A count rescoring & reproducibility** | [../eval/runs/layer_a_count/REPORT.md](../eval/runs/layer_a_count/REPORT.md) | Fixed served operating point (`conf=0.20, overlap=0.60`, car MAE **1.87**) vs threshold-swept artifact scores (`conf=0.30, overlap=off`, car MAE **1.73**) |
+| **Layer A CNN-RNN congestion research** | [../eval/cnn_rnn_congestion/README.md](../eval/cnn_rnn_congestion/README.md) | Auxiliary ResNet18 + BiGRU + Bahdanau attention sequence classifier on camera 2701 crops (v8 Maps-supervision negative result; v10a human-label inter-rater study, macro-F1 **0.659**) |
+| **Layer A → Layer B correlation & ablation** | [../eval/runs/layer_a_eval/report.md](../eval/runs/layer_a_eval/report.md) | 18-day correlation ($r = +0.462$ `SG_TO_MY`, $r = +0.618$ `MY_TO_SG`) and restricted 4-feature XGBoost ablation ($\Delta = -0.0827$ min, fold paired-$t$ $p = 0.0067$) |
+| **Layer B horizon study (30 min – 24 h)** | [horizon-study.md](horizon-study.md) | Multi-horizon skill curve (`xgb[maps+prof]` vs persistence and weekday×time-of-day profile across 16 horizons; Holm-significant out to **3 h**) |
+| **Layer B FCM-MLP & 50/50 XGBoost mix** | [layer-b-mix-module.md](layer-b-mix-module.md) | Fuzzy C-Means + MLP standalone ([results](layer-b-fcm-mlp-results.md), MAE **2.230 min**) and 50/50 ensemble with `xgb[maps]` (pooled MAE **2.186 min**, within $\pm 0.5$ min band) |
+| **Deep learning assessment** | [deep-learning-assessment.md](deep-learning-assessment.md) | Why deep learning helps in Layer A (YOLO26s) while trees match or beat LSTM/GRU/TCN/Transformer on short univariate Layer B histories |
+
+## 3. Runbooks, SQL, Component Guides & ADRs
+
+| Topic | Document | Summary |
+| --- | --- | --- |
+| **Forecast API runbook** | [runbooks/forecast-api.md](runbooks/forecast-api.md) | Operating, verifying, and rolling back the `forecast-api` Cloud Run service ([component README](../forecastapi/README.md)) |
+| **Camera detection service** | [../camdetect/README.md](../camdetect/README.md) | `swiftbackend` HTTP contract, `traffic-backfill` Cloud Run Job, dividing-line geometry (2701 & 2702), and local ONNX weights |
+| **Maps ingestion service** | [../gmapfetcher/README.md](../gmapfetcher/README.md) | `gmap-woodlands-fetcher` Cloud Run service (`causeway.travel_times` + `traffic-24h.json` snapshot builder) |
+| **Weather ingestion (offline)** | [../weather/README.md](../weather/README.md) | data.gov.sg rainfall and 2-hour forecast fetchers; manual `load_bigquery.py` append to `rainfall` / `weatherforecast` |
+| **Evaluation harness guide** | [../eval/README.md](../eval/README.md) | CLI commands, data layout ([`eval/data/`](../eval/data/README.md)), frozen run artifacts ([`eval/runs/`](../eval/runs/README.md)), and exploratory notebooks ([`eval/notebooks/`](../eval/notebooks/README.md)) |
+| **BigQuery SQL & DDL** | [../sql/README.md](../sql/README.md) | Checked-in BigQuery views, historical BQML model DDL, `model_registry`, and [re-export instructions](../sql/bigquery/EXPORT.md) |
+| **Diagram sources & prompts** | [diagrams/README.md](diagrams/README.md) | Canonical Mermaid sources (`*.mmd`), Nano Banana 2 prompt specs, and `sync_mermaid.py` checker |
+| **Local deploy to CI capture** | [agent-deploy.md](agent-deploy.md) | Playbook for capturing teammates' GCP deployments into git and wiring Cloud Build |
+| **ADR 0001** | [adr/0001-firebase-client-api-calls.md](adr/0001-firebase-client-api-calls.md) | Browser-direct public `forecast-api` calls with CORS allowlist and cost caps |
+| **ADR 0002** | [adr/0002-firebase-hosting-source.md](adr/0002-firebase-hosting-source.md) | Storing Firebase Hosting static source in `hosting/` (later wired to GitHub Actions via `firebase.json` and `.firebaserc`) |
+| **ADR 0003** | [adr/0003-deep-training-and-feature-matrix.md](adr/0003-deep-training-and-feature-matrix.md) | Causal 10-minute feature matrix and multi-seed deep learning evaluation protocol |
+| **ADR 0004** | [adr/0004-serve-local-models.md](adr/0004-serve-local-models.md) | Replacing live BQML `ML.PREDICT` with in-process local models (`lin_bq[frozen]`, `xgb_bq[frozen]`, persistence) in `forecast-api` |
+
+## 4. Roadmap & Historical Planning Archive
+
+These files record earlier sprint plans, PR checklists, and handoff notes. Where they mention a proposed 19 Oct data cutoff or future Runs A/B, the **17 Oct 2026 freeze** ([final-report-readiness.md](final-report-readiness.md)) supersedes those future tasks:
+
+| Historical document | Context |
+| --- | --- |
+| [roadmap.md](roadmap.md) | Pre-freeze roadmap and workstream tracker (superseded on 17 Oct 2026 by the final-report freeze note at the top of the file) |
+| [archive/plan-next-steps.md](archive/plan-next-steps.md) | Earlier two-run execution plan (superseded by [roadmap.md](roadmap.md) and the 17 Oct freeze) |
+| [archive/plan-eval-integrity.md](archive/plan-eval-integrity.md) | 30 Sep – 1 Oct evaluation integrity overhaul checklist (completed) |
+| [archive/handoff-camera-pilot.md](archive/handoff-camera-pilot.md) | 2 Oct camera 2701 backfill pilot handoff (superseded by the `traffic-backfill` Cloud Run Job on 4 Oct) |
+| [archive/release-pr2.md](archive/release-pr2.md) | Release runbook for PR #2 (`eval-integrity-overhaul`, merged 3 Oct) |
+| [archive/hosting-forecast-widget-delta.md](archive/hosting-forecast-widget-delta.md) | 3–4 Oct Firebase Hosting forecast widget delta note (superseded by 12 Oct `hosting/` updates) |

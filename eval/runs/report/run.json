@@ -3331,12 +3331,12 @@
       },
       "refreshed_from_bq": false,
       "rainfall_S210": {
-        "path": "Causeway/data/rainfall/S210_Woodlands_Centre.csv",
+        "path": "weather/data/rainfall/S210_Woodlands_Centre.csv",
         "sha256": "732910bdb5560b220bce77fd3b97037a3b7a2e199442bcfa93a34df01946c62a",
         "bytes": 294131
       },
       "forecast_woodlands": {
-        "path": "Causeway/data/forecast/Woodlands.csv",
+        "path": "weather/data/forecast/Woodlands.csv",
         "sha256": "8826664f661d700293454bd7f329e5024f7bbc5624d2ce811c1af378a55f913f",
         "bytes": 244479
       },

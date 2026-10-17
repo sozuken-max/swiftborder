@@ -15,7 +15,7 @@ The module asks the system to demonstrate at least three of these. All four are 
 | --- | --- |
 | Supervised learning | Roboflow vehicle labels; BigQuery ML and offline regression of later Maps duration (`y_30`, 60-min offline) |
 | Machine learning / deep learning | YOLO served through Roboflow; `lin_h30` (linear regression), `xgb_h30` (boosted tree), offline XGBoost; LSTM, GRU and a patch Transformer are scored offline |
-| Intelligent sensing | LTA frame to directional occupancy (`swiftbackend` counts). Dividing line in `camdetect` is camera 2701 only. **Also:** Colab CNN-RNN research maps pixels to duration bands (not served) |
+| Intelligent sensing | LTA frame to directional occupancy (`swiftbackend` counts). Dividing lines in `camdetect` cover cameras 2701 and 2702 (2702 added 11 Oct; `cam2701.local_counts` and the 15-frame test report cover 2701). **Also:** Colab CNN-RNN research maps pixels to duration bands (not served) |
 | Hybrid / ensemble | Mean of `lin_h30` and `xgb_h30`, and ridge+XGBoost in the joined experiment, scored against the single models in [evaluation.md](evaluation.md). Not in the serve path. CNN-RNN **residual** models add a learned correction on top of a time-of-day baseline (notebook only) |
 
 ## Roboflow / YOLO free tier
@@ -87,7 +87,7 @@ flowchart LR
     CAM["sg-lta-traffic-cameras"] --> JOB["Cloud Run Job<br/>traffic-backfill"]
     JOB --> META["traffic_images<br/>metadata populated; labels empty"]
     HIST["cam2701 / cam2702<br/>historical detections<br/>congestion view: 2701"]
-    CNNRNN["camdetect/CNN_RNN_Congestion<br/>Colab CNN-RNN research<br/>image to duration bands"]
+    CNNRNN["eval/cnn_rnn_congestion<br/>Colab CNN-RNN research<br/>image to duration bands"]
     CAM -.-> CNNRNN
     TT -.-> CNNRNN
   end
@@ -107,7 +107,7 @@ flowchart LR
     API --> UI
     PUB["swiftborder-public<br/>traffic-24h.json history"] --> UI
     EVAL["eval/ read-only harnesses<br/>run.json and report figures"]
-    WX["NEA weather<br/>Causeway manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
+    WX["NEA weather<br/>weather/ manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
     HIST -.->|"historical queue profile"| EVAL
     TT -.->|"read-only export"| EVAL
     CNNRNN -.->|"not in run.json"| EVAL
@@ -137,7 +137,7 @@ What those facts allow the report to claim is in [findings.md](findings.md). Met
 
 ## Offline image-to-duration research (CNN-RNN)
 
-Deepak's Colab notebooks, checked in under [`camdetect/CNN_RNN_Congestion/`](../camdetect/CNN_RNN_Congestion/). This is a **third camera story**, parallel to production Layer A (Chad's detector and [test report](../camdetect/test-reports/README.md)) and to the scored count experiments in `eval/`.
+Deepak's Colab notebooks, checked in under [`eval/cnn_rnn_congestion/`](../eval/cnn_rnn_congestion/). This is a **third camera story**, parallel to production Layer A (Chad's detector and [test report](../eval/test-reports/README.md)) and to the scored count experiments in `eval/`.
 
 | Approach | Input | Output | Live? | Scored in `eval/`? |
 | --- | --- | --- | --- | --- |
@@ -153,10 +153,10 @@ Deepak's Colab notebooks, checked in under [`camdetect/CNN_RNN_Congestion/`](../
 
 **Relation to `eval/deep_forecast.py`.** Both use deep learning on the causeway problem, but deep forecast consumes **only** 5-minute Maps bins (LSTM / GRU / Transformer). CNN-RNN consumes **images** and is closer to an alternative Layer A→B bridge than to another tabular forecaster. See [deep-learning-assessment.md](deep-learning-assessment.md) for the scored tabular DL result (do not serve; XGBoost wins on 5 day-blocks).
 
-Runbook: [camdetect/CNN_RNN_Congestion/README.md](../camdetect/CNN_RNN_Congestion/README.md).
+Runbook: [eval/cnn_rnn_congestion/README.md](../eval/cnn_rnn_congestion/README.md).
 
 **Deck export (regenerated 4 Oct 2026):**
 
 ![Detailed architecture](images/architecture-detailed.png)
 
-Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the served join, a longer horizon, Layer A box metrics, 2702 geometry, a Firebase project file for Hosting) is in [findings.md](findings.md) and [roadmap.md](roadmap.md). `hosting/` is in git; the deck PNGs still label that node as outside git.
+Legacy proposal/target PNGs are not in the repo. Unfinished scope (camera features in the served join, a longer confirmed horizon, `eval/layer_a.py` directional crossing-line metrics) is in [findings.md](findings.md) and [roadmap.md](roadmap.md). `hosting/`, `firebase.json`, `.firebaserc`, and `gmapfetcher/` are now in git; the 4 Oct deck PNGs still label `hosting` and `gmap-woodlands-fetcher` from before those commits ([final-report-readiness.md](final-report-readiness.md)).

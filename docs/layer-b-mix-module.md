@@ -1,10 +1,10 @@
-# Layer B mix module: `Causeway/layer_b_fcm_xgb_mix.py`
+# Layer B mix module: `eval/layer_b_fcm_xgb_mix.py`
 
-Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `swiftborder` that afternoon showed no `layer_b_mix_*` or `layer_a_counts` table in `traffic_prediction`, and no Cloud Run Job or Scheduler entry runs this module. Code: [`layer_b_fcm_xgb_mix.py`](layer_b_fcm_xgb_mix.py). Slide numbers follow the 17-slide proposal deck.
+Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `swiftborder` that afternoon showed no `layer_b_mix_*` or `layer_a_counts` table in `traffic_prediction`, and no Cloud Run Job or Scheduler entry runs this module. Code: [`layer_b_fcm_xgb_mix.py`](../eval/layer_b_fcm_xgb_mix.py). Slide numbers follow the 17-slide proposal deck.
 
 ## What it does
 - **Forecast:** the Google Maps travel time per direction, 30 minutes ahead (target bin [t+30, t+40) = `y_30`), as `mix = 0.5 × fcm_mlp + 0.5 × xgb[maps]`.
-- **`fcm_mlp`:** imported from [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py). Byte-identical to its `train_direction` on the same days, and covered by a test.
+- **`fcm_mlp`:** imported from [`layer_b_fcm_mlp.py`](../eval/layer_b_fcm_mlp.py). Byte-identical to its `train_direction` on the same days, and covered by a test.
 - **`xgb[maps]`:** the harness XGBoost (`eval/joined.py`, `eval/features.py`). Row-for-row identical to `forecastapi/local_models.py`, also covered by a test.
 - **Refit:** both members are refitted daily on every label observed before 00:00 SGT since `MIX_HISTORY_START` (default 2026-09-06). This is the evaluated daily refit; `MIX_LOOKBACK_DAYS` is only an optional cap.
 - **Layer A:** the camera 2701 counts and congestion level (shared `layer_a_counts` table) are optional, gated inputs (slide 10).
@@ -15,11 +15,11 @@ Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `
 - **New tables** in `traffic_prediction`, created on first run: `layer_b_mix_forecasts`, `layer_b_mix_evaluation` and `layer_b_mix_registry`.
 
 ## Other files in the change
-- `Causeway/tests/test_layer_b_fcm_xgb_mix.py`: 42 offline tests.
-- `Causeway/requirements.txt`: adds `xgboost==3.2.0`.
-- `Causeway/requirements-dev.txt`: adds `pandas==3.0.6`, so the parity tests run in CI.
-- `Causeway/Procfile` and `Causeway/.python-version` (3.11).
-- A `Causeway/README.md` row and a `CHANGELOG.md` entry.
+- `eval/tests/test_layer_b_fcm_xgb_mix.py`: 42 offline tests.
+- `eval/requirements.txt`: adds `xgboost==3.2.0`.
+- `eval/requirements-dev.txt`: adds `pandas==3.0.6`, so the parity tests run in CI.
+- `eval/Procfile` and `eval/.python-version` (3.11).
+- A `eval/README.md` row and a `CHANGELOG.md` entry.
 
 ## Verification (10 Oct 2026)
 - **Local backtest:** run on live BigQuery bins for 13–30 Sep with `--allow-protected-window` (`run_id: backtest-20261010T080013Z-6a139c3f`, 5,184 rows, 18 calendar days):
@@ -36,7 +36,7 @@ Added on 10 Oct 2026 on top of `main` f90e62b. Not deployed: a read of project `
   - **Slices:** Morning peak 2.613 min, evening peak 2.834 min, off-peak 1.623 min; weekday 1.998 min, weekend 2.482 min. Share within 15 min of Maps duration: 99.90%.
   Without `--allow-protected-window`, 5,178 rows are scored because six labels fall on 1 Oct.
 - **`train` on 24–30 Sep:** took 88 s and served the mix in both directions (validation mix 2.09 against persistence 2.74). The registry round trip is exact, and the registry entry is 0.74 MB.
-- **Tests and checks:** all 42 tests in `Causeway/tests/test_layer_b_fcm_xgb_mix.py` pass; all 577 tests pass across the repository (`scripts/run_tests.ps1`). ruff and mypy clean.
+- **Tests and checks:** all 42 tests in `eval/tests/test_layer_b_fcm_xgb_mix.py` pass; all 577 tests pass across the repository (`scripts/run_tests.ps1`). ruff and mypy clean.
 - **Independent review:** two passes. All findings were fixed, including the lookback default (now all history) and the registry age.
 
 ## Open items for the team

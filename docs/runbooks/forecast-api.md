@@ -63,7 +63,7 @@ What it is not:
 
 ## Model cards
 
-`GET /?list=cards` and `GET /?view=cards` return a JSON array. Each object has `id` (the `model` query value, except the two code-only cards below), `name`, `summary`, `kind` (`single` or `mix`), `callable`, `default_for` (or null), and `members` on a mix. A single model omits `members`. `callable` matches the allow-list above. `timesfm` and `fcm_mlp` are cards only: `Causeway/layer_b_timesfm.py` and `Causeway/layer_b_fcm_mlp.py` are not called by this service, and both summaries start with "Not served."
+`GET /?list=cards` and `GET /?view=cards` return a JSON array. Each object has `id` (the `model` query value, except the two code-only cards below), `name`, `summary`, `kind` (`single` or `mix`), `callable`, `default_for` (or null), and `members` on a mix. A single model omits `members`. `callable` matches the allow-list above. `timesfm` and `fcm_mlp` are cards only: `eval/layer_b_timesfm.py` and `eval/layer_b_fcm_mlp.py` are not called by this service, and both summaries start with "Not served."
 
 The Hosting chart's Typical line is `profile` (`?baseline=profile`), the calendar profile. `served` at 30 minutes is the registry choice, with no weights.
 
@@ -187,7 +187,7 @@ The fitted daily models are reused until 00:00 SGT. Memory is 1 GiB.
    - `model=served` → 200 with `"source": "local model"` and `lead_min` (503 is accepted as a data condition);
    - `model=lstm` → 400.
 
-   The earlier token-based smoke test (403 without a token) contradicted the live access setting and was dropped. The build SA's `roles/iam.serviceAccountOpenIdTokenCreator` on itself, granted for it on 2026-10-03, is no longer used. It can be removed with the command in [release-pr2.md](../release-pr2.md#gcp-changes-made-for-this-pr).
+   The earlier token-based smoke test (403 without a token) contradicted the live access setting and was dropped. The build SA's `roles/iam.serviceAccountOpenIdTokenCreator` on itself, granted for it on 2026-10-03, is no longer used. It can be removed with the command in [release-pr2.md](../archive/release-pr2.md#gcp-changes-made-for-this-pr).
 5. **Promote:** traffic moves to the new revision and the `candidate` tag is removed.
 
 If Test, Deploy or Smoke fails, traffic stays on the previous revision. GitHub Actions runs the same `forecastapi` suite, the equivalence test, and a static check of the build file (`scripts/tests/test_forecastapi_cloudbuild.py`) on every push and PR.

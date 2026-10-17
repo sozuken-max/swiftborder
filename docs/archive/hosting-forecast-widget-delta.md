@@ -3,7 +3,7 @@
 Baseline: the `app.js` and `index.html` uploaded on 2026-10-03 (the live Hosting release, per ADR 0002).
 Result: `hosting/app.js` and `hosting/index.html` on branch `claude/vigilant-cerf-eexe6f`.
 
-**Superseded names (2026-10-12):** `hosting/` was later reorganised. The function, constant and class names below (`fetchBackendMessage`, `updateDashboardUI`, `fetchAndRenderCongestionChart`, `FORECAST_DIRECTIONS`, `dashboard-card`, `live-chart-card`, `cam-grid-footer` and others) no longer exist; see the 2026-10-12 entries in [CHANGELOG.md](../CHANGELOG.md). This note is kept as a record of that change.
+**Superseded names (2026-10-12):** `hosting/` was later reorganised. The function, constant and class names below (`fetchBackendMessage`, `updateDashboardUI`, `fetchAndRenderCongestionChart`, `FORECAST_DIRECTIONS`, `dashboard-card`, `live-chart-card`, `cam-grid-footer` and others) no longer exist; see the 2026-10-12 entries in [CHANGELOG.md](../../CHANGELOG.md). This note is kept as a record of that change.
 
 ## Summary
 
@@ -236,7 +236,7 @@ Not caused by this change. On 2026-10-03 ~22:17 SGT, `swiftbackend` returned `40
 
 ## Revision 2 (2026-10-04): forecast curve, baseline, public API
 
-The first revision above called `forecast-api` with no parameters and drew one 30-minute value. The API has since gained a forecast curve and a typical-day baseline ([runbook](runbooks/forecast-api.md)), and the service is public. `hosting/` now does the following.
+The first revision above called `forecast-api` with no parameters and drew one 30-minute value. The API has since gained a forecast curve and a typical-day baseline ([runbook](../runbooks/forecast-api.md)), and the service is public. `hosting/` now does the following.
 
 | Area | Change |
 | --- | --- |

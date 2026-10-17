@@ -1,6 +1,6 @@
 # Layer A count comparison (15 frames)
 
-Image-level car and vehicle totals for camera 2701, on the 15-frame Roboflow v6 `test` split. Chad's per-frame report, annotated frames, and box AP50 are in [camdetect/test-reports/](../../../camdetect/test-reports/README.md#box-metrics-test-split). These JSON files have no bounding boxes. `eval/layer_a.py` has not been run on the split. Reproducibility for the count rescoring is [`REPORT.md`](REPORT.md).
+Image-level car and vehicle totals for camera 2701, on the 15-frame Roboflow v6 `test` split. Chad's per-frame report, annotated frames, and box AP50 are in [eval/test-reports/](../../../eval/test-reports/README.md#box-metrics-test-split). These JSON files have no bounding boxes. `eval/layer_a.py` has not been run on the split. Reproducibility for the count rescoring is [`REPORT.md`](REPORT.md).
 
 | File | What it is |
 | --- | --- |

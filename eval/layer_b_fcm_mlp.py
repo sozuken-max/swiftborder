@@ -107,20 +107,20 @@ validation and test predictions row by row for the report's tables and plots.
 
 Deployment (Cloud Run Jobs triggered by Cloud Scheduler)
 --------------------------------------------------------
-``Causeway/requirements.txt`` needs::
+``eval/requirements.txt`` needs::
 
     google-cloud-bigquery==3.45.2
     requests==2.34.2
     numpy==2.4.6
     scikit-learn==1.9.1
 
-Buildpacks start the command named in ``Causeway/Procfile``. One line serves this module, the
+Buildpacks start the command named in ``eval/Procfile``. One line serves this module, the
 TimesFM module and the training job, chosen per job with environment variables (started without
 arguments, either module also reads its command from ``LAYER_B_ARGS``, default ``run-cycle``)::
 
     web: python3 ${LAYER_B_MODULE:-layer_b_fcm_mlp.py} ${LAYER_B_ARGS:-run-cycle}
 
-A ``Causeway/.python-version`` file containing ``3.11`` pins the interpreter to the team lock files;
+A ``eval/.python-version`` file containing ``3.11`` pins the interpreter to the team lock files;
 without it buildpacks use the latest Python release.
 
 Environment variables (all optional)::
@@ -142,7 +142,7 @@ Environment variables (all optional)::
 
 Example::
 
-    gcloud run jobs deploy layer-b-fcm-mlp --source Causeway --region asia-southeast1 \\
+    gcloud run jobs deploy layer-b-fcm-mlp --source eval --region asia-southeast1 \\
         --max-retries 1 --task-timeout 600s --memory 1Gi \\
         --service-account layer-b@swiftborder.iam.gserviceaccount.com \\
         --set-env-vars SWIFTBORDER_PROJECT=swiftborder,LAYER_B_MODULE=layer_b_fcm_mlp.py,LAYER_A_URL=https://<swiftbackend-url>
@@ -150,7 +150,7 @@ Example::
         --schedule "*/10 * * * *" --time-zone Asia/Singapore --http-method POST \\
         --uri https://run.googleapis.com/v2/projects/swiftborder/locations/asia-southeast1/jobs/layer-b-fcm-mlp:run \\
         --oauth-service-account-email layer-b@swiftborder.iam.gserviceaccount.com
-    gcloud run jobs deploy layer-b-fcm-mlp-train --source Causeway --region asia-southeast1 \\
+    gcloud run jobs deploy layer-b-fcm-mlp-train --source eval --region asia-southeast1 \\
         --max-retries 0 --task-timeout 1800s --memory 2Gi \\
         --service-account layer-b@swiftborder.iam.gserviceaccount.com \\
         --set-env-vars "SWIFTBORDER_PROJECT=swiftborder,LAYER_B_MODULE=layer_b_fcm_mlp.py,LAYER_B_ARGS=train --lookback-days 28 --test-days 0 --register"

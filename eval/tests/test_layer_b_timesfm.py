@@ -1,4 +1,4 @@
-"""Offline tests for layer_b_timesfm.py (no network, no GCP). Run from Causeway/: python -m pytest"""
+"""Offline tests for layer_b_timesfm.py (no network, no GCP). Run from eval/: python -m pytest"""
 import datetime as dt
 import json
 import sys

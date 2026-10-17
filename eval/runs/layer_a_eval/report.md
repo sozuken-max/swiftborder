@@ -80,11 +80,13 @@ Mean delta: -0.0827 min
 
 ### Ablation findings
 
-Camera features produced a **0.0827 min improvement** in mean MAE on 18 folds with ≥60% camera coverage.
-The improvement is statistically significant at α=0.05 (paired-t p=0.0067).
+Camera features produced a **0.0827 min improvement** in mean MAE (2.8445 → 2.7618 min) on 18 folds with ≥60% camera coverage inside this **restricted 4-feature contemporaneous-Maps XGBoost** (`y_persistence`, `congestion_ratio`, `speed_kmh`, direction indicator).
+The fold-level difference is statistically significant at α=0.05 (paired-t p=0.0067), **but both restricted trees have higher error than naive persistence (2.6718 min) and the full lag/profile `xgb[maps]` baseline (2.275 min)** on the same 13–30 Sep window.
 
 ### Important caveats
 
+- **Restricted baseline:** The maps-only model in this script omits the multi-step Maps lags (`lag_10..lag_60`) and time-of-day profile used in `eval/joined.py` (`xgb[maps]` MAE 2.275 min). Consequently, this ablation shows that observed camera counts help a minimal contemporaneous-Maps tree, not that they improve on persistence or on the full `xgb[maps]` / `xgb[maps+mpfc]` Layer B baselines.
+- **Autocorrelation in Q1:** Pearson and Spearman $p$-values in Q1 are descriptive row-level tests on 10-minute bins and do not adjust for serial dependence across consecutive bins.
 - Camera frames cover only ~1 frame/10 min. Finer coverage would sharpen the ablation.
 - The label (`y_30`) is a future Maps estimate, not a ground-truth crossing time.
 - A fold-level t-test on 18 folds is underpowered; row-level DM is needed for formal confirmation.

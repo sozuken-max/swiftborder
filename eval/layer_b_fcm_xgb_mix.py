@@ -121,12 +121,12 @@ writing. To backfill Layer A frames, use ``layer_b_fcm_mlp.py backfill-layer-a``
 
 Deployment (Cloud Run Jobs triggered by Cloud Scheduler)
 --------------------------------------------------------
-``Causeway/requirements.txt`` adds ``xgboost==3.2.0``, the pin of ``eval/`` and ``forecastapi/``, to
+``eval/requirements.txt`` adds ``xgboost==3.2.0``, the pin of ``eval/`` and ``forecastapi/``, to
 ``layer_b_fcm_mlp.py``'s dependencies. On Linux it also installs NVIDIA NCCL (about 0.5 GB) into the
 image. ``xgboost-cpu==3.2.0`` is the CPU-only build of the same library and gave identical xgb[maps]
 predictions on the 13-30 Sep bins in a check on 2026-10-10, so a deploy-only requirements file may use
 it; never install both packages in one environment. Buildpacks start the command in
-``Causeway/Procfile``, and ``Causeway/.python-version`` pins Python 3.11 (the team lock files); both
+``eval/Procfile``, and ``eval/.python-version`` pins Python 3.11 (the team lock files); both
 were added with this module. The Procfile line, documented in ``layer_b_fcm_mlp.py`` too, serves this
 module when ``LAYER_B_MODULE`` names it (started without arguments, the module reads its command from
 ``LAYER_B_ARGS``, default ``run-cycle``)::
@@ -135,14 +135,14 @@ module when ``LAYER_B_MODULE`` names it (started without arguments, the module r
 
 Example (replace the service account with the team's Layer B account)::
 
-    gcloud run jobs deploy layer-b-mix --source Causeway --region asia-southeast1 \\
+    gcloud run jobs deploy layer-b-mix --source eval --region asia-southeast1 \\
         --max-retries 1 --task-timeout 600s --memory 1Gi --service-account <layer-b-service-account> \\
         --set-env-vars SWIFTBORDER_PROJECT=swiftborder,LAYER_B_MODULE=layer_b_fcm_xgb_mix.py
     gcloud scheduler jobs create http layer-b-mix-10min --location asia-southeast1 \\
         --schedule "*/10 * * * *" --time-zone Asia/Singapore --http-method POST \\
         --uri https://run.googleapis.com/v2/projects/swiftborder/locations/asia-southeast1/jobs/layer-b-mix:run \\
         --oauth-service-account-email <layer-b-service-account>
-    gcloud run jobs deploy layer-b-mix-train --source Causeway --region asia-southeast1 \\
+    gcloud run jobs deploy layer-b-mix-train --source eval --region asia-southeast1 \\
         --max-retries 0 --task-timeout 3600s --memory 2Gi --service-account <layer-b-service-account> \\
         --set-env-vars "SWIFTBORDER_PROJECT=swiftborder,LAYER_B_MODULE=layer_b_fcm_xgb_mix.py,LAYER_B_ARGS=train --register"
     gcloud scheduler jobs create http layer-b-mix-daily --location asia-southeast1 \\

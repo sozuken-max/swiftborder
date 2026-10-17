@@ -11,8 +11,8 @@ Run it once on a CPU runtime and once on a GPU runtime (Runtime -> Change runtim
 Frames are downloaded before timing, so only preprocessing + inference is measured.
 
 --frames DIR times the JPEGs in DIR instead of downloading live frames, so a rerun
-uses the same images (e.g. camdetect/test-reports/frames). The recorded GPU run in
-camdetect/test-reports/README.md used live frames, which were not kept.
+uses the same images (e.g. eval/test-reports/frames). The recorded GPU run in
+eval/test-reports/README.md used live frames, which were not kept.
 """
 
 import argparse
