@@ -1,0 +1,828 @@
+{
+  "schema_version": 2,
+  "run_id": "20261017T083554Z_counts-substitute",
+  "component": "counts_substitute",
+  "provenance": {
+    "git_sha": "b26681c910210e409bc1cb4660cd0b8511f03e88",
+    "git_branch": "experiment/counts-for-maps",
+    "git_dirty": 1,
+    "python": "3.11.9",
+    "pandas": "2.2.3",
+    "numpy": "2.1.3",
+    "scikit_learn": "1.5.2",
+    "xgboost": "2.1.4"
+  },
+  "definition": "The target on every row is Google Maps duration in traffic at the 30-minute horizon: the mean `duration_in_traffic` of the bin that starts 30 minutes after the origin (`y_30`), in minutes. The Maps version is that served estimator refit on September 2026 only, reading Maps duration, lags, rolling means, slope, congestion ratio and speed where that model uses them. The counts version puts the directional camera-2701 count in those duration slots (`sg_my` for SG_TO_MY, `my_sg` for MY_TO_SG) and does not read a Maps duration, lag, speed or distance feature at predict time. Calendar terms stay. Persistence-of-Maps repeats the current Maps duration. Persistence-of-counts repeats the current directional count and does not see Maps at predict time; that output is a vehicle count, so it is not scored as a minute forecast. The counts profile is the same Fourier rule fit on September counts and read at the target clock; that output is a typical count, not a duration. Learned counts models are fit to September rows whose label is Maps `y_30`, so they can emit minutes.",
+  "protocol": "Callable forecast-api ids confirmed in `services/forecastapi/main.py`: `persistence`, `profile`, `ridge[maps]`, `xgb[maps]`, `xgb[maps+prof]`, `lin_bq[daily]`, `xgb_bq[daily]`, `lin_bq[frozen]`, `xgb_bq[frozen]`, and `mix[fcm_mlp+xgb]`. `served` at 30 minutes is the mix in both directions, so it is not a second fit. `fcm_mlp` alone and `timesfm` are not served. `lin_bq[frozen]` and `xgb_bq[frozen]` are refit on all September rows and reported as `lin_bq[sept-refit]` and `xgb_bq[sept-refit]`, not as the 12 Sep production cutoff. Those September fits use the same rows and estimators as `lin_bq[daily]` and `xgb_bq[daily]` (BQ feature list, `lag_60` required), so each pair is one fit listed under both names. No October row is used to fit. The mix's L2 penalty still uses the module's last two September days as inner validation (`fit_day` for serving day 2026-10-01).",
+  "bar_min": 0.5,
+  "bar": "`docs/evaluation.md` states two different bars. \"What would count as success\" is the product target of mean absolute error at or below 15 minutes on crossing time; that target is not measured here, and this run does not claim it. The practical bar used for this decision is the one in the Significance section: a serving change needs a drop of at least 0.5 min (30 s), about the rounding of a forecast shown in whole minutes. The same +/-0.5 min band is the practical threshold elsewhere on that page. A difference inside that band is not a meaningful improvement. Substitution also requires the counts version to be able to run when Maps bins are absent (it does not read `v_bins_10min` at predict time) and its October MAE to sit within 0.5 min of both the Maps version and persistence-of-Maps. Label `regression` when the paired interval lies entirely above +0.5 min, `improvement` when it lies entirely below -0.5 min, `substitute` when the interval lies inside +/-0.5 min and the counts MAE is also within 0.5 min of persistence, and `inconclusive` when a direction has fewer than 50 rows or the interval crosses +/-0.5 min.",
+  "window": "Clocks: bin timestamps are UTC. The month cut is the Asia/Singapore calendar date. Train: origin date 2026-09-06 through 2026-09-30 SGT (Maps logging and `local_counts` both start 6 Sep; 1-5 Sep have neither series) and `bin_ts + 40 min` at or before 2026-10-01 00:00 SGT. Eval: October 2026 SGT origins that are scorable on both series (`y_30` present, `after_gap = 0`). Maps `v_bins_10min` rows in the download: 8618 (2026-09-05T17:50:00+00:00 to 2026-10-05T15:50:00+00:00). October SGT bin-days in that download: 2026-10-01: 288 bins, mean n_obs 2.00; 2026-10-02: 288 bins, mean n_obs 2.00; 2026-10-03: 288 bins, mean n_obs 2.00; 2026-10-04: 288 bins, mean n_obs 2.00; 2026-10-05: 288 bins, mean n_obs 2.00. `cam2701.local_counts` frames in the download: 4052 (2026-09-05T16:05:46+00:00 to 2026-10-04T15:55:48+00:00). October SGT frame counts by day: {'2026-10-01': 143, '2026-10-02': 138, '2026-10-03': 139, '2026-10-04': 135}. Camera 2702 is not used: `features.py` builds counts from one camera (2701).",
+  "october_overlap_n": {
+    "SG_TO_MY": 534,
+    "MY_TO_SG": 534
+  },
+  "models": [
+    {
+      "id": "persistence",
+      "train_n": {
+        "maps": 0,
+        "counts": 0
+      },
+      "emits_minutes": 0,
+      "reads_maps_at_predict": 0,
+      "note": "Univariate. Counts version repeats the current vehicle count and is not a minute forecast.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 3.2039,
+          "mae_counts_min": null,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": null,
+          "interval_low_min": null,
+          "interval_high_min": null,
+          "interval": "not a minute comparison",
+          "calendar_days": null,
+          "label": "inconclusive",
+          "reason": "the counts-series rule does not emit a duration in minutes",
+          "raw_abs_diff_count_units_vs_minutes": 28.523
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 3.2361,
+          "mae_counts_min": null,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": null,
+          "interval_low_min": null,
+          "interval_high_min": null,
+          "interval": "not a minute comparison",
+          "calendar_days": null,
+          "label": "inconclusive",
+          "reason": "the counts-series rule does not emit a duration in minutes",
+          "raw_abs_diff_count_units_vs_minutes": 22.594
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 3.1717,
+          "mae_counts_min": null,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": null,
+          "interval_low_min": null,
+          "interval_high_min": null,
+          "interval": "not a minute comparison",
+          "calendar_days": null,
+          "label": "inconclusive",
+          "reason": "the counts-series rule does not emit a duration in minutes",
+          "raw_abs_diff_count_units_vs_minutes": 34.4519
+        }
+      ],
+      "raw_counts_vs_maps_minutes": 28.523
+    },
+    {
+      "id": "profile",
+      "train_n": {
+        "maps": 7178,
+        "counts": 6994
+      },
+      "emits_minutes": 0,
+      "reads_maps_at_predict": 0,
+      "note": "Univariate calendar rule. Counts version is fit on September counts and emits a typical count, not minutes. It does not read the live Maps bin.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 6.7893,
+          "mae_counts_min": null,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": null,
+          "interval_low_min": null,
+          "interval_high_min": null,
+          "interval": "not a minute comparison",
+          "calendar_days": null,
+          "label": "inconclusive",
+          "reason": "the counts-series rule does not emit a duration in minutes",
+          "raw_abs_diff_count_units_vs_minutes": 16.5022
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 7.8579,
+          "mae_counts_min": null,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": null,
+          "interval_low_min": null,
+          "interval_high_min": null,
+          "interval": "not a minute comparison",
+          "calendar_days": null,
+          "label": "inconclusive",
+          "reason": "the counts-series rule does not emit a duration in minutes",
+          "raw_abs_diff_count_units_vs_minutes": 19.7124
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 5.7206,
+          "mae_counts_min": null,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": null,
+          "interval_low_min": null,
+          "interval_high_min": null,
+          "interval": "not a minute comparison",
+          "calendar_days": null,
+          "label": "inconclusive",
+          "reason": "the counts-series rule does not emit a duration in minutes",
+          "raw_abs_diff_count_units_vs_minutes": 13.2921
+        }
+      ],
+      "raw_counts_vs_maps_minutes": 16.5022
+    },
+    {
+      "id": "ridge[maps]",
+      "train_n": {
+        "maps": 7172,
+        "counts": 6804
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "Harness ridge (`joined._ridge`). Counts features omit congestion ratio and speed.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 2.9357,
+          "mae_counts_min": 7.2251,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 4.2894,
+          "interval_low_min": 3.1168,
+          "interval_high_min": 5.3452,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 2.8921,
+          "mae_counts_min": 8.8378,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 5.9457,
+          "interval_low_min": 4.1669,
+          "interval_high_min": 8.3134,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 2.9792,
+          "mae_counts_min": 5.6123,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 2.6331,
+          "interval_low_min": 2.1184,
+          "interval_high_min": 3.2013,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    },
+    {
+      "id": "xgb[maps]",
+      "train_n": {
+        "maps": 7172,
+        "counts": 6804
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "Harness XGBoost (`joined._xgb`). Counts features omit congestion ratio and speed.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 2.7864,
+          "mae_counts_min": 5.9123,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 3.1259,
+          "interval_low_min": 1.8142,
+          "interval_high_min": 4.3069,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 2.7976,
+          "mae_counts_min": 6.5962,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 3.7986,
+          "interval_low_min": 2.2274,
+          "interval_high_min": 5.8245,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 2.7751,
+          "mae_counts_min": 5.2283,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 2.4532,
+          "interval_low_min": 1.8999,
+          "interval_high_min": 3.0509,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    },
+    {
+      "id": "xgb[maps+prof]",
+      "train_n": {
+        "maps": 7172,
+        "counts": 6804
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "Harness XGBoost plus the Fourier profile. The counts version uses the profile of the count series, not the Maps profile.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 2.7898,
+          "mae_counts_min": 5.5166,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 2.7268,
+          "interval_low_min": 1.4705,
+          "interval_high_min": 3.858,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 2.9155,
+          "mae_counts_min": 6.1373,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 3.2218,
+          "interval_low_min": 1.4996,
+          "interval_high_min": 5.211,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 2.6641,
+          "mae_counts_min": 4.896,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 2.2319,
+          "interval_low_min": 1.7265,
+          "interval_high_min": 2.828,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    },
+    {
+      "id": "lin_bq[daily]",
+      "train_n": {
+        "maps": 7160,
+        "counts": 6738
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "BQ linear replica (`bq_replica.fit_lin` on the Maps side). September only, `lag_60` required.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 2.9351,
+          "mae_counts_min": 7.2399,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 4.3048,
+          "interval_low_min": 3.0912,
+          "interval_high_min": 5.3974,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 2.8908,
+          "mae_counts_min": 8.908,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 6.0173,
+          "interval_low_min": 4.1289,
+          "interval_high_min": 8.4931,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 2.9795,
+          "mae_counts_min": 5.5718,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 2.5923,
+          "interval_low_min": 2.0772,
+          "interval_high_min": 3.1742,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    },
+    {
+      "id": "lin_bq[sept-refit]",
+      "train_n": {
+        "maps": 7160,
+        "counts": 6738
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "Same September fit as the daily replica. Not the 12 Sep production frozen model. Callable id this stands in for: `lin_bq[frozen]`.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 2.9351,
+          "mae_counts_min": 7.2399,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 4.3048,
+          "interval_low_min": 3.0912,
+          "interval_high_min": 5.3974,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 2.8908,
+          "mae_counts_min": 8.908,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 6.0173,
+          "interval_low_min": 4.1289,
+          "interval_high_min": 8.4931,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 2.9795,
+          "mae_counts_min": 5.5718,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 2.5923,
+          "interval_low_min": 2.0772,
+          "interval_high_min": 3.1742,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    },
+    {
+      "id": "xgb_bq[daily]",
+      "train_n": {
+        "maps": 7160,
+        "counts": 6738
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "BQ XGBoost replica (`bq_replica.fit_xgb`, five seeds). September only, `lag_60` required.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 3.273,
+          "mae_counts_min": 7.0799,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 3.8069,
+          "interval_low_min": 2.4135,
+          "interval_high_min": 5.0614,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 3.439,
+          "mae_counts_min": 8.0097,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 4.5706,
+          "interval_low_min": 2.4847,
+          "interval_high_min": 7.1292,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 3.1071,
+          "mae_counts_min": 6.1502,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 3.0431,
+          "interval_low_min": 2.7052,
+          "interval_high_min": 3.6035,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    },
+    {
+      "id": "xgb_bq[sept-refit]",
+      "train_n": {
+        "maps": 7160,
+        "counts": 6738
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "Same September fit as the daily replica. Not the 12 Sep production frozen model. Callable id this stands in for: `xgb_bq[frozen]`.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 3.273,
+          "mae_counts_min": 7.0799,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 3.8069,
+          "interval_low_min": 2.4135,
+          "interval_high_min": 5.0614,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 3.439,
+          "mae_counts_min": 8.0097,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 4.5706,
+          "interval_low_min": 2.4847,
+          "interval_high_min": 7.1292,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 3.1071,
+          "mae_counts_min": 6.1502,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 3.0431,
+          "interval_low_min": 2.7052,
+          "interval_high_min": 3.6035,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    },
+    {
+      "id": "mix[fcm_mlp+xgb]",
+      "train_n": {
+        "maps": "see mix.maps_diagnostics",
+        "counts": "see mix.counts_diagnostics"
+      },
+      "emits_minutes": 1,
+      "reads_maps_at_predict": 0,
+      "note": "Same `fit_day` / `predict_direction` as the service. Counts version: duration slots are directional counts, congestion and speed are missing, and the FCM residual is Maps minutes minus the count.",
+      "slices": [
+        {
+          "slice": "both",
+          "n": 1068,
+          "mae_maps_min": 2.7373,
+          "mae_counts_min": 5.689,
+          "mae_persistence_maps_min": 3.2039,
+          "paired_diff_counts_minus_maps_min": 2.9517,
+          "interval_low_min": 1.452,
+          "interval_high_min": 4.3019,
+          "interval": "joint_calendar_day",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "SG_TO_MY",
+          "n": 534,
+          "mae_maps_min": 2.7512,
+          "mae_counts_min": 6.197,
+          "mae_persistence_maps_min": 3.2361,
+          "paired_diff_counts_minus_maps_min": 3.4458,
+          "interval_low_min": 1.8432,
+          "interval_high_min": 5.6782,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        },
+        {
+          "slice": "MY_TO_SG",
+          "n": 534,
+          "mae_maps_min": 2.7234,
+          "mae_counts_min": 5.181,
+          "mae_persistence_maps_min": 3.1717,
+          "paired_diff_counts_minus_maps_min": 2.4576,
+          "interval_low_min": 1.6856,
+          "interval_high_min": 3.4594,
+          "interval": "day_block",
+          "calendar_days": 4,
+          "label": "regression",
+          "reason": "the paired interval lies entirely above +0.5 min",
+          "raw_abs_diff_count_units_vs_minutes": null
+        }
+      ],
+      "raw_counts_vs_maps_minutes": null
+    }
+  ],
+  "mix": {
+    "serve_day": "2026-10-01",
+    "history_start": "2026-09-06",
+    "maps_diagnostics": {
+      "labels_before": "2026-09-30 16:00:00+00:00",
+      "SG_TO_MY": {
+        "fcm_centres": {
+          "light": {
+            "now": 16.69,
+            "delta_30": -0.211,
+            "d1_rise_end": 0.774
+          },
+          "moderate": {
+            "now": 30.474,
+            "delta_30": -2.883,
+            "d1_rise_end": -3.967
+          },
+          "heavy": {
+            "now": 34.762,
+            "delta_30": 3.843,
+            "d1_rise_end": 2.741
+          }
+        },
+        "alpha": 0.01,
+        "alpha_search_inner_mae": {
+          "0.0001": 2.4122649870872945,
+          "0.001": 2.411783639137689,
+          "0.01": 2.411610286589984
+        },
+        "best_epochs": [
+          6,
+          9,
+          7,
+          5,
+          3
+        ],
+        "rows": {
+          "fit": 3289,
+          "inner_validation": 282,
+          "with_layer_a": 0
+        },
+        "fit_days": [
+          "2026-09-06",
+          "2026-09-28"
+        ],
+        "inner_days": [
+          "2026-09-29",
+          "2026-09-30"
+        ]
+      },
+      "MY_TO_SG": {
+        "fcm_centres": {
+          "light": {
+            "now": 19.198,
+            "delta_30": -0.178,
+            "d1_rise_end": 0.735
+          },
+          "moderate": {
+            "now": 30.372,
+            "delta_30": -3.13,
+            "d1_rise_end": -3.24
+          },
+          "heavy": {
+            "now": 36.874,
+            "delta_30": 4.183,
+            "d1_rise_end": 1.177
+          }
+        },
+        "alpha": 0.01,
+        "alpha_search_inner_mae": {
+          "0.0001": 2.0357425221562075,
+          "0.001": 2.035579877599253,
+          "0.01": 2.035193250983822
+        },
+        "best_epochs": [
+          8,
+          10,
+          6,
+          7,
+          7
+        ],
+        "rows": {
+          "fit": 3289,
+          "inner_validation": 282,
+          "with_layer_a": 0
+        },
+        "fit_days": [
+          "2026-09-06",
+          "2026-09-28"
+        ],
+        "inner_days": [
+          "2026-09-29",
+          "2026-09-30"
+        ]
+      },
+      "xgb_rows": {
+        "maps": 7172,
+        "layer_a": 0
+      }
+    },
+    "counts_diagnostics": {
+      "labels_before": "2026-09-30 16:00:00+00:00",
+      "SG_TO_MY": {
+        "fcm_centres": {
+          "light": {
+            "now": 4.949,
+            "delta_30": -3.342,
+            "d1_rise_end": 0.072
+          },
+          "moderate": {
+            "now": 9.513,
+            "delta_30": 1.931,
+            "d1_rise_end": 0.232
+          },
+          "heavy": {
+            "now": 59.005,
+            "delta_30": 25.608,
+            "d1_rise_end": -4.417
+          }
+        },
+        "alpha": 0.01,
+        "alpha_search_inner_mae": {
+          "0.0001": 4.709398535820586,
+          "0.001": 4.728353473553212,
+          "0.01": 4.70768671389775
+        },
+        "best_epochs": [
+          57,
+          50,
+          42,
+          58,
+          36
+        ],
+        "rows": {
+          "fit": 3174,
+          "inner_validation": 280,
+          "with_layer_a": 0
+        },
+        "fit_days": [
+          "2026-09-06",
+          "2026-09-28"
+        ],
+        "inner_days": [
+          "2026-09-29",
+          "2026-09-30"
+        ]
+      },
+      "MY_TO_SG": {
+        "fcm_centres": {
+          "light": {
+            "now": 11.438,
+            "delta_30": -1.003,
+            "d1_rise_end": 2.057
+          },
+          "moderate": {
+            "now": 41.281,
+            "delta_30": -19.134,
+            "d1_rise_end": -1.073
+          },
+          "heavy": {
+            "now": 78.941,
+            "delta_30": 22.988,
+            "d1_rise_end": -3.992
+          }
+        },
+        "alpha": 0.001,
+        "alpha_search_inner_mae": {
+          "0.0001": 3.5109174283258686,
+          "0.001": 3.5070449497985035,
+          "0.01": 3.5330886953542717
+        },
+        "best_epochs": [
+          37,
+          164,
+          67,
+          44,
+          67
+        ],
+        "rows": {
+          "fit": 3174,
+          "inner_validation": 280,
+          "with_layer_a": 0
+        },
+        "fit_days": [
+          "2026-09-06",
+          "2026-09-28"
+        ],
+        "inner_days": [
+          "2026-09-29",
+          "2026-09-30"
+        ]
+      },
+      "xgb_rows": {
+        "maps": 6810,
+        "layer_a": 0
+      }
+    },
+    "counts_predict_time_maps_columns": "congestion_ratio and speed_kmh are NaN; duration slots are counts",
+    "fcm_residual": "counts mix trains delta = Maps duration - directional count, then predicts count + delta"
+  },
+  "october_scored_n": {
+    "SG_TO_MY": 534,
+    "MY_TO_SG": 534
+  },
+  "october_scored_days": [
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03",
+    "2026-10-04"
+  ],
+  "figures": [
+    "mae_maps_vs_counts.png",
+    "paired_diff.png",
+    "series_xgb_mix.png"
+  ],
+  "univariate_raw": "Persistence-of-counts and the counts profile are not minute forecasts. On these same October rows the mean absolute difference between Maps `y_30` (minutes) and the vehicle-count output is 28.523 for persistence-of-counts and 16.502 for the counts profile. Those figures are not duration errors and are not labelled improvement or regression.",
+  "train_n": {
+    "maps_harness": 7172,
+    "maps_bq": 7160,
+    "counts_harness": 6804,
+    "counts_bq": 6738
+  }
+}

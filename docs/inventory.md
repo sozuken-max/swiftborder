@@ -2,6 +2,15 @@
 
 Dated copy of GCP project `swiftborder`. When this file and the project disagree, the project wins; re-query and update this file. Older blocks below are history. They keep the revisions and sentences that were true at their own timestamps.
 
+## Counts and Maps bins for the substitution run: 2026-10-17, approximately 16:15 SGT
+
+Read-only. `bq query` on `traffic_prediction.v_bins_10min` (location `US`) and `cam2701.local_counts` (location `asia-southeast1`). No join across locations, no write, no Roboflow call.
+
+- `v_bins_10min` from 6 Sep through 5 Oct SGT: 8,618 rows in that download. October days 1-5 still have 288 bins per day (both directions), mean `n_obs` 2.00. That is denser than the live once-a-day scheduler.
+- `cam2701.local_counts`: 4,052 frames, `2026-09-05T16:05:46Z` through `2026-10-04T15:55:48Z`. October frame counts: 143, 138, 139, 135 on 1-4 Oct SGT. No frames after 4 Oct. Camera 2702 is not in this table.
+
+The substitution scores are in `eval/runs/20261017T081758Z_counts-substitute/`, not in the frozen evidence index.
+
 ## Forecast serving: 2026-10-17, approximately 15:40 SGT
 
 Queried after Cloud Build `24ec59b4-52e5-4c88-86c7-a249d214c934` (trigger `forecast-api`, commit `4a23f43009f9a3c6979465c084cb583a8a74c812`) finished SUCCESS and promoted traffic.
