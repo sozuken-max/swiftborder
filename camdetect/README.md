@@ -8,6 +8,8 @@ Roboflow vehicle-detection workflow over it (or, with `model=local`, the
 YOLO26s ONNX model shipped in the image) -> filter by confidence -> classify
 each detection by direction -> return JSON or an annotated JPEG.
 
+**Separate research (not served):** [`CNN_RNN_Congestion/`](CNN_RNN_Congestion/README.md) holds Colab notebooks that train a ResNet18 + BiGRU model on camera 2701 frames against Google Maps duration (and human congestion ratings in v10a). That path does not call `main.py` and is documented in [architecture.md](../docs/architecture.md#offline-image-to-duration-research-cnn-rnn).
+
 ## Request parameters
 
 Accepted in the query string or a JSON object body. A body value wins unless it

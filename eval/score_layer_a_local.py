@@ -29,9 +29,11 @@ import main as camdetect  # noqa: E402
 ART = EVAL_ROOT / "runs" / "layer_a_count" / "artifact_counts.json"
 OUT = EVAL_ROOT / "runs" / "layer_a_count" / "local_rescore.json"
 
+# ``artifact_conf_overlap_off`` uses OVERLAP_SUPPRESSION_OFF (1.0), not None: detect_frame treats
+# None as the live default (LOCAL_MAX_OVERLAP 0.6) and normalizes values >= 1 to off before NMS.
 SETTINGS = (
     ("live", 0.2, 0.6),
-    ("artifact_conf_overlap_off", 0.30, 1.0),
+    ("artifact_conf_overlap_off", 0.30, camdetect.OVERLAP_SUPPRESSION_OFF),
     ("artifact_conf_overlap_on", 0.30, 0.6),
 )
 
@@ -96,15 +98,17 @@ def main() -> None:
                 max_overlap=overlap,
             )
             row["pred"][name] = _counts(result["kept"])
+            row["pred"][name]["max_overlap"] = result["max_overlap"]
             row["pred"][name]["overlap_suppressed"] = result["overlap_suppressed"]
         frames.append(row)
         print(image["t"], {k: row["pred"][k]["cars"] for k, _, _ in SETTINGS}, "gt", image["gt"]["cars"])
 
     summary = {}
     for name, conf, overlap in SETTINGS:
+        applied_overlap = frames[0]["pred"][name].get("max_overlap")
         summary[name] = {
             "min_confidence": conf,
-            "max_overlap": None if overlap >= 1 else overlap,
+            "max_overlap": applied_overlap,
             "model_id": camdetect.LOCAL_MODEL_ID,
             "cars": _mae(frames, name, "cars"),
             "veh": _mae(frames, name, "veh"),

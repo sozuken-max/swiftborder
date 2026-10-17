@@ -231,6 +231,13 @@ def test_overlap_param_one_turns_suppression_off(upstream, twin_session):
     assert payload["overlap_suppressed"] == 0
 
 
+def test_detect_frame_overlap_suppression_off_constant(upstream, twin_session):
+    result = main.detect_frame(_jpeg(), "2701", workflow_id=main.LOCAL_MODEL_ID, max_overlap=main.OVERLAP_SUPPRESSION_OFF)
+    assert len(result["kept"]) == 2
+    assert result["max_overlap"] is None
+    assert result["overlap_suppressed"] == 0
+
+
 def test_roboflow_models_do_not_suppress_unless_asked(upstream):
     dup = {"x": 1500, "y": 300, "width": 60, "height": 40, "class": "truck", "confidence": 0.5}
     upstream["workflow"]._payload["outputs"][0]["predictions"]["predictions"] = [*test_handler.PREDICTIONS, dup]

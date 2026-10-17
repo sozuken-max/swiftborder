@@ -5,6 +5,9 @@ flowchart LR
     CAM["sg-lta-traffic-cameras"] --> JOB["Cloud Run Job<br/>traffic-backfill"]
     JOB --> META["traffic_images<br/>metadata populated; labels empty"]
     HIST["cam2701 / cam2702<br/>historical detections<br/>congestion view: 2701"]
+    CNNRNN["camdetect/CNN_RNN_Congestion<br/>Colab CNN-RNN research<br/>image to duration bands"]
+    CAM -.-> CNNRNN
+    TT -.-> CNNRNN
   end
   subgraph LB["Layer B - Forecasting"]
     SCH["Cloud Scheduler<br/>daily 08:00 SGT"] --> ING["gmap-woodlands-fetcher"]
@@ -25,6 +28,7 @@ flowchart LR
     WX["NEA weather<br/>Causeway manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
     HIST -.->|"historical queue profile"| EVAL
     TT -.->|"read-only export"| EVAL
+    CNNRNN -.->|"not in run.json"| EVAL
   end
   subgraph STORAGE["Other storage - inventory only, no inferred data edges"]
     CACHE["swiftborder-frame-cache<br/>no writer in git"]

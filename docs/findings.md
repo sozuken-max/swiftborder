@@ -107,4 +107,6 @@ Paste-ready status for a slide (refresh from [inventory.md](inventory.md) and `r
 
 **Deep learning is scored and not served.** With about three weeks of 5-minute data, LSTM, GRU and a patch Transformer trail XGBoost by 0.5–0.7 min at 60 minutes. Reasons and the conditions for revisiting: [deep-learning-assessment.md](deep-learning-assessment.md).
 
+**Image-to-duration research is separate from the MVP.** [`camdetect/CNN_RNN_Congestion/`](../camdetect/CNN_RNN_Congestion/) trains a Colab CNN-RNN on the same GCS frames and `travel_times` labels as section 7c, but it predicts Maps duration (or bands) from pixels instead of going through YOLO counts. It supports the module's deep learning and intelligent sensing story; it is not deployed, not in `eval/runs/report/`, and v10a argues that Google MAE alone is a weak test because the label covers road the camera cannot see. Architecture: [architecture.md](architecture.md#offline-image-to-duration-research-cnn-rnn).
+
 **What to defer.** ResNet, a Firebase project file and an automated Hosting deploy, and holiday calendars can wait. The static client is already in `hosting/`. The order of work is in [roadmap.md](roadmap.md) and [plan-eval-integrity.md](plan-eval-integrity.md).
