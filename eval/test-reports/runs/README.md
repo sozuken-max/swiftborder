@@ -37,6 +37,8 @@ runs/
     └── yolo26m/                 the fine-tuned YOLO26m (trained_m in the notebook)
 training_curves.csv / .png       per-epoch metrics and losses of both runs
 plot_training_curves.py          builds the two files above from each results.csv
+threshold_sweep.csv / .png       car recall, precision and count error vs confidence
+plot_threshold_sweep.py          builds them from the notebook output
 ```
 
 Each detector folder holds its 15 annotated test frames at 1920 x 1080, named
@@ -65,6 +67,17 @@ top; train and validation box, class and L1 losses below). YOLO26 has no objectn
 no "object loss" panel. Rebuild both with `python eval/test-reports/runs/plot_training_curves.py`.
 
 ![Training curves](training_curves.png)
+
+Car recall, precision and count error at confidence 0.10-0.50 for both models, valid and test
+splits, parsed from the notebook output: [`threshold_sweep.csv`](threshold_sweep.csv) and
+[`threshold_sweep.png`](threshold_sweep.png) (rebuild with
+`python eval/test-reports/runs/plot_threshold_sweep.py`). It is a 7-point trade-off curve; the
+per-box predictions behind a full precision-recall curve are not in the repo (Ultralytics' own full
+curves are `BoxPR_curve.png` in each `eval_test/` folder). Count error is lowest at 0.30 (YOLO-S)
+and 0.25 (YOLO-M) on test, and at 0.40 for both on valid. Picking the threshold on test is
+optimistic; the served setting is conf 0.20 with overlap 0.6.
+
+![Threshold sweep](threshold_sweep.png)
 
 ## Ultralytics evaluation on the test split
 
