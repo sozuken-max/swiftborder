@@ -16,7 +16,8 @@ def _step(step_id):
 
 
 def test_step_order_gates_traffic_on_the_smoke_test():
-    assert [s["id"] for s in CFG["steps"]] == ["Test", "Buildpack", "Deploy", "Smoke", "Promote"]
+    assert [s["id"] for s in CFG["steps"]] == ["Test", "Vendor-mix", "Buildpack", "Deploy", "Smoke", "Promote"]
+    assert CFG["steps"][-2]["id"] == "Smoke" and CFG["steps"][-1]["id"] == "Promote"
 
 
 def test_images_are_pinned_by_digest():
