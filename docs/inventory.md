@@ -2,6 +2,19 @@
 
 Dated copy of GCP project `swiftborder`. When this file and the project disagree, the project wins; re-query and update this file. Older blocks below are history. They keep the revisions and sentences that were true at their own timestamps.
 
+## Review verification: 2026-10-17, approximately 11:10-11:20 SGT (read-only)
+
+The team subsequently confirmed that live operation was curtailed to reduce costs and that **all currently committed results are frozen; no more experiment runs**. The availability observation below is intentional operational status, not a final-report blocker. It does not supersede the historical evaluation windows.
+
+- `forecast-api` serves `forecast-api-00012-zal`, commit `3bd5b6b0fd315992a27b497804c9c35856494f58`, with the invoker IAM check disabled and 100% traffic on the latest ready revision. Anonymous `GET ?model=served` returned **503**, `{"error":"No recent forecast for the requested direction"}`.
+- `swiftbackend` now serves `swiftbackend-00045-sk7`, commit `199c2e55e5969236a081499eb326f00262c2a467`. The service listing also shows `gmap-woodlands-fetcher-00008-rq8` and `weather-backfill-tmp-00025-55m`.
+- Scheduler `Gmap-Woodlands` remains enabled at `0 8 * * *`, `Asia/Singapore`, last attempt `2026-10-17T00:00:00.874509Z`.
+- `causeway.travel_times` remains **11,289 rows per direction, 22,578 total**, latest observation `2026-10-17 00:00:02 UTC`. Daily row counts, both directions combined: 576 each on 1-12 Oct; 444 on 13 Oct; 288 each on 14-16 Oct; 6 on 17 Oct at query time. Nominal calendar spans must not be mistaken for fully sampled evaluation coverage.
+- Public Hosting `app.js` (`https://swiftborder-92b45.web.app/app.js`) was re-read on 17 Oct 2026. It is the same text as `hosting/app.js` (44,260 characters; HTTP body 45,771 bytes, working-tree file 46,675 bytes with CRLF). It calls `forecast-api`, includes the exploratory-curve wording, and references the local detector. An earlier note of 44,261 versus 45,165 characters does not match either copy. This was a source read, not a full browser rehearsal.
+- Repository-only verification: `gmapfetcher/index.js`, `hosting/`, `firebase.json` and `.firebaserc` are tracked. The Firebase configuration names `swiftborder-92b45`; older statements that deployment configuration is absent are superseded.
+
+Query scope: `gcloud run services list` and selected non-secret fields from forecast/camera service descriptions; Scheduler job description; aggregate freshness and October daily coverage queries on `causeway.travel_times`; anonymous forecast and Hosting HTTP reads. No cloud mutation or billed detector request was made. Other tables, buckets, model lists and job executions were **not** re-queried in this pass; their observations retain the timestamps below.
+
 ## Update: 2026-10-17, approximately 09:15 SGT (read-only)
 
 Queried with `gcloud run services list`, `gcloud run jobs list` / `jobs describe cam2701-local-backfill`, `gcloud scheduler jobs describe Gmap-Woodlands` (`asia-southeast1`), `gcloud storage buckets list`, `bq ls --models traffic_prediction`, and read-only aggregates on `travel_times`, `cam2701.local_counts`, `Cam2701`, `Cam2702`, `traffic_images.metadata`, `traffic_images.labels`, and `rainfall.rainfall`. No IAM policies, view SQL, or forecast response body were re-read. Fifteen `swiftbackend` `model=v6` calls were made the same morning to rescore labelled frames; that is evaluation traffic, not a deploy.
