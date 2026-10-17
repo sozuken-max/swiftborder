@@ -17,6 +17,8 @@ htmlcov/
 !docs/images/horizon-study/*.csv
 # Per-frame model=local counts from services/camdetect/backfill_local_counts.py (committed output).
 !services/camdetect/backfill/*.csv
+# Layer A training logs and detector-comparison tables (committed run outputs, small).
+!eval/test-reports/runs/**/*.csv
 **/*.log
 # Test fixtures are small, hand-built, and must be committed
 !**/tests/fixtures/**
