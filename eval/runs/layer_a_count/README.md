@@ -8,4 +8,4 @@ Image-level car and vehicle totals for camera 2701. Not a box score: `eval/layer
 | `local_rescore.json` | `local:yolo26s-v6-boxfix` on those originals: confidence 0.2 and overlap 0.6; confidence 0.30 with overlap off; confidence 0.30 with overlap 0.6. Produced by `eval/score_layer_a_local.py`. |
 | `roboflow_v6_conf02.json` | Live `swiftbackend` `model=v6` at confidence 0.2, overlap off, 17 Oct 2026. Fifteen billed calls. The 03:15 frame's data.gov.sg bytes match the GCS object. |
 
-Day is 07:00-18:59 SGT from the timestamp in the file name (7 day, 8 night). The narrative is [docs/evaluation.md](../../../docs/evaluation.md#layer-a--vision).
+Day is 07:00-18:59 SGT from the timestamp in the file name (7 day, 8 night). The narrative is [docs/evaluation.md](../../../docs/evaluation.md#layer-a--vision). The full per-frame report with the annotated images is [camdetect/test-reports/](../../../camdetect/test-reports/README.md).
