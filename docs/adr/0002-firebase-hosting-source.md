@@ -2,11 +2,11 @@
 
 ## Status
 
-Proposed on 2026-10-03 for how a later push is deployed. The static client is now in git; see the update below. `firebase.json` and `.firebaserc` are still absent, and deploy stays manual.
+Proposed on 2026-10-03 for how a later push is deployed. The static client is in git under `hosting/`, and on 2026-10-12 (`23bb0cf`, PR #37) `firebase.json`, `.firebaserc` (`swiftborder-92b45`), and [`.github/workflows/firebase-hosting.yml`](../../.github/workflows/firebase-hosting.yml) were added to deploy `hosting/` automatically on merge to `main` (and preview channels on PRs).
 
 ## Update (repo, after the Hosting commits)
 
-`hosting/` contains `index.html`, `app.js`, and `style.css`. The Context sentence that this repo has no Hosting directory describes the 2026-10-03 check. No workflow deploys the site, and this note does not invent `firebase.json` or `.firebaserc`. The live page copy and the claims register disagree: the page keeps a Maps sourcing line and "Typical for this day and time"; the register still limits claims to an evaluated 30-minute result, exploratory later curve points, Holm skill only to 3 h, and 5.5 h as a generous end ([findings.md](../findings.md#claims-register), [hosting-forecast-widget-delta.md](../hosting-forecast-widget-delta.md)).
+`hosting/` contains `index.html`, `app.js`, and `style.css`. The Context sentence below that this repo had no Hosting directory describes the 2026-10-03 check; `firebase.json`, `.firebaserc`, and `.github/workflows/firebase-hosting.yml` were added on 12 Oct 2026, and public `app.js` on `https://swiftborder-92b45.web.app` matched `hosting/app.js` (44,260 chars) on 17 Oct 2026 ([inventory.md](../inventory.md)). The live page copy and the claims register still differ in scope: the page keeps a Maps sourcing line and "Typical for this day and time"; the register limits claims to an evaluated 30-minute result, exploratory later curve points, Holm skill only to 3 h, and 5.5 h as a generous end ([findings.md](../findings.md#claims-register), [hosting-forecast-widget-delta.md](../archive/hosting-forecast-widget-delta.md)).
 
 ## Context
 

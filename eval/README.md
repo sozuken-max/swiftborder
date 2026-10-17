@@ -18,6 +18,7 @@ Evaluation harnesses for Layer A and Layer B. Nothing here deploys `swiftbackend
 | [`fuzzy_traffic.py`](fuzzy_traffic.py) | Light / moderate / heavy at 60 min, both directions: fuzzy partition, learned fuzzy rule base, XGB → fuzzy level hybrid; accuracy, macro-F1, severe errors, RPS; DM on 0/1 loss |
 | [`camera_forecast.py`](camera_forecast.py) | Layer A queue forecast for Layer B: camera-2701 profile learned from the Mar-Apr detections (cached read-only pull), CV-chosen Fourier ridge; `camfc_*` features and the Maps-profile control used by `joined.py` |
 | [`ensemble.py`](ensemble.py) | Ensembles and hybrids of Layer B models: served (registry), equal mean, rolling LAD stack, rolling selection, fuzzy-gated stack; error by regime; optional 60-min XGB + deep pool |
+| [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py), [`layer_b_timesfm.py`](layer_b_timesfm.py), [`layer_b_fcm_xgb_mix.py`](layer_b_fcm_xgb_mix.py) | Exploratory Layer B modules (FCM+MLP, TimesFM 2.5, 50/50 mix); not deployed on `forecast-api` ([docs](../docs/layer-b-mix-module.md)) |
 | [`significance.py`](significance.py) | Diebold–Mariano test on loss differences (HAC variance, i.e. corrected for autocorrelation, with at least one day of lags; HLN small-sample correction), moving day-block bootstrap CIs within direction, Holm correction across comparisons |
 | [`layer_a.py`](layer_a.py) | Layer A box scorer: mAP, precision/recall, count error (overall and per direction), day/night. Needs a COCO or YOLO export |
 | [`layer_a_count_lib.py`](layer_a_count_lib.py) | Shared MAE/day-night helpers and run provenance for the 15-frame count set |
@@ -48,11 +49,11 @@ Or from the repo root: `scripts/run_tests.ps1 [-Slow] [-Coverage]` / `scripts/ru
 
 ```bash
 cd eval
-# weather CSVs for the joined experiment (see ../Causeway/README.md)
-python ../Causeway/fetch_rainfall_history.py --start-date 2026-09-05 --end-date 2026-09-30
-python ../Causeway/fetch_forecast_history.py --start-date 2026-09-05 --end-date 2026-09-30
-python ../Causeway/filter_station_history.py
-python ../Causeway/filter_area_forecast.py
+# weather CSVs for the joined experiment (see ../weather/README.md)
+python ../weather/fetch_rainfall_history.py --start-date 2026-09-05 --end-date 2026-09-30
+python ../weather/fetch_forecast_history.py --start-date 2026-09-05 --end-date 2026-09-30
+python ../weather/filter_station_history.py
+python ../weather/filter_area_forecast.py
 # all components into one run folder, then validate and promote
 pip install -r requirements-notebook.txt   # TensorFlow for --deep
 python generate_comparison_plots.py --bqml --window-end "2026-09-30 23:50" --joined --deep --fuzzy --ensemble
@@ -127,7 +128,7 @@ python backfill_camera_counts.py --max-calls 50 --start 2026-09-20 --end 2026-09
 python backfill_camera_counts.py --coverage
 ```
 
-In PowerShell set the key with `$env:ROBOFLOW_API_KEY = "<key>"` instead of `export`. The full procedure is in [docs/handoff-camera-pilot.md](../docs/handoff-camera-pilot.md).
+In PowerShell set the key with `$env:ROBOFLOW_API_KEY = "<key>"` instead of `export`. The full procedure is in [docs/archive/handoff-camera-pilot.md](../docs/archive/handoff-camera-pilot.md).
 
 Check the credit change on the Roboflow Credit Usage page after the pilot before a full run (2,730 calls for 5–30 Sep peak-first; 3,743 with `--mode full`). A quota or payment error stops the run with everything so far saved; re-run to resume.
 

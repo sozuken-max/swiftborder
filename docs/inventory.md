@@ -129,12 +129,12 @@ Locations: `cam2701`, `cam2702`, `rainfall`, `traffic_images`, `weatherforecast`
 
 ### `rainfall` / `weatherforecast`
 
-Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 2025-09-01 to 2026-08-31 SGT (last modified 3 Sep). On **2026-10-01 ~01:50 SGT** the rows for **1–30 Sep 2026 SGT** were appended with [`Causeway/load_bigquery.py`](../Causeway/load_bigquery.py) from complete data.gov.sg day files (verified after load: no duplicate timestamps).
+Both tables are Woodlands-only, timestamps in UTC. Until 2026-10-01 they held 2025-09-01 to 2026-08-31 SGT (last modified 3 Sep). On **2026-10-01 ~01:50 SGT** the rows for **1–30 Sep 2026 SGT** were appended with [`weather/load_bigquery.py`](../weather/load_bigquery.py) from complete data.gov.sg day files (verified after load: no duplicate timestamps).
 
 - **`rainfall.rainfall`** -- **103,922 rows** (+8,640), station `Woodlands Centre Road` (S210), 5-minute readings, 2025-08-31 16:00 to 2026-09-30 15:55 UTC. The appended rows first went in as `Woodlands Centre` (data.gov.sg's current name for S210); a one-off `UPDATE` restricted to those 8,640 appended rows restored `Woodlands Centre Road` so the view keeps one station. The loader now pins that name.
 - **`weatherforecast.weatherforecast`** -- **24,482 rows** (+1,876), area Woodlands, one row per issue, to 2026-09-30 15:30 UTC. New nullable column **`update_timestamp`** (data.gov.sg acquisition time) is set on the appended rows and NULL on older rows.
 - **Snapshots** (expire 2026-10-31): `rainfall.rainfall_snapshot_20261001`, `weatherforecast.weatherforecast_snapshot_20261001` hold the pre-load tables. Revert with `CREATE OR REPLACE TABLE <table> CLONE <snapshot>`.
-- **No scheduled loader** keeps these tables current; re-run the Causeway fetchers and `load_bigquery.py --execute` (it refuses overlapping ranges).
+- **No scheduled loader** keeps these tables current; re-run the [`weather/`](../weather/README.md) fetchers and `load_bigquery.py --execute` (it refuses overlapping ranges).
 - **View `v_weather_features_10min`** -- Woodlands forecast flags plus Woodlands Centre Road rainfall on 10-minute bins; now returns bins to 2026-09-30. It bins forecasts by **issue** time, not valid period. **Not referenced by `v_training_set`.**
 
 ### `traffic_images`

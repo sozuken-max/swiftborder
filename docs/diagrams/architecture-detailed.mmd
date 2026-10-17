@@ -5,7 +5,7 @@ flowchart LR
     CAM["sg-lta-traffic-cameras"] --> JOB["Cloud Run Job<br/>traffic-backfill"]
     JOB --> META["traffic_images<br/>metadata populated; labels empty"]
     HIST["cam2701 / cam2702<br/>historical detections<br/>congestion view: 2701"]
-    CNNRNN["camdetect/CNN_RNN_Congestion<br/>Colab CNN-RNN research<br/>image to duration bands"]
+    CNNRNN["eval/cnn_rnn_congestion<br/>Colab CNN-RNN research<br/>image to duration bands"]
     CAM -.-> CNNRNN
     TT -.-> CNNRNN
   end
@@ -25,7 +25,7 @@ flowchart LR
     API --> UI
     PUB["swiftborder-public<br/>traffic-24h.json history"] --> UI
     EVAL["eval/ read-only harnesses<br/>run.json and report figures"]
-    WX["NEA weather<br/>Causeway manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
+    WX["NEA weather<br/>weather/ manual loader<br/>rainfall / weatherforecast"] -.->|"offline join"| EVAL
     HIST -.->|"historical queue profile"| EVAL
     TT -.->|"read-only export"| EVAL
     CNNRNN -.->|"not in run.json"| EVAL

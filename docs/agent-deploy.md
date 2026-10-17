@@ -14,7 +14,7 @@ Read [AGENTS.md](../AGENTS.md) first. Do not invent services, env vars, or metri
 | --- | --- | --- |
 | `camdetect/main.py` | HTTP function `detect`. Resolves an LTA frame, calls a Roboflow workflow, counts vehicles against a dividing line. | A BigQuery writer. It does not insert into `Cam2701` or `Cam2702`. |
 | `camdetect/requirements.txt` | Pinned `functions-framework`, `requests`, `Pillow` (+ `backports.zoneinfo` on Python 3.8). A push of this file or `main.py` to `main` redeploys `swiftbackend`. | The build is `camdetect/cloudbuild.yaml` with `camdetect/Dockerfile`. |
-| `Causeway/*.py` | Day-by-day CSV history of NEA rainfall and the 2-hour forecast from data.gov.sg (complete days only), and `load_bigquery.py`, a manual append-only loader into `rainfall.rainfall` / `weatherforecast.weatherforecast`. | A scheduled pipeline. The original loader is not in git; nothing runs these on a schedule. |
+| `weather/*.py` | Day-by-day CSV history of NEA rainfall and the 2-hour forecast from data.gov.sg (complete days only), and `load_bigquery.py`, a manual append-only loader into `rainfall.rainfall` / `weatherforecast.weatherforecast`. | A scheduled pipeline. The original loader is not in git; nothing runs these on a schedule. |
 | `eval/` | Read-only harnesses: `layer_b.py` (30 min production models), `joined.py`, `layer_a.py`, offline XGB/LSTM, significance, report manifest. | A deploy path. Nothing writes to Cloud Run, BigQuery or `model_registry`. |
 | `.github/workflows/tests.yml` | Fast test suites on push and PR, including `forecastapi`. | A deploy path; it has no secrets and no service-account key. |
 | `forecastapi/cloudbuild.yaml` | Tests (including the harness equivalence test), build, a no-traffic candidate deploy, a smoke test, then traffic promotion for Cloud Run `forecast-api` in `asia-southeast1`, when a `^main$` trigger sees a `forecastapi/**` change. The service fits local models (ADR 0004). | A deploy of `swiftbackend`. It does not run on this branch, and the service does not exist until that `main` build. |
@@ -22,11 +22,11 @@ Read [AGENTS.md](../AGENTS.md) first. Do not invent services, env vars, or metri
 
 Direction names in `camdetect` are `SG-MY` and `MY-SG`. The BigQuery congestion view maps `to_JB` / `to_Woodlands` onto `SG_TO_MY` / `MY_TO_SG`. Any join has to translate those names. Do not assume they already match.
 
-The only dividing line in code is camera **2701**.
+Dividing lines in `camdetect/main.py` (`DEFAULT_DIVIDING_LINES`) are calibrated for cameras **2701** and **2702** (2702 added on 11 Oct 2026).
 
 ---
 
-## What runs in the project and is not in git
+## What runs in the project and its git status
 
 Re-query [inventory.md](inventory.md) before you edit a service.
 
@@ -35,7 +35,7 @@ Re-query [inventory.md](inventory.md) before you edit a service.
 | Cloud Run `swiftbackend` | `europe-west1` | Source is `camdetect/` on `main`. Deploy is an **inline** Cloud Build trigger (`76bbca35-c1b4-4836-9f34-d7adda53ea17`), push to `^main$`, **pytest** then a docker build of [camdetect/Dockerfile](../camdetect/Dockerfile), function target `detect`. Config is [camdetect/cloudbuild.yaml](../camdetect/cloudbuild.yaml) (trigger switched from inline on 2026-10-08). **Included files** are runtime paths only (`main.py`, `requirements.txt`, Dockerfile, yaml/json/toml under `camdetect/`). Tests, dev requirements, `README.md`, and the rest of the repo do not start this build. Details: [camdetect/README.md](../camdetect/README.md). |
 | Cloud Run `gmap-woodlands-fetcher` | `asia-southeast1` | Source is [gmapfetcher/](../gmapfetcher/) on `main`. Deploy is Cloud Build trigger `rmgpgab-gmap-woodlands-fetcher-…-szsd` (`33e4b77e-dbce-426e-a701-de234ec16d60`), push to `^main$`, included files `gmapfetcher/**`, inline buildpacks build, no test step. Created 2026-10-13 by Cloud Run **Connect to repo**. Details: [gmapfetcher/README.md](../gmapfetcher/README.md). |
 | Cloud Scheduler `Gmap-Woodlands` | `asia-southeast1` | No. It calls the fetcher every 10 minutes (`*/10`, from 2026-10-13; `*/5` before). The 5-minute points in `traffic-24h.json` are interpolated midpoints; BigQuery holds real rows only. |
-| Cloud Run job `traffic-backfill` | `asia-southeast1` | No |
+| Cloud Run job `traffic-backfill` | `asia-southeast1` | Source is `camdetect/backfill_local_counts.py` (`camdetect/backfill.Dockerfile`, `camdetect/jobs/backfill.cloudbuild.yaml`). Writes `cam2701.local_counts`. |
 | Views and models under `traffic_prediction`, plus the weather and congestion views | BigQuery | **SQL in** [sql/](../sql/); not applied by Cloud Build |
 | Cloud Build trigger `forecast-api` (`949ff029-31c9-4521-8ff4-d0e8d16dfa25`) | global, `^main$` | Config is in git (`forecastapi/cloudbuild.yaml`). The Cloud Run service is **not** created until that trigger runs. It does not deploy `swiftbackend`. |
 
@@ -163,7 +163,7 @@ These do not require the missing fetcher source.
 
 ## Code that is still missing after a successful export
 
-- Maps ingest, the `travel_times` loader and the camera table writers. Weather has a manual loader in git ([`Causeway/load_bigquery.py`](../Causeway/load_bigquery.py)) but no schedule; capturing a scheduled weather job is a deploy like any other. View and BQML SQL lives in [sql/](../sql/); re-export with [sql/bigquery/EXPORT.md](../sql/bigquery/EXPORT.md).
+- Maps ingest, the `travel_times` loader and the camera table writers. Weather has a manual loader in git ([`weather/load_bigquery.py`](../weather/load_bigquery.py)) but no schedule; capturing a scheduled weather job is a deploy like any other. View and BQML SQL lives in [sql/](../sql/); re-export with [sql/bigquery/EXPORT.md](../sql/bigquery/EXPORT.md).
 - Layer B numbers are published in [evaluation.md](evaluation.md) from [`eval/runs/report/`](../eval/runs/report/). The scorers run manually; CI (GitHub Actions) runs tests only and never queries BigQuery.
 
 ## gcloud on a Windows dev box

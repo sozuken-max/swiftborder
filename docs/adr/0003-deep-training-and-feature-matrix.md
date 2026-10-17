@@ -99,7 +99,7 @@ Same rows. Joining the profile must not drop rows and must not move the boundary
 
 Direction is `MY_TO_SG` only. The congestion history cache `eval/data/cam2701_congestion_10min.csv` is already on this machine, so the profile does not need a new query. A read-only refresh of `cam2701.v_congestion_index_10min` is allowed if that file is missing. It is still March-April counts, not September detections.
 
-**Observed counts are not an arm.** Detections in BigQuery end on 22 Apr 2026. The Maps label starts on 5 Sep. Raw 2701 frames for 6-11 Sep have no detections until the Roboflow backfill in [handoff-camera-pilot.md](../handoff-camera-pilot.md) (`backfill_camera_counts.py --mode full --start 2026-09-06 --end 2026-09-11`, about 864 calls). That overlap is the first place a live count could be tested. It is blocked until the key holder runs it.
+**Observed counts are not an arm.** Detections in BigQuery end on 22 Apr 2026. The Maps label starts on 5 Sep. Raw 2701 frames for 6-11 Sep have no detections until the Roboflow backfill in [handoff-camera-pilot.md](../archive/handoff-camera-pilot.md) (`backfill_camera_counts.py --mode full --start 2026-09-06 --end 2026-09-11`, about 864 calls). That overlap is the first place a live count could be tested. It is blocked until the key holder runs it.
 
 ## What the trees run
 
@@ -163,7 +163,7 @@ Also skipped: db4, a second split, more than three deep seeds, both directions, 
 | camfc and camfc+mpfc arms | Maps cache plus `eval/data/cam2701_congestion_10min.csv` (present; Mar-Apr profile) | Can run |
 | Importance, including the noise column | Training rows of that frame | Can run |
 | New LSTM cells | Only after that importance | Can run locally, maybe zero cells |
-| Observed September counts as a feature | Roboflow backfill, especially 6-11 Sep | Blocked ([handoff-camera-pilot.md](../handoff-camera-pilot.md)) |
+| Observed September counts as a feature | Roboflow backfill, especially 6-11 Sep | Blocked ([handoff-camera-pilot.md](../archive/handoff-camera-pilot.md)) |
 | A significance claim on this hold-out | 10 or more day-blocks | Blocked by the length of the series, not by compute |
 
 ## Consequences

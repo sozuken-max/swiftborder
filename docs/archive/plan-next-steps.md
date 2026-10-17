@@ -2,12 +2,12 @@
 
 This plan covers what to do between now and the deadlines, given what has landed since 4 Oct:
 - the horizon study and forecast curve (PR #7);
-- TimesFM 2.5 and FCM + MLP ([evaluation.md §8](evaluation.md#8-timesfm-25-and-fcm--mlp-shared-13-30-sep-window-2026-10-05));
+- TimesFM 2.5 and FCM + MLP ([evaluation.md §8](../evaluation.md#8-timesfm-25-and-fcm--mlp-shared-13-30-sep-window-2026-10-05));
 - Roboflow workflow v6 and count-band congestion labels;
 - `hosting/` in git.
 
 **Fixed dates:**
-- **19 Oct 23:59 SGT:** evaluation data cutoff ([roadmap.md](roadmap.md#evaluation-freeze-decided-2026-10-03)).
+- **19 Oct 23:59 SGT:** evaluation data cutoff ([roadmap.md](../roadmap.md#evaluation-freeze-decided-2026-10-03)).
 - **30 Oct:** weather snapshot decision.
 - **31 Oct:** deliverables.
 
@@ -17,7 +17,7 @@ This plan covers what to do between now and the deadlines, given what has landed
 | --- | --- | --- | --- |
 | Layer B, 30 min | Daily-refit `xgb[maps]` beats persistence (−0.37) and the served mix (−0.27) on 13–30 Sep | `fcm_mlp` + `xgb[maps]` mean (−0.14 vs `xgb[maps]`, formed after scoring); TimesFM ≈ `xgb[maps]` | October confirmation (Run B) |
 | Layer B, 1–24 h | — | `xgb[maps+prof]` beats the profile to 3 h under Holm (5.5 h uncorrected); nothing consistent after | Frozen-run claims for any horizon |
-| Layer A | Image-level count error on 15 frames ([evaluation.md](evaluation.md#layer-a--vision)). `local_counts` overlaps 13–30 Sep | Count bands on the page (14 frames, not a classifier) | mAP, precision, recall, directional count error (`eval/layer_a.py` on a box export) |
+| Layer A | Image-level count error on 15 frames ([evaluation.md](../evaluation.md#layer-a--vision)). `local_counts` overlaps 13–30 Sep | Count bands on the page (14 frames, not a classifier) | mAP, precision, recall, directional count error (`eval/layer_a.py` on a box export) |
 | Demo | API and curve are live and public | Page shows a 5 h curve with no caveats | Hosting deployed from git; browser rehearsal |
 
 The largest open Layer A gap is box metrics and directional count error. Image-level count error and the observed-count join are scored. The largest risk is claiming exploratory Layer B results as findings.
@@ -38,20 +38,20 @@ The largest open Layer A gap is box metrics and directional count error. Image-l
 ### 2. Layer A box scoring (count error is done; boxes still need an export)
 
 1. Export a Roboflow dataset version with a `test` split that none of the candidates trained on. The local YOLO26s was trained on dataset v6, so exclude v6's training images.
-2. Score v6 and `model=local` (and v4 if possible) with [`eval/layer_a.py`](../eval/layer_a.py), recording mAP, precision/recall, count error by direction, and day vs night.
+2. Score v6 and `model=local` (and v4 if possible) with [`eval/layer_a.py`](../../eval/layer_a.py), recording mAP, precision/recall, count error by direction, and day vs night.
    - The local model can be scored offline from `camdetect/models/yolo26s_v6_boxfix.onnx`, with no Roboflow credits.
    - Score it at its served overlap setting (0.6), and with suppression off.
-3. Record the model ids, the dataset version and the overlap setting, and fill the Layer A table in [evaluation.md](evaluation.md#layer-a--vision).
+3. Record the model ids, the dataset version and the overlap setting, and fill the Layer A table in [evaluation.md](../evaluation.md#layer-a--vision).
 4. The 6 Sep–4 Oct local backfill is in `cam2701.local_counts` (4,052 frames). Section 7c is the correlation and the maps-only ablation. A row-level test against `maps+mpfc` is still open.
 5. Check the count bands on the scored frames: do the four labels match a hand label? If not, report them as a display heuristic only.
 
-If the box export is still unscored on 19 Oct, the report keeps mAP, precision, recall and directional count error as pending and uses the 15-frame count table for what it actually measures ([final-report-readiness.md](final-report-readiness.md) §1).
+If the box export is still unscored on 19 Oct, the report keeps mAP, precision, recall and directional count error as pending and uses the 15-frame count table for what it actually measures ([final-report-readiness.md](../final-report-readiness.md) §1).
 
 ### 3. Code for the frozen run (before 19 Oct, so Run A/B only run code that already exists)
 
 - **`horizon_study.py`:** add `--test-start`, `--test-end` and `--data-cutoff`, mirroring `generate_comparison_plots.py`, so H1/H2 can be scored on Run A (13 Sep–19 Oct) and Run B (1–19 Oct). Promote them as a `horizon` component of the run manifest, not as a separate summary.
 - **`fcm_mlp` and the C9 mean in the harness:**
-  - Either call `Causeway/layer_b_fcm_mlp.py` from `eval/ensemble.py` (or a new component), on the same folds and rows, inside the run-wide multiplicity check.
+  - Either call `eval/layer_b_fcm_mlp.py` from `eval/ensemble.py` (or a new component), on the same folds and rows, inside the run-wide multiplicity check.
   - Or run the §8 script on the Run B window from a clean commit and attach its output to the run.
   - The harness route is cleaner.
 - **TimesFM:** keep it as an exploratory comparison. `AI.FORECAST` is a billed BigQuery call, outside the local-only evaluation, and it did not beat `xgb[maps]`. No Run B arm is needed.
@@ -59,13 +59,13 @@ If the box export is still unscored on 19 Oct, the report keeps mAP, precision, 
 
 ### 4. Demo readiness
 
-- Deploy the page from `hosting/` and record which commit is live; today the live site differs from git ([inventory.md](inventory.md)).
+- Deploy the page from `hosting/` and record which commit is live; today the live site differs from git ([inventory.md](../inventory.md)).
 - Rehearse the browser flow and record it, including what the page shows when the API returns 503 (stale data).
 - Apply the page-copy decision from step 1.
 
 ## From 20 Oct
 
-1. **Run A and Run B.** Use the [roadmap](roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt) commands from a clean tree, plus the components added in step 3. Validate and promote both.
+1. **Run A and Run B.** Use the [roadmap](../roadmap.md#frozen-window-run-plan-proposed-2026-10-03-the-team-confirms-before-19-oct-2359-sgt) commands from a clean tree, plus the components added in step 3. Validate and promote both.
 2. **Set `SERVED_SELECTION`** by the ADR 0004 rule.
    - If C9 is confirmed, serving the mix needs a small change to `forecast-api`: fit `fcm_mlp` there, or a precomputed artifact. Estimate half a day; decide only after Run B.
    - If H1/H2 are confirmed, the curve keeps the model to that horizon and the cutoff is set from Run A/B, not from the study.
@@ -76,7 +76,7 @@ If the box export is still unscored on 19 Oct, the report keeps mAP, precision, 
 4. **Weather snapshots:** decide by 30 Oct whether to keep them; they expire 31 Oct 01:41 SGT ([release-pr2.md](release-pr2.md)).
 5. **Report and submission:**
    - write the report;
-   - prepare the submission data package or the access procedure ([final-report-readiness.md](final-report-readiness.md) §9);
+   - prepare the submission data package or the access procedure ([final-report-readiness.md](../final-report-readiness.md) §9);
    - record the video and the individual reflections.
 
 ## What not to start

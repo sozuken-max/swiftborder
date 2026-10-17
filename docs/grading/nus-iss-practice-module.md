@@ -75,9 +75,10 @@ Cloud region layout / multi-region consolidation is **not** what this module sco
 | Graded surface | Where the draft lives |
 | --- | --- |
 | Final report: tools, design, models | [architecture.md](../architecture.md) |
-| Final report: performance | [evaluation.md](../evaluation.md) (30-min production models, joined weather experiment, offline 60-min XGB, deep sequence models, fuzzy traffic level, ensembles and hybrids, all scored with Diebold–Mariano tests and Holm correction; Layer A image-level count error on 15 frames, box metrics pending) |
+| Final report: performance | [evaluation.md](../evaluation.md) (Frozen Evidence Index; 30-min production & local-replica models, joined weather/camera experiments, offline 60-min XGB, deep sequence models, fuzzy traffic level, ensembles & 50/50 `fcm_mlp + xgb[maps]` mix, all scored with Diebold–Mariano tests and Holm correction; Layer A 15-frame count error & notebook IoU-0.5 AP50 in [eval/test-reports/](../../eval/test-reports/README.md)) |
 | Final report: findings and discussion | [findings.md](../findings.md) |
+| Final report readiness & freeze record | [final-report-readiness.md](../final-report-readiness.md) (17 Oct 2026 submission freeze at `199c2e5`) |
 | Evidence appendix | [inventory.md](../inventory.md), a dated copy of project `swiftborder` |
-| Sequence of remaining work | [roadmap.md](../roadmap.md) |
-| Final system | Runnable detection (`camdetect`) plus the served 30-min forecast (`v_forecast_recent`); evaluation harnesses in `eval/` (BQML fixed window on both directions; offline 60-min XGB on one route, `jb_to_woodlands`) |
+| Historical sequence of work | [roadmap.md](../roadmap.md) (superseded by the 17 Oct 2026 freeze) |
+| Final system | Runnable Layer A detection (`camdetect`, Cloud Run `swiftbackend` + `traffic-backfill` Job), Layer B local-model serving (`forecastapi`, Cloud Run `forecast-api`), Maps ingestion (`gmapfetcher`), Firebase web client (`hosting/`), and historical BQML (`v_forecast_recent`); evaluation harnesses in `eval/` and `eval/` |
 | Peer review | Visible git footprint on the owned report sections |

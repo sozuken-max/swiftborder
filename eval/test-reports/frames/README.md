@@ -1,6 +1,6 @@
 # Test frames (camera 2701)
 
-The 15 frames of the Roboflow dataset v6 `test` split, unannotated, 1920 x 1080 JPEG. These are the frames behind every count and box score in the [test report](../README.md). They were not used to train or to select any of the fine-tuned detectors.
+The 15 frames of the Roboflow dataset v6 `test` split, unannotated, 1920 x 1080 JPEG. These are the frames behind every count and box score in the [test report](../README.md). They were not used to train any of the fine-tuned detectors or to select their training checkpoint epoch (note that the comparison notebook's per-model confidence threshold in the artifact table was swept on these 15 frames, whereas the served `model=local` operating point is fixed at `conf=0.20, overlap=0.60`).
 
 **Naming.** `2701_<YYYYMMDD>T<HHMMSS>.jpg`: camera id, then the capture time in SGT. This is the same name as the object in `gs://sg-lta-traffic-cameras/camera_id=2701/month=<YYYY-MM>/`. Roboflow renamed the files on export (`..._jpg.rf.<hash>.jpg`), and that name is what the [notebooks](../notebooks/), `test_counts.csv` and the Drive `test_predictions/` folders use; the table maps one to the other.
 

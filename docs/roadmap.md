@@ -7,7 +7,7 @@
 **Dates (briefing; confirm on Canvas):** first presentation **30 Sep 2026, 18:30–22:30**; final deliverables **31 Oct 2026**.  
 **Rubric:** [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md). Methods, a runnable system, and an honest report are the graded work. Region layout is not.
 
-**Active work plan:** [plan-eval-integrity.md](plan-eval-integrity.md) (evaluation fixes, significance upgrades, joined-feature experiment, Layer A scorer, code hardening). Its task table is the current execution order; the steps below are the report-level milestones.
+**Active work plan:** [plan-eval-integrity.md](archive/plan-eval-integrity.md) (evaluation fixes, significance upgrades, joined-feature experiment, Layer A scorer, code hardening). Its task table is the current execution order; the steps below are the report-level milestones.
 
 The report describes **one system at two depths** (high-level, then detailed). This page is the sequence that gets the empty tables in [evaluation.md](evaluation.md) filled and the claims in [findings.md](findings.md) updated. It is not a second architecture.
 
@@ -20,7 +20,7 @@ The report describes **one system at two depths** (high-level, then detailed). T
 **Before 19 Oct 23:59 SGT, if it is to appear in the report**
 
 1. Score a Roboflow Layer A `test` export with [`eval/layer_a.py`](../eval/layer_a.py) (step 4).
-2. Observed September counts only if the Roboflow key holder runs the backfill before the 19th ([handoff-camera-pilot.md](handoff-camera-pilot.md)). The 6-11 Sep frames already exist. The cutoff does not create them. A read on 2026-10-03: `cam2701` / `cam2702` detection rows end 22 Apr 2026, `traffic_images.metadata` has frames through 11 Sep 2026, `traffic_images.labels` is empty, and no detection overlaps the Maps label.
+2. Observed September counts only if the Roboflow key holder runs the backfill before the 19th ([handoff-camera-pilot.md](archive/handoff-camera-pilot.md)). The 6-11 Sep frames already exist. The cutoff does not create them. A read on 2026-10-03: `cam2701` / `cam2702` detection rows end 22 Apr 2026, `traffic_images.metadata` has frames through 11 Sep 2026, `traffic_images.labels` is empty, and no detection overlaps the Maps label.
 3. Re-promote the existing 30-minute harness on a longer window that still ends at or before the cutoff (step 2). 13 Sep through 19 Oct is 37 calendar days, so that window has more than 10 day-blocks. The published 13-30 Sep window (18 days) already does.
 4. Train deep models on the local machine ([adr/0003](adr/0003-deep-training-and-feature-matrix.md), Accepted). Do not start a GCP training job.
 
@@ -52,7 +52,7 @@ These choices are written down before any October label is scored, so the frozen
 | C6 | `xgb[maps+camfc]` vs `xgb[maps]` | camfc | −0.065, family-level only |
 | C7 | `xgb[maps+camfc]` vs `xgb[maps+mpfc]` (camera beyond the Maps profile) | camfc | −0.007, not significant |
 | C8 | Rolling LAD stack vs `xgb[maps]` (expected: no gain; local-only pool) | ensemble | −0.021, not significant |
-| C9 (proposed 2026-10-08, team confirms before 19 Oct) | Equal mean of `fcm_mlp` and `xgb[maps]` vs `xgb[maps]` (`layer_b_fcm_xgb_mix.py`) | fcm (evaluation.md §8) | −0.143, challenger in its own family (CI [−0.215, −0.087]); implemented in Causeway |
+| C9 (proposed 2026-10-08, team confirms before 19 Oct) | Equal mean of `fcm_mlp` and `xgb[maps]` vs `xgb[maps]` (`layer_b_fcm_xgb_mix.py`) | fcm (evaluation.md §8) | −0.143, challenger in its own family (CI [−0.215, −0.087]); implemented in `eval/` |
 
 `xgb[maps]` stays the "best single" reference (`ensemble.BEST_SINGLE_30`). It is not re-picked on October data.
 
@@ -62,7 +62,7 @@ These choices are written down before any October label is scored, so the frozen
 
 **5. 60-minute offline and deep models: keep the 80/20 split (recommended).** At the cutoff it has about 9 day-blocks, so these decisions stay "insufficient data" by design, consistent with the rule above against inventing a split to clear the threshold. Point estimates are still reported. The alternative is rolling daily folds over 1–19 Oct (19 blocks). It would need new code and roughly 3 CPU hours for the deep models, and it counts only if adopted before the run.
 
-**Commands (on or after 20 Oct, from a clean tree).** First fetch weather to 19 Oct ([Causeway/README.md](../Causeway/README.md)). Then:
+**Commands (on or after 20 Oct, from a clean tree).** First fetch weather to 19 Oct ([weather/README.md](../weather/README.md)). Then:
 
 ```bash
 cd eval
@@ -90,7 +90,7 @@ Neither run uses `--bqml`, so the ensemble pool is local (`ensemble.pool_30_loca
 - `camdetect` runtime changes on `main` run pytest then deploy `swiftbackend` via Cloud Build. Camera 2701 has a dividing line. BigQuery camera tables last moved 18 Jul.
 - Labels live in Roboflow. `traffic_images.labels` is empty. `traffic_images.metadata` is not.
 - Layer B is scored and promoted to [`eval/runs/report/`](../eval/runs/report/): production models at 30 min on 13–30 Sep (`layer_b.py`), the joined weather experiment (`joined.py`), and offline 60-min XGBoost (`timeseries_xgb.py`), all with significance tests (Diebold–Mariano on error differences, Holm correction across models). Numbers are in [evaluation.md](evaluation.md).
-- Weather history for 5–30 Sep is fetched (`Causeway/`) and appended to BigQuery; weather gave no significant gain. The Layer A box scorer exists (`eval/layer_a.py`). Image-level count error on 15 frames is in [evaluation.md](evaluation.md#layer-a--vision). mAP and directional count error are not scored.
+- Weather history for 5–30 Sep is fetched (`eval/`) and appended to BigQuery; weather gave no significant gain. The Layer A box scorer exists (`eval/layer_a.py`). Image-level count error on 15 frames is in [evaluation.md](evaluation.md#layer-a--vision). mAP and directional count error are not scored.
 - Also scored in `report/`: LSTM, GRU and a patch Transformer at 60 min (none beats XGBoost), a fuzzy light / moderate / heavy forecast (the XGB → fuzzy hybrid is best), and ensembles / hybrids of the 30-min models (no gain over a daily-refit XGBoost, which beats the served forecast).
 - Report drafts exist: design, evaluation, findings, inventory (latest verification 2026-10-17).
 
@@ -182,7 +182,7 @@ The eval sequence above does not by itself put the deployed fetcher or the forec
 | Gap | Why it matters | What to do |
 | --- | --- | --- |
 | No `cloudbuild.yaml` in git | The `swiftbackend` trigger is inline in Cloud Build. It runs **pytest** before deploy; `includedFiles` is runtime paths only (not test-only files). | Treat the live trigger as the source of truth (`gcloud builds triggers describe 76bbca35-c1b4-4836-9f34-d7adda53ea17 --project=swiftborder`). Behavior is documented in [camdetect/README.md](../camdetect/README.md). History: [CHANGELOG.md](../CHANGELOG.md). Do not add a second trigger. |
-| Weather load is manual | `Causeway/load_bigquery.py` appends to `rainfall` / `weatherforecast` (snapshot first, refuses overlaps). Nothing schedules it, and the original pipeline that filled the tables to 31 Aug is still outside the repo. | Re-run fetchers plus the loader before a report refresh. Add a Cloud Run job or Scheduler only as an approved deploy. |
+| Weather load is manual | `weather/load_bigquery.py` appends to `rainfall` / `weatherforecast` (snapshot first, refuses overlaps). Nothing schedules it, and the original pipeline that filled the tables to 31 Aug is still outside the repo. | Re-run fetchers plus the loader before a report refresh. Add a Cloud Run job or Scheduler only as an approved deploy. |
 | Direction names differ | `camdetect` emits `SG-MY` / `MY-SG`. The congestion view expects `to_JB` / `to_Woodlands` and emits `SG_TO_MY` / `MY_TO_SG`. | Map them in the join (step 5). Do not treat the strings as already aligned. |
 | Camera 2701 line only | 2702 detections become `Unknown`. | Add a line only after it is calibrated on a real frame. |
 

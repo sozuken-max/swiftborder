@@ -1,9 +1,9 @@
 # Work plan: evaluation integrity, hardening, and joined-feature experiment
 
 **Status:** complete except Task 9 (camera backfill, handed off) and regeneration of the deck PNGs. Delivered in PR #2 (`eval-integrity-overhaul`). **Owner:** Evaluation & Risk. **Target:** final report, 31 Oct 2026.
-**Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](inventory.md) is the dated copy).
+**Source of truth for live resources:** GCP project `swiftborder` ([inventory.md](../inventory.md) is the dated copy).
 
-This plan comes from a full-repo review against a read-only query of `swiftborder` on **2026-09-30 ~21:35 SGT**. It corrects evaluation bugs, hardens ingest and detection code, upgrades significance testing, and adds the experiments the report needs. The Status column is updated as work lands. Results enter [evaluation.md](evaluation.md) only from a promoted [`eval/runs/report/run.json`](../eval/runs/report/run.json).
+This plan comes from a full-repo review against a read-only query of `swiftborder` on **2026-09-30 ~21:35 SGT**. It corrects evaluation bugs, hardens ingest and detection code, upgrades significance testing, and adds the experiments the report needs. The Status column is updated as work lands. Results enter [evaluation.md](../evaluation.md) only from a promoted [`eval/runs/report/run.json`](../../eval/runs/report/run.json).
 
 ## Problems found
 
@@ -34,19 +34,19 @@ This plan comes from a full-repo review against a read-only query of `swiftborde
 
 ## Verified background (2026-09-30 ~21:35 SGT, read-only)
 
-Dated facts that shaped the plan. Current counts are in [inventory.md](inventory.md).
+Dated facts that shaped the plan. Current counts are in [inventory.md](../inventory.md).
 
 - `lin_h30` (created 2026-09-12 06:15 UTC) and `xgb_h30` (06:19 UTC) were never retrained. Both use a CUSTOM split on `is_val` (11–12 Sep). BQML internal eval MAE 3.04 / 2.87 is not harness output. **Every date from 13 Sep is out-of-sample.**
-- `v_training_set`: `LEAD(bin_ts, 3)` is exactly 30 min on every row (0 exceptions of 3,572 per direction). `route_id` to `direction` is 1:1. 7,144 labelled rows, 2026-09-05 17:50 to 2026-09-30 13:00 UTC. Live `v_training_set` and `v_forecast_recent` match [sql/](../sql/).
+- `v_training_set`: `LEAD(bin_ts, 3)` is exactly 30 min on every row (0 exceptions of 3,572 per direction). `route_id` to `direction` is 1:1. 7,144 labelled rows, 2026-09-05 17:50 to 2026-09-30 13:00 UTC. Live `v_training_set` and `v_forecast_recent` match [sql/](../../sql/README.md).
 - `causeway.travel_times`: 14,296 rows (7,148 per direction), 2026-09-05 17:53 to 2026-09-30 13:35 UTC.
-- Frozen stores: `Cam2701` / `Cam2702` last modified 18 Jul; `rainfall` / `weatherforecast` last modified 3 Sep with data to 31 Aug SGT. None overlaps `travel_times`, so the join needs a backfill. (Weather superseded on 1 Oct: Woodlands rows for 1–30 Sep appended with `Causeway/load_bigquery.py`.) Those datasets are in `asia-southeast1`; `causeway` and `traffic_prediction` are in `US`, so a BigQuery join is not possible without copying data.
+- Frozen stores: `Cam2701` / `Cam2702` last modified 18 Jul; `rainfall` / `weatherforecast` last modified 3 Sep with data to 31 Aug SGT. None overlaps `travel_times`, so the join needs a backfill. (Weather superseded on 1 Oct: Woodlands rows for 1–30 Sep appended with `weather/load_bigquery.py`.) Those datasets are in `asia-southeast1`; `causeway` and `traffic_prediction` are in `US`, so a BigQuery join is not possible without copying data.
 - `swiftbackend` (`europe-west1`, revision `swiftbackend-00023-f8g`, commit e49b232): IAM invoker check disabled, ingress `all`, `ALLOWED_ORIGIN` unset (CORS `*`), `ROBOFLOW_API_KEY` a plain env var, `CACHE_BUCKET` set but not read by `camdetect`. Any caller can trigger billed inference.
-- Bucket names are exact in [inventory.md](inventory.md); the Cloud Build bucket is `swiftborder_cloudbuild`.
+- Bucket names are exact in [inventory.md](../inventory.md); the Cloud Build bucket is `swiftborder_cloudbuild`.
 - Roboflow free tier has no overage billing. When included credits run out, calls fail until the monthly reset. The per-image hosted-inference credit cost is ambiguous in Roboflow's docs, so it is measured with a pilot. Weight download (self-hosting) is Core-only.
 
 ## Method choices
 
-- **Significance:** Diebold–Mariano with Newey–West variance and the Harvey–Leybourne–Newbold correction, a day-block bootstrap within direction, Holm correction, and an "insufficient data" rule below 10 day-blocks. The single description (with references) is [evaluation.md → Significance](evaluation.md#significance); the review on 2026-10-01 tightened it (two-sided Holm, HAC lag of at least one day).
+- **Significance:** Diebold–Mariano with Newey–West variance and the Harvey–Leybourne–Newbold correction, a day-block bootstrap within direction, Holm correction, and an "insufficient data" rule below 10 day-blocks. The single description (with references) is [evaluation.md → Significance](../evaluation.md#significance); the review on 2026-10-01 tightened it (two-sided Holm, HAC lag of at least one day).
 - **Features:** causal only; every input is available at or before the forecast origin.
 
 ## Design
@@ -118,6 +118,6 @@ One significance module and one manifest schema serve every harness. Doc result 
 | Risk | Handling |
 | --- | --- |
 | Roboflow credits run out | Budgeted, resumable backfill; "+camera" row marked insufficient if coverage is thin. |
-| Corrected offline numbers lose the headline "win" | Report what the harness shows. Negative results go in [findings.md](findings.md). |
+| Corrected offline numbers lose the headline "win" | Report what the harness shows. Negative results go in [findings.md](../findings.md). |
 | A `camdetect` fix is pushed to `main` | Push only on approval; the trigger redeploys `swiftbackend`. |
 | Public `swiftbackend` is abused | Documented risk (decision above); lock-down is a separate, approved change. |

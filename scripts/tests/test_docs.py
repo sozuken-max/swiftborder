@@ -101,7 +101,7 @@ BANNED = {
     "architecture-as-is.png": "renamed to architecture-high-level.png",
     "dataflow-as-is.png": "renamed to architecture-detailed.png",
 }
-BANNED_EXEMPT = {"docs/plan-eval-integrity.md", "docs/diagrams/README.md", "CHANGELOG.md"}
+BANNED_EXEMPT = {"docs/archive/plan-eval-integrity.md", "docs/diagrams/README.md", "CHANGELOG.md"}
 
 
 def _doc_files() -> List[Path]:

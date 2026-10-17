@@ -2,7 +2,7 @@
 
 This file is the modules' own day-disjoint split (fit through 18 Sep, test 26-30 Sep), not the comparison with `xgb[maps]`. The fair 13-30 Sep daily-refit scores are in [docs/evaluation.md](../docs/evaluation.md) section 8. The 25 Sep TimesFM fit is not that comparison.
 
-Produced on 4 Oct 2026 by the `train` logic of [`layer_b_fcm_mlp.py`](layer_b_fcm_mlp.py) on the BigQuery view `traffic_prediction.v_bins_10min`, 3,589 ten-minute bins per direction. No October labels were used (the protected window 1–19 Oct was respected).
+Produced on 4 Oct 2026 by the `train` logic of [`layer_b_fcm_mlp.py`](../eval/layer_b_fcm_mlp.py) on the BigQuery view `traffic_prediction.v_bins_10min`, 3,589 ten-minute bins per direction. No October labels were used (the protected window 1–19 Oct was respected).
 
 ## Protocol
 - **Model:** Fuzzy C-Means (c = 3, m = 2) on travel time now, its 30-minute change and yesterday's change over the coming hour. The membership degrees, plus lag, D-1/D-7 and calendar features, feed an MLP (32-16 ReLU, Adam). Each model is an average of 5 networks with different seeds, predicting the change at 10–60 minutes.

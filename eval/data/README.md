@@ -9,7 +9,7 @@ Everything under `eval/data/` except this README and `.gitkeep` is gitignored.
 | `camera/cam2701_counts.csv` | `backfill_camera_counts.py` | Camera 2701 counts per sampled bin (append-only, resumable) |
 | `layer_a/` | you | Drop a Roboflow export here (COCO `_annotations.coco.json` or YOLO `labels/` + `images/`) for `layer_a.py` |
 
-Weather CSVs live in `Causeway/data/` (see [Causeway/README.md](../../Causeway/README.md)).
+Weather CSVs live in `weather/data/` (see [eval/README.md](../../eval/README.md)).
 
 ## Refresh the Maps export
 

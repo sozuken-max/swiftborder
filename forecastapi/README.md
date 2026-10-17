@@ -30,7 +30,7 @@ A blend point (not what `served` returns) looks like `"model": "mean[models]"` p
 
 ## Model cards
 
-`GET /?list=cards` (same body as `GET /?view=cards`) returns a JSON array the frontend can render as cards. `GET /?list=models` is unchanged. A card's `callable` flag matches the forecast allow-list. `timesfm` and `fcm_mlp` are on the cards only: the modules are in `Causeway/` and this API does not call them.
+`GET /?list=cards` (same body as `GET /?view=cards`) returns a JSON array the frontend can render as cards. `GET /?list=models` is unchanged. A card's `callable` flag matches the forecast allow-list. `timesfm` and `fcm_mlp` are on the cards only: the modules are in `eval/` and this API does not call them.
 
 ```json
 [

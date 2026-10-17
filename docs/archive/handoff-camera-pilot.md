@@ -1,8 +1,8 @@
 # Handoff: camera 2701 count backfill (Roboflow pilot)
 
 **Owner:** the team member who holds the Roboflow workspace key (`chads-workspace-t3qcz`). **Not** run by the Evaluation & Risk owner or an agent: the key is not shared, and the run spends the team's free-tier credits.
-**Status:** code and tests done ([`eval/backfill_camera_counts.py`](../eval/backfill_camera_counts.py)); pilot **not run**. Tracked as Task 9 in [plan-eval-integrity.md](plan-eval-integrity.md).
-**Why it matters:** the joined experiment ([evaluation.md §2](evaluation.md#2-joined-features-30-minutes-evaljoinedpy)) has a "Maps + weather + camera" row that stays `pending` until camera counts exist for 5–30 Sep. It is the only test of the proposal's claim that queue depth helps the forecast: the Layer A output already in BigQuery covers 13 Mar–22 Apr 2026 and does not overlap the Maps label ([evaluation.md §7](evaluation.md#7-is-layer-a-output-a-meaningful-layer-b-input)).
+**Status:** code and tests done ([`eval/backfill_camera_counts.py`](../../eval/backfill_camera_counts.py)); pilot **not run**. Tracked as Task 9 in [plan-eval-integrity.md](plan-eval-integrity.md).
+**Why it matters:** the joined experiment ([evaluation.md §2](../evaluation.md#2-joined-features-30-minutes-evaljoinedpy)) has a "Maps + weather + camera" row that stays `pending` until camera counts exist for 5–30 Sep. It is the only test of the proposal's claim that queue depth helps the forecast: the Layer A output already in BigQuery covers 13 Mar–22 Apr 2026 and does not overlap the Maps label ([evaluation.md §7](../evaluation.md#7-is-layer-a-output-a-meaningful-layer-b-input)).
 
 ## What the script does
 
@@ -33,12 +33,12 @@ Windows PowerShell, from the repo root, Python 3.11.
    ..\.venv\Scripts\python.exe backfill_camera_counts.py --coverage
    ```
 5. **Record the Credit Usage page again** and compute credits per call = (after − before) / 50.
-6. **Optional first target: 6–11 Sep.** These frames overlap the Maps label and are the cheapest test of whether camera counts track travel time at all ([evaluation.md §7b](evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)). All bins, about 864 calls:
+6. **Optional first target: 6–11 Sep.** These frames overlap the Maps label and are the cheapest test of whether camera counts track travel time at all ([evaluation.md §7b](../evaluation.md#7b-could-layer-a-output-replace-the-distance-matrix-data)). All bins, about 864 calls:
    ```powershell
    ..\.venv\Scripts\python.exe backfill_camera_counts.py --mode full --start 2026-09-06 --end 2026-09-11 --max-calls <budget>
    ```
    Note foggy, hazy or dark frames in the report-back table if you see them: they score as zero vehicles, not as missing.
-7. **Decide the budget.** Calls affordable this cycle = remaining credits / credits per call. Leave headroom for demos of `swiftbackend`, which is public and draws on the same credits ([findings.md](findings.md#known-risk-public-swiftbackend-documented-not-changed)). Then run with a cap:
+7. **Decide the budget.** Calls affordable this cycle = remaining credits / credits per call. Leave headroom for demos of `swiftbackend`, which is public and draws on the same credits ([findings.md](../findings.md#known-risk-public-swiftbackend-documented-not-changed)). Then run with a cap:
    ```powershell
    ..\.venv\Scripts\python.exe backfill_camera_counts.py --max-calls <budget>
    ```
@@ -72,7 +72,7 @@ cd eval
 
 Do not add `--refresh-bq`: it re-downloads `travel_times` past the report cut, so the offline numbers would change for a reason unrelated to the camera.
 
-`joined.py` scores the "+camera" models only on test rows with a camera value and reports coverage. Below 60% of test rows the row is marked **insufficient** and must not be quoted as a result. Then update the camera row in [evaluation.md](evaluation.md) and findings item 5 in [findings.md](findings.md).
+`joined.py` scores the "+camera" models only on test rows with a camera value and reports coverage. Below 60% of test rows the row is marked **insufficient** and must not be quoted as a result. Then update the camera row in [evaluation.md](../evaluation.md) and findings item 5 in [findings.md](../findings.md).
 
 ## Do not
 
