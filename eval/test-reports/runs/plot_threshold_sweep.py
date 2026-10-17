@@ -28,7 +28,7 @@ NOTEBOOK = os.path.join(HERE, "..", "notebooks", "vehicle_detection_comparison.i
 NAMES = {"yolo26s": "YOLO-S (served)", "yolo26m": "YOLO-M"}
 COLORS = {"yolo26s": "#2a78d6", "yolo26m": "#eb6834"}  # categorical slots 1, 2
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
-CHOSEN, SERVED = 0.30, 0.20
+CHOSEN = 0.30
 
 
 def parse_sweep():
@@ -94,9 +94,7 @@ SPLIT = "test"
 
 def mark_thresholds(ax, top):
     ax.axvline(CHOSEN, color=INK, lw=1, ls=":")
-    ax.axvline(SERVED, color=MUTED, lw=1, ls=":")
     ax.text(CHOSEN, top, " 0.30 chosen", fontsize=8.5, color=INK, va="top")
-    ax.text(SERVED, top, " 0.20 served\n (+ overlap 0.6)", fontsize=8.5, color=MUTED, va="top")
 
 
 # 1. Precision vs recall, one point per confidence threshold; PR-AUC from the full curve
@@ -147,7 +145,7 @@ for model in NAMES:
     pct = [x * 100 for x in ratio]
     ax.plot(conf, pct, color=COLORS[model], lw=2, marker="o", ms=5, label=NAMES[model])
     for c, v in zip(conf, pct):
-        if c in (SERVED, CHOSEN):
+        if c == CHOSEN:
             ax.annotate(f"{v:.0f}%", (c, v), xytext=(8, 2 if model == "yolo26s" else -12),
                         textcoords="offset points", fontsize=9, color=COLORS[model], fontweight="bold")
 mark_thresholds(ax, 152)
@@ -158,9 +156,6 @@ ax.set_ylabel("Predicted cars as % of labelled cars")
 ax.set_title("Total count as % of ground truth (451 cars)", loc="left")
 
 fig.suptitle("Choosing the confidence threshold: cars on the test split (15 frames, 451 labelled cars)",
-             x=0.08, ha="left", fontsize=14, fontweight="bold", color=INK, y=1.04)
-fig.text(0.08, 0.955, "Points: the notebook's sweep at 7 thresholds (IoU 0.5, no overlap suppression). PR-AUC: area "
-         "under the full car precision-recall curve from the notebook's comparison cell. Ringed = conf 0.30.",
-         fontsize=9.5, color=MUTED)
+             x=0.08, ha="left", fontsize=14, fontweight="bold", color=INK, y=1.0)
 fig.savefig(os.path.join(HERE, "threshold_sweep.png"), dpi=150, bbox_inches="tight", facecolor=SURFACE)
 print(f"wrote threshold_sweep.csv ({len(rows)} rows) and threshold_sweep.png; car PR-AUC {CAR_AP}")
