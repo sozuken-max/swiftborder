@@ -96,9 +96,9 @@ def main() -> None:
         print(image["t"], "cars", cars, "gt", image["gt"]["cars"])
 
     summary = {
-        "cars": mae_rows(frames, "cars", nested=False),
-        "veh": mae_rows(frames, "veh", nested=False),
-        "cars_day_night": day_night_slice(frames, "cars", nested=False),
+        "cars": mae_rows(frames, "cars", "cars", nested=False),
+        "veh": mae_rows(frames, "veh", "veh", nested=False),
+        "cars_day_night": day_night_slice(frames, "cars", "cars", nested=False),
     }
     payload = {
         "run": run_provenance(

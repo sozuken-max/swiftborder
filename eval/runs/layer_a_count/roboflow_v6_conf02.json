@@ -25,10 +25,10 @@
       "n": 15
     },
     "veh": {
-      "mae": 6.07,
-      "bias": 0.2,
-      "exact": 0,
-      "within_2": 5,
+      "mae": 6.27,
+      "bias": -6.13,
+      "exact": 3,
+      "within_2": 8,
       "n": 15
     },
     "cars_day_night": {
