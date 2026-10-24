@@ -67,3 +67,33 @@ test('null speed stays null', () => {
 test('empty input', () => {
   assert.deepEqual(fillMidpoints([]), []);
 });
+
+test('20-min points get three 5-min points; older 10-min history keeps its midpoint', () => {
+  const out = fillMidpoints(
+    [
+      ['2026-10-24T11:50', 1000, 20],
+      ['2026-10-24T12:00', 1200, 18],
+      ['2026-10-24T12:20', 1600, 14],
+    ],
+    { gapMin: 20 }
+  );
+  assert.deepEqual(
+    out.map((p) => [p[0], p[1], p[3]]),
+    [
+      ['2026-10-24T11:50', 1000, false],
+      ['2026-10-24T11:55', 1100, true],
+      ['2026-10-24T12:00', 1200, false],
+      ['2026-10-24T12:05', 1300, true],
+      ['2026-10-24T12:10', 1400, true],
+      ['2026-10-24T12:15', 1500, true],
+      ['2026-10-24T12:20', 1600, false],
+    ]
+  );
+});
+
+test('with gapMin 20, a 21-min gap is filled and a 25-min gap is not', () => {
+  const a = fillMidpoints([['2026-10-24T12:00', 1000, 20], ['2026-10-24T12:21', 2050, 10]], { gapMin: 20 });
+  assert.equal(a.length, 5);
+  const b = fillMidpoints([['2026-10-24T12:00', 1000, 20], ['2026-10-24T12:25', 2000, 10]], { gapMin: 20 });
+  assert.equal(b.length, 2);
+});
