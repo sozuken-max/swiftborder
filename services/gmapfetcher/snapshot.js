@@ -11,10 +11,11 @@ function formatMinute(ms) {
   return new Date(ms).toISOString().slice(0, 16);
 }
 
-// Real points arrive every 10 min. Between two real points 9-11 min apart (10 min, with a 1-min margin
-// for a run that slips across a minute boundary), add the straight-line point 5 min after the earlier
-// one so the website keeps its 5-min grid. Midpoints exist only in the JSON, never in BigQuery.
-// Points are [t, sec, speed_kmh, interpolated]. The newest point is always real.
+// Real points arrive every `gapMin` minutes (FETCH_INTERVAL_MIN). Between two real points whose gap is
+// within 1 min of a multiple of 5 min, from 10 min up to `gapMin` (a run can slip across a minute
+// boundary), add straight-line points every 5 min after the earlier one so the website keeps its 5-min
+// grid; older 10-min history is filled too when `gapMin` is 20. Points exist only in the JSON, never in
+// BigQuery. Points are [t, sec, speed_kmh, interpolated]. The newest point is always real.
 export function fillMidpoints(points, { gapMin = 10, marginMin = 1, stepMin = 5 } = {}) {
   const out = [];
   for (let i = 0; i < points.length; i++) {
@@ -22,16 +23,19 @@ export function fillMidpoints(points, { gapMin = 10, marginMin = 1, stepMin = 5 
     if (i > 0) {
       const prev = points[i - 1];
       const gap = (parseMinute(p[0]) - parseMinute(prev[0])) / MINUTE_MS;
-      if (Math.abs(gap - gapMin) <= marginMin) {
-        const frac = stepMin / gap;
-        const lerp = (a, b, digits) =>
-          a == null || b == null ? null : +(a + (b - a) * frac).toFixed(digits);
-        out.push([
-          formatMinute(parseMinute(prev[0]) + stepMin * MINUTE_MS),
-          lerp(prev[1], p[1], 0),
-          lerp(prev[2], p[2], 2),
-          true,
-        ]);
+      const n = Math.round(gap / stepMin);
+      if (n >= 2 && n * stepMin <= gapMin && Math.abs(gap - n * stepMin) <= marginMin) {
+        for (let k = 1; k < n; k++) {
+          const frac = (k * stepMin) / gap;
+          const lerp = (a, b, digits) =>
+            a == null || b == null ? null : +(a + (b - a) * frac).toFixed(digits);
+          out.push([
+            formatMinute(parseMinute(prev[0]) + k * stepMin * MINUTE_MS),
+            lerp(prev[1], p[1], 0),
+            lerp(prev[2], p[2], 2),
+            true,
+          ]);
+        }
       }
     }
     out.push([p[0], p[1], p[2], false]);

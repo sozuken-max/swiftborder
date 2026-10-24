@@ -3,38 +3,53 @@
 Source of the Cloud Run service `gmap-woodlands-fetcher` (`asia-southeast1`), copied from the
 console **Source** tab on 2026-10-13. Node.js 22, function entry point `fetchTravelTimes`.
 
-Every run (Cloud Scheduler `Gmap-Woodlands`, every 10 minutes since 2026-10-13; every 5 before):
+Every run (Cloud Scheduler `Gmap-Woodlands`; every 5 minutes until 2026-10-13, then every 10; this code
+expects every 20, set by `FETCH_INTERVAL_MIN`):
 
 1. Calls the Google Maps Distance Matrix API (`traffic_model: best_guess`) for two Woodlands routes:
    `mandai_to_shell_jb` (`SG_TO_MY`) and `jb_to_woodlands` (`MY_TO_SG`).
 2. Streams one row per route into BigQuery `causeway.travel_times` (failed calls are kept with a
-   non-`OK` `status`).
+   non-`OK` `status`), plus the carried-forward rows below.
 3. Rebuilds the last-24 h snapshot `gs://swiftborder-public/traffic-24h.json` that `hosting/` reads.
    A snapshot failure does not fail the run.
 
-## 10-minute fetch, 5-minute snapshot
+## 20-minute fetch, 10-minute bins, 5-minute snapshot
 
-To halve Distance Matrix calls, the fetcher runs every 10 minutes. BigQuery gets **real rows
-only**. `traffic_prediction.v_bins_10min` (read by `forecast-api` and the eval harness) already
-averages into 10-minute bins, so each bin simply holds one observation instead of two.
+The fetcher runs every `FETCH_INTERVAL_MIN` minutes (default 20, a multiple of 10) to stay within the
+Distance Matrix free tier. Everything downstream still expects **one row per route in every 10-minute
+bin**: `v_bins_10min`, the positional `LAG`/`LEAD` in `v_training_set`, and the time-based lags and
+labels in `forecast-api` (`y_30` is three bins ahead, so with 20-minute rows only it would always land on
+an empty bin and no 30-minute model could be fitted).
 
-The JSON snapshot keeps the website's 5-minute grid: between two real points 9-11 minutes apart
-(10 min with a 1-minute margin), `snapshot.js` adds the straight-line value 5 minutes after the
-earlier point (duration rounded to whole seconds, speed to
-2 dp). Each point is `[datetime_sgt, duration_in_traffic_sec, speed_kmh, interpolated]`; the newest
-point is always real. Older 5-minute history and longer gaps are left as they are.
+So each run at T also writes, for every `OK` route, a **carried-forward** copy of the same reading at
+T+10 (T+10 and T+20 at 30 minutes; none at 10). It is a normal `status = 'OK'` row with
+`error_message = 'carried_forward from <T>'`. It uses only the reading at T, so no bin ever holds a later
+observation, and it is in BigQuery before its bin opens. A failed call is not carried, so a failed run
+leaves its bins empty, as before. To drop carried rows from a query:
+`NOT STARTS_WITH(IFNULL(error_message, ''), 'carried_forward')`.
 
-Interpolated rows are deliberately **not** written to BigQuery: a 12:05 midpoint is computed from
-the 12:10 reading, so it would leak a later observation into the 12:00 bin and change that bin
-after `forecast-api` had already read it.
+Caveat for evaluation: from the switch on, half the 10-minute bins (and half the `y_30` labels) are
+copies of the previous bin. Persistence is exactly right on those bins, so MAE measured on data after
+the switch is not comparable with the 5/10-minute period unless carried rows are filtered out.
 
-Tests: `npm test` (Node's built-in runner, no install needed for `test/snapshot.test.js`).
+The JSON snapshot skips carried rows and keeps the website's 5-minute grid: between two real points
+whose gap is within 1 minute of 10, 15 or 20 minutes (up to `FETCH_INTERVAL_MIN`), `snapshot.js` adds
+straight-line points every 5 minutes (duration rounded to whole seconds, speed to 2 dp). Each point is
+`[datetime_sgt, duration_in_traffic_sec, speed_kmh, interpolated]`; the newest point is always real.
+5-minute history and longer gaps are left as they are.
+
+Interpolated points are deliberately **not** written to BigQuery: a 12:05 point is computed from the
+12:20 reading, so it would leak a later observation into an earlier bin and change that bin after
+`forecast-api` had already read it.
+
+Tests: `npm test` (Node's built-in runner, no install needed for `test/`).
 
 ## Configuration (names only; values live in Cloud Run)
 
 | Env var | Default |
 | --- | --- |
 | `GOOGLE_MAPS_API_KEY` | none, required |
+| `FETCH_INTERVAL_MIN` | `20` (must match the scheduler) |
 | `BQ_DATASET` / `BQ_TABLE` | `causeway` / `travel_times` |
 | `BQ_LOCATION` | `US` |
 | `SNAPSHOT_BUCKET` / `SNAPSHOT_OBJECT` | `swiftborder-public` / `traffic-24h.json` |

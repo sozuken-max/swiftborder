@@ -4,6 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-10-24
 
+- `gmapfetcher/` 1.3.0: built for a 20-minute fetch (`FETCH_INTERVAL_MIN`, default 20; Scheduler `Gmap-Woodlands` must be set to `*/20` in the console) to fit the Distance Matrix free tier. Each run also writes a carried-forward copy of each `OK` reading at T+10 (`error_message` starts with `carried_forward`), so every 10-minute bin still has a row and `v_bins_10min`, `v_training_set` and `forecast-api` are unchanged. `traffic-24h.json` skips carried rows and fills 5-minute points between real points up to 20 min apart. From the switch on, half the bins are copies: filter them before comparing MAE across periods.
 - Final-report readiness now states the Word-report structure, the four research questions, and the canonical figures, following the academic review of `PRS-Practice-Module-Group-3-Project-Report.docx`. No new experiment.
 
 ## 2026-10-17

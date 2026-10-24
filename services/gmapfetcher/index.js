@@ -3,6 +3,7 @@ import { Client } from '@googlemaps/google-maps-services-js';
 import { BigQuery } from '@google-cloud/bigquery';
 import { Storage } from '@google-cloud/storage';
 import { fillMidpoints } from './snapshot.js';
+import { CARRY_TAG, carryForward, parseInterval, toSgtParts } from './carry.js';
 
 const MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const BQ_DATASET = process.env.BQ_DATASET || 'causeway';
@@ -10,6 +11,8 @@ const BQ_TABLE = process.env.BQ_TABLE || 'travel_times';
 const BQ_LOCATION = process.env.BQ_LOCATION || 'US';
 const SNAPSHOT_BUCKET = process.env.SNAPSHOT_BUCKET || 'swiftborder-public';
 const SNAPSHOT_OBJECT = process.env.SNAPSHOT_OBJECT || 'traffic-24h.json';
+// Must match the Cloud Scheduler `Gmap-Woodlands` cadence.
+const FETCH_INTERVAL_MIN = parseInterval(process.env.FETCH_INTERVAL_MIN);
 
 const maps = new Client({});
 const bigquery = new BigQuery();
@@ -31,12 +34,6 @@ const ROUTES = [
     destination: { lat: 1.4401375461664851, lng: 103.76842889302142 },
   },
 ];
-
-// SGT is UTC+8, no DST, so a fixed offset is safe.
-function toSgtParts(date) {
-  const iso = new Date(date.getTime() + 8 * 3600 * 1000).toISOString();
-  return { datetime: iso.slice(0, 19), date: iso.slice(0, 10) };
-}
 
 function baseRow(route, observedAt) {
   const sgt = toSgtParts(observedAt);
@@ -126,6 +123,7 @@ async function writeSnapshot(observedAt) {
     WHERE observed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
       AND status = 'OK'
       AND duration_in_traffic_sec IS NOT NULL
+      AND NOT STARTS_WITH(IFNULL(error_message, ''), '${CARRY_TAG}')
     ORDER BY observed_at
   `;
 
@@ -139,7 +137,7 @@ async function writeSnapshot(observedAt) {
     if (!series[row.route_id]) continue;
     series[row.route_id].points.push([row.t, row.sec, row.speed_kmh]);
   }
-  for (const s of Object.values(series)) s.points = fillMidpoints(s.points);
+  for (const s of Object.values(series)) s.points = fillMidpoints(s.points, { gapMin: FETCH_INTERVAL_MIN });
 
   const payload = {
     updated_at_sgt: toSgtParts(observedAt).datetime,
@@ -167,9 +165,10 @@ http('fetchTravelTimes', async (req, res) => {
 
   const observedAt = new Date();
   const rows = await Promise.all(ROUTES.map((r) => fetchRoute(r, observedAt)));
+  const carried = carryForward(rows, FETCH_INTERVAL_MIN);
 
   try {
-    await bigquery.dataset(BQ_DATASET).table(BQ_TABLE).insert(rows);
+    await bigquery.dataset(BQ_DATASET).table(BQ_TABLE).insert([...rows, ...carried]);
   } catch (err) {
     const detail = err?.errors
       ? JSON.stringify(err.errors).slice(0, 2000)
@@ -196,6 +195,7 @@ http('fetchTravelTimes', async (req, res) => {
       observed_at: observedAt.toISOString(),
       inserted: rows.length,
       ok: okCount,
+      carried_forward: carried.length,
       snapshot_points: snapshotPoints,
       snapshot_error: snapshotError,
     })
@@ -205,6 +205,7 @@ http('fetchTravelTimes', async (req, res) => {
     observed_at_sgt: toSgtParts(observedAt).datetime,
     inserted: rows.length,
     ok: okCount,
+    carried_forward: carried.length,
     snapshot_points: snapshotPoints,
     snapshot_error: snapshotError,
     rows: rows.map((r) => ({
