@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-24
+
+- Final-report readiness now states the Word-report structure, the four research questions, and the canonical figures, following the academic review of `PRS-Practice-Module-Group-3-Project-Report.docx`. No new experiment.
+
 ## 2026-10-17
 
 - Final-report readiness: vendor `forecast-api` mix modules (`scripts/vendor_forecast_mix_eval.py`, isolated import test); align evaluation freeze boundary, §7d ten-day gate, and §8 served default; refresh [findings.md](docs/findings.md) claims register and discussion (counts substitute, mix default, §7c vs §8 camera windows).

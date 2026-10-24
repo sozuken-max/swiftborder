@@ -9,7 +9,7 @@ A reviewer can read these six documents in order to verify system design, empiri
 | Section | Document | Summary |
 | --- | --- | --- |
 | **Grading & methods** | [grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md) | NUS-ISS Practice Module (Pattern Recognition Systems) rubric mapping across Intelligent Sensing, Supervised/Unsupervised Learning, ML/DL, and Hybrid/Ensemble methods |
-| **Readiness & freeze** | [final-report-readiness.md](final-report-readiness.md) | Final-report readiness review (updated **17 Oct 2026**): submission freeze record, claim-hygiene audit, reproducibility assessment, and report structure |
+| **Readiness & freeze** | [final-report-readiness.md](final-report-readiness.md) | Final-report readiness review. **24 Oct 2026** assembly guide: nine-chapter structure, four research questions, canonical figures. Earlier sections are the 17 Oct freeze and claim audit |
 | **Architecture** | [architecture.md](architecture.md) | High-level and detailed GCP architecture (`swiftborder`), Layer A (`camdetect`) and Layer B (`forecastapi`, `gmapfetcher`, BigQuery) contracts, and active vs unused paths |
 | **Evaluation** | [evaluation.md](evaluation.md) | Frozen Evidence Index, Layer A 15-frame detector comparison + box AP50, Layer B 18-day rolling-origin backtests, Diebold–Mariano + Holm significance, deep/fuzzy/ensemble ablations, and Layer A → B correlation & ablation |
 | **Findings & risks** | [findings.md](findings.md) | Six numbered technical findings, explicit negative results, risk register, and the safe-claims register |

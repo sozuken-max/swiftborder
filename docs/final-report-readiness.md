@@ -1,5 +1,86 @@
 # Final-report readiness review
 
+## Report assembly: 24 Oct 2026
+
+This section is the structure for the Word report (`PRS-Practice-Module-Group-3-Project-Report.docx`). It follows the 24 Oct academic review of that draft. The review is a scoped audit of coherence and cogency. It is not a mark, and it did not re-check every figure in the docx. Repo evidence stays in [evaluation.md](evaluation.md) and [findings.md](findings.md). Do not add a model run to satisfy the review.
+
+The graded surfaces are still tools and design, performance, findings, a runnable system, and the submission package ([grading/nus-iss-practice-module.md](grading/nus-iss-practice-module.md)). The six-file repo spine below stays the working set. This section says how those files become one report.
+
+### One target, four questions
+
+The observed forecast label is Google Maps `duration_in_traffic`. A low error on that series is not a measured traveller crossing time. Count error is not a duration error. Deployment of `mix[fcm_mlp+xgb]` does not promote that mix from exploratory to confirmed.
+
+| | Question | Strongest committed answer | Status |
+| --- | --- | --- | --- |
+| Q1 | Does the fine-tuned detector improve vehicle **counts** over the hosted baseline on the 15-frame test split? | At the **served** point (`conf=0.20`, overlap 0.6) car MAE is **1.87**, versus Roboflow v6 **4.40**. The **1.73** figure is the threshold swept on those same frames (`conf=0.30`, overlap off). Directional count error is not scored. | Descriptive. Say so. |
+| Q2 | Do short-horizon models beat persistence on future Maps duration? | 13–30 Sep, `y_30`, both directions: persistence **2.640 min**, daily-refit `xgb[maps]` **2.275 min** (about 22 seconds; Holm p 0.0117). The gain is inside the 0.5-minute bar. | Confirmatory on that window. Not a crossing-time result. |
+| Q3 | Do camera counts add anything beyond a non-camera baseline? | Restricted 13–30 Sep tree: about **5 seconds**, and that tree still trails persistence (§7c). Counts **instead of** Maps inputs on 1–4 Oct: regression of about **3–4 min** (§7d). Current duration, counts plus calendar vs a Fourier calendar: XGBoost **6.570** vs **6.702**, interval crosses ±0.5 min (§7b). | Bound each sentence to its protocol. |
+| Q4 | Do extra complexity and hybrids earn their place? | Original combiners do not beat `xgb[maps]` (§6). The equal mix point estimate is about **2.13 min** and was chosen after seeing September. It is the HTTP default. It is not a pre-registered win. | Exploratory for the mix. Confirmatory that the older combiners add nothing. |
+
+Longer horizons, deep sequence models, fuzzy level, TimesFM, and the CNN-RNN notebooks are exploratory. They do not redefine Q1–Q4.
+
+Three outcomes stay distinct: improvement detected, no improvement detected, and insufficient temporal evidence. "Not significant" is not equivalence.
+
+### Report structure
+
+Write the body in this order. Inside each results subsection use the same sequence: question, comparison, result, interpretation, limitation.
+
+| # | Chapter | Take from | Leave out of the body |
+| --- | --- | --- | --- |
+| 1 | Introduction: problem, observed target, Q1–Q4, exclusions | [findings.md](findings.md) claims register; [evaluation.md](evaluation.md) "What would count as success" | 24-hour and ≤15 min crossing-time claims |
+| 2 | Related work: why these comparisons | Draft §3, cut to the decision each subsection motivates | Model-family catalogues that do not choose a method |
+| 3 | Data and measurements: sources, labels, splits, what a count is not | [inventory.md](inventory.md) latest block; Layer A vs Layer B split in evaluation | One date that mixes architecture, collection, and the freeze |
+| 4 | Methods: detector operating points, baselines, feature sets, the mix | [architecture.md](architecture.md); [ADR 0004](adr/0004-serve-local-models.md) | The full callable-model list and HTTP catalogue |
+| 5 | Protocol: time order, matched rows, threshold boundaries, uncertainty | Evaluation "Reasoning" and "Significance" | A single leaderboard across horizons |
+| 6 | Results: Q1–Q4, then a labelled exploratory section | Frozen Evidence Index | Combining §7c, §7d, and §8 into one camera sentence |
+| 7 | Discussion: answer each question, effect size, failure cases | [findings.md](findings.md) | Infrastructure as a finding |
+| 8 | Conclusion: only the claims the experiments support | Claims register, "Say this" column | "We beat Google"; directional accuracy; untouched test-set MAE of 1.73 |
+| 9 | Appendices: deploy, model catalogue, evidence register, who did what | [services/README.md](../services/README.md), [runbooks/forecast-api.md](runbooks/forecast-api.md), ADRs | — |
+
+Dates to keep separate: architecture description, Maps and camera collection windows, each evaluation window, submission freeze at `199c2e5`, and later committed runs (counts substitute, camera-current, mix backtest). The forecast horizon in every headline is the bin that starts 30–40 minutes after the origin, about 9–19 minutes after a request when ingest is current. It is not "30 minutes from now".
+
+Detector wording for Q1, from the review: the test frames were excluded from weight training and checkpoint selection. The comparison thresholds were selected using count error on those frames. Those rows are descriptive, threshold-selected comparisons. The served and backfill point is confidence 0.2 and overlap 0.6 (car MAE 1.87). Do not attach 1.73 to `local_counts`.
+
+### Evidence register
+
+Every number in the body needs one row. Fields: research question, table or figure id, task and target, dataset and dates, split and n, model and operating point, baseline and whether the rows match, artefact path and git revision, evidence status (`descriptive`, `exploratory`, `confirmatory`, `insufficient data`). The Frozen Evidence Index is that register for the committed runs. Cite the run or notebook, not this readiness file, as the source of a result.
+
+### Canonical figures
+
+Use these in the report body. A figure is canonical only for the question in its row. Deck PNGs are slide copies of the Mermaid sources; the `.mmd` files and the embeds in [architecture.md](architecture.md) and [evaluation.md](evaluation.md) are the system drawings. Regenerate a PNG when it disagrees with its `.mmd` ([diagrams/README.md](diagrams/README.md)).
+
+| Use | Figure | Question | Do not use it to say |
+| --- | --- | --- | --- |
+| Body | [architecture-high-level.mmd](diagrams/architecture-high-level.mmd), [architecture-detailed.mmd](diagrams/architecture-detailed.mmd) | What is deployed | That weather or counts feed the served model |
+| Body | [eval/runs/report/bqml/mae-diff-ci.png](../eval/runs/report/bqml/mae-diff-ci.png), [mae-by-direction.png](../eval/runs/report/bqml/mae-by-direction.png) | Q2, 13–30 Sep `y_30` | A crossing-time MAE, or that the served mix won this test |
+| Body | [eval/runs/report/ensemble/ensemble-30min-mae-diff.png](../eval/runs/report/ensemble/ensemble-30min-mae-diff.png) | Q4, original combiners | That the later 50/50 mix was in this figure |
+| Body | [counts-substitute paired difference](../eval/runs/20261017T083554Z_counts-substitute/paired_diff.png), [series](../eval/runs/20261017T083554Z_counts-substitute/series_xgb_mix.png) | Q3, counts in place of Maps inputs, 1–4 Oct, target `y_30` | That counts are useless as a sensor; §7c is a different test |
+| Body | [camera-current paired difference](../eval/runs/20261017T084900Z_camera-current/paired_current.png), [series](../eval/runs/20261017T084900Z_camera-current/series_current.png) | Q3, current duration vs a calendar profile | A 30-minute forecast result |
+| Exploratory | [horizon mae-by-horizon](images/horizon-study/mae-by-horizon.png), [skill-vs-profile](images/horizon-study/skill-vs-profile.png) | Horizon study | A confirmed 24-hour forecast |
+| Exploratory | [deep-mae-diff.png](../eval/runs/report/deep/deep-mae-diff.png), [fuzzy-confusion.png](../eval/runs/report/fuzzy/fuzzy-confusion.png) | Extra model families | That deep or fuzzy models are served |
+| Exploratory | [camfc-mae-diff.png](../eval/runs/report/joined/camfc-mae-diff.png), [camfc-profiles.png](../eval/runs/report/joined/camfc-profiles.png) | March–April count forecast as a calendar prior | Observed September counts, or `local_counts` |
+| Appendix | [joined-mae-by-feature-set.png](../eval/runs/report/joined/joined-mae-by-feature-set.png) | Weather and extra Maps features on 13–30 Sep | That rain never matters |
+| Appendix | [parity-mae-diff.png](../eval/runs/parity-bqml/parity/parity-mae-diff.png) | Local replica vs BigQuery ML | A serving-quality claim |
+| Not canonical | [images/architecture-high-level.png](images/architecture-high-level.png) and the other three deck PNGs | Slides, after they match the `.mmd` | A result table |
+| Not canonical | CNN-RNN notebook screenshots | A separate image-to-duration study | Chad's 15-frame detector comparison |
+| Still to draw | One timeline: origin start, bin close, request, target interval `[t+30, t+40)` | Horizon definition in chapter 5 | A new measured error |
+
+There is no canonical figure that shows directional count accuracy, an independent crossing time, or a single ranking of every model.
+
+### Claim boundaries to apply while editing the docx
+
+1. Disclose test-set threshold selection. Keep 1.73 and 1.87 in different rows.
+2. Name the forecast target as the Maps route-duration estimate in the abstract, the introduction, the target definition, and the conclusion.
+3. Directional assignment is implemented. Total-frame count error does not validate it. Call the output a visible vehicle count, not traffic density or flow.
+4. Camera conclusions stay inside §7b, §7c, or §7d. Do not merge them with the §8 mix.
+5. The deployed mix stays exploratory.
+6. Report the 22-second `xgb[maps]` gain and its uncertainty. Do not call it a large traveller benefit. The mix's about 30-second point-estimate gap versus persistence is exploratory.
+7. "Costs nothing per call" means no separate hosted-detector fee, not zero infrastructure cost.
+8. In-service fitting was chosen to match the harness with less extra machinery. It is not the only design that can reproduce a model.
+9. Literature percentages (small-object share, height versus area) get one population and one denominator before they stay in the report. This repo does not hold Table 3.2's source counts; do not invent a corrected percentage here.
+
+Individual contribution (draft §2.8) still needs person-level artefacts if the rubric asks for them. That check is on Canvas, not in this file.
+
 ## Re-review: 17 Oct 2026, HEAD c98b4d5 (22:09 SGT)
 
 **Verdict: acceptable to assemble the final report. Two new stale-prose items found; all previously listed open items remain open and unchanged.** This pass reads the full working tree at `c98b4d5` (the merge of `experiment/counts-for-maps` into `main`). It does not run experiments, query GCP resources beyond what is already in [inventory.md](inventory.md), or make any deployment. The team's no-new-runs constraint applies.
@@ -273,7 +354,7 @@ The review is not a full rerun of the published experiments, a browser usability
 
 ## Proposed information architecture
 
-**Status: proposed (2026-10-04).** This section is a consolidation plan. It does not move or rewrite the other docs.
+**Status: repo spine (2026-10-04), superseded for the Word report by [Report assembly](#report-assembly-24-oct-2026).** The gap table at the end of this section is the 4 Oct snapshot. It is not the current figure list.
 
 A lecturer should open six files and stop. Everything else is an ADR, a runbook, or a labelled archive.
 
