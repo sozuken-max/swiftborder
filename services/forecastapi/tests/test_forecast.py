@@ -105,6 +105,7 @@ def _reset(monkeypatch):
     main._cache.clear()
     main._fitted.clear()
     main._training.clear()
+    main._raw_bins.clear()
     main._clock = time.monotonic
     monkeypatch.setattr(main, "_now", lambda: FIXTURE_NOW)
     yield
@@ -260,8 +261,15 @@ def _fake_bigquery(monkeypatch, bins, now):
         keep = bins["direction"].isin(directions) & (ts >= at - main.LATEST_WINDOW) & (ts + main.BIN + main.INGEST_GRACE <= at)
         return bins[keep].copy()
 
+    def fetch_recent(directions, at, since):
+        reads.setdefault("recent", []).append((at, since))
+        ts = bins["bin_ts"]
+        keep = bins["direction"].isin(directions) & (ts >= since) & (ts + main.BIN + main.INGEST_GRACE <= at)
+        return bins[keep].copy()
+
     monkeypatch.setattr(main, "fetch_training", fetch_training)
     monkeypatch.setattr(main, "fetch_latest", fetch_latest)
+    monkeypatch.setattr(main, "fetch_recent", fetch_recent)
     monkeypatch.setattr(main, "_now", lambda: now["t"])
     return reads
 
@@ -775,7 +783,7 @@ def test_request_spanning_midnight_uses_one_serving_day(monkeypatch):
     daily = lambda vs: {v for v in vs if v.startswith("labels_before=")}  # noqa: E731 (frozen replicas have fixed versions)
     assert daily(m["version"] for m in payload["model_meta"].values()) == {day}
     assert daily(k[1] for k in main._fitted) == {day}  # every daily fit and the profile are from one serving day
-    assert reads["training"] == 1 and len(reads["latest"]) == 1
+    assert reads["training"] == 2 and len(reads["latest"]) == 1  # one day: the harness frame and the mix's raw bins
 
 
 @pytest.mark.parametrize("query", [
@@ -899,3 +907,78 @@ def test_curve_note_does_not_claim_the_model_never_won_later(monkeypatch):
     _fake_bigquery(monkeypatch, _bins(), now)
     payload, status, _ = _json(main.forecast(_request(query={"curve": "forecast"})))
     assert status == 200 and "not consistent" in payload["note"] and "no model beat it" not in payload["note"]
+
+
+# --- forecast replay (?curve=replay) --------------------------------------------------------
+
+# 04:00 UTC = 12:00 SGT. The anchor is 03:40; origins 15:40, 19:40 and 23:40 UTC. The first is
+# 23:40 SGT on 2 Oct, so it must use the fits of 2 Oct (labels before 00:00 SGT 2 Oct).
+REPLAY_NOW = dt.datetime(2026, 10, 3, 4, 0, tzinfo=UTC)
+
+
+def test_replay_runs_observed_and_typical(monkeypatch):
+    bins = _bins()
+    _fake_bigquery(monkeypatch, bins, {"t": REPLAY_NOW})
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "replay"})))
+    assert status == 200 and payload["status"] == "exploratory" and payload["hours"] == 5
+    assert payload["anchor_ts"] == "2026-10-03T03:40:00Z"
+    for d in main.DIRECTIONS:
+        block = payload["directions"][d]
+        assert [r["origin_ts"] for r in block["runs"]] == [
+            "2026-10-02T15:40:00Z", "2026-10-02T19:40:00Z", "2026-10-02T23:40:00Z"]
+        typical = block["typical"]
+        assert len(typical) == 145 and typical[0]["bin_start"] == "2026-10-02T15:40:00Z" and typical[-1]["bin_start"] == "2026-10-03T15:40:00Z"
+        observed = block["observed"]
+        assert observed[0]["bin_start"] == "2026-10-02T15:40:00Z" and observed[-1]["bin_start"] == "2026-10-03T03:40:00Z"
+        for run in block["runs"]:
+            pts = run["points"]
+            assert [p["horizon_min"] for p in pts] == list(range(30, 301, 30))
+            assert [p["model"] for p in pts[:3]] == [main.SERVED_SELECTION[d], "xgb[maps]", "xgb[maps+prof]"]
+            scored = [p for p in pts if "observed_min" in p]
+            assert run["scored_points"] == len(scored)
+            for p in scored:
+                assert p["observed_min"] == round(_dur(bins, d, p["forecast_for"][:-1]), 1)
+                assert pd.Timestamp(p["forecast_for"]) + main.BIN <= pd.Timestamp(REPLAY_NOW)
+            errors = [abs(p["forecast_min"] - p["observed_min"]) for p in scored]
+            assert run["mae_min"] == pytest.approx(sum(errors) / len(errors), abs=0.06)
+        # the -4 h run (23:40) reaches 04:40: points after 03:40 have no observed bin yet
+        assert block["runs"][0]["scored_points"] == 10 and block["runs"][2]["scored_points"] == 8
+
+
+def test_replay_matches_what_was_served_at_each_origin(monkeypatch):
+    bins = _bins()
+    now = {"t": REPLAY_NOW}
+    _fake_bigquery(monkeypatch, bins, now)
+    replay, status, _ = _json(main.forecast(_request(query={"curve": "replay"})))
+    assert status == 200
+    versions = {k[1] for k in main._fitted if k[0] == "xgb[maps+prof]"}
+    assert versions == {"labels_before=2026-10-02T00:00:00+08:00", "labels_before=2026-10-03T00:00:00+08:00"}
+    for run_index, served_at in ((0, dt.datetime(2026, 10, 2, 15, 51, tzinfo=UTC)), (2, dt.datetime(2026, 10, 2, 23, 51, tzinfo=UTC))):
+        now["t"] = served_at
+        main._cache.clear()
+        for h in (60, 120, 300):
+            live, status, _ = _json(main.forecast(_request(query={"horizon_min": str(h)})))
+            assert status == 200
+            for d in main.DIRECTIONS:
+                assert live["directions"][d]["origin_ts"] == replay["directions"][d]["runs"][run_index]["origin_ts"]
+                p = next(p for p in replay["directions"][d]["runs"][run_index]["points"] if p["horizon_min"] == h)
+                assert p["forecast_min"] == live["directions"][d]["forecast_min"]
+                assert p["baseline_min"] == live["baseline"]["directions"][d]["forecast_min"]
+
+
+def test_replay_skips_an_origin_after_a_gap(monkeypatch):
+    gap = [pd.Timestamp("2026-10-02 19:00", tz="UTC") + pd.Timedelta(minutes=10 * i) for i in range(3)]
+    bins = _bins(drop=[str(t.tz_localize(None)) for t in gap])
+    _fake_bigquery(monkeypatch, bins, {"t": REPLAY_NOW})
+    payload, status, _ = _json(main.forecast(_request(query={"curve": "replay", "direction": "SG_TO_MY"})))
+    assert status == 200
+    runs = payload["directions"]["SG_TO_MY"]["runs"]
+    assert runs[1]["points"] == [] and runs[1]["unavailable"] == "origin within an hour of a data gap"
+    assert runs[0]["points"] and runs[2]["points"]
+
+
+def test_replay_parameter_errors(monkeypatch):
+    _fake_bigquery(monkeypatch, _bins(), {"t": REPLAY_NOW})
+    assert _json(main.forecast(_request(query={"curve": "replay", "hours": "0"})))[1] == 400
+    assert _json(main.forecast(_request(query={"curve": "replay", "hours": "13"})))[1] == 400
+    assert _json(main.forecast(_request(query={"curve": "replay", "direction": "north"})))[1] == 400

@@ -639,6 +639,69 @@ h4 {
     font-weight: 600;
 }
 
+/* Day chart: actual times, past runs and the "now" marker */
+.fc-obs-line {
+    fill: none;
+    stroke: rgba(241, 245, 249, 0.9);
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+}
+
+.fc-run-line {
+    fill: none;
+    stroke-width: 1.4;
+    stroke-opacity: 0.55;
+    stroke-linejoin: round;
+}
+
+.fc-now-line {
+    stroke: rgba(241, 245, 249, 0.35);
+    stroke-width: 1;
+    stroke-dasharray: 2 3;
+}
+
+.fc-now-label {
+    fill: rgba(241, 245, 249, 0.8);
+}
+
+.fc-legend,
+.fc-acc-runs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.9rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.fc-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.fc-key {
+    display: inline-block;
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.fc-key-obs { background: rgba(241, 245, 249, 0.9); }
+.fc-key-run { opacity: 0.55; height: 2px; }
+.fc-key-base {
+    background: repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.8) 0 4px, transparent 4px 7px);
+}
+
+.fc-acc {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.fc-acc strong,
+.fc-acc-run strong {
+    color: var(--text-main);
+}
+
 /* ── Forecast view: back link and Causeway | Tuas switcher ──────────────── */
 .live-head {
     display: flex;

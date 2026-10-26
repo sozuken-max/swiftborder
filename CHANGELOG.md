@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-26
+
+- `forecast-api` adds `?curve=replay&hours=N` (1–12, default 5): the forecast curve re-run from origins 12, 8 and 4 h ago with the fits of each origin's own SGT day, scored against the observed bins, plus the observed bins and the typical-day profile from −12 h to +12 h. Fits and training reads are now kept for two SGT days. A test checks that a replayed point equals the live answer at that origin. The Hosting "Forecast vs Typical Day" card becomes "Forecast vs Actual and Typical Day": −12 h to +12 h with actual times, the three past runs, the live run and their pooled error next to the typical day's. Not deployed from this branch: the `forecast-api` trigger builds `main` only.
+
 ## 2026-10-24
 
 - `gmapfetcher/` 1.3.0: built for a 20-minute fetch (`FETCH_INTERVAL_MIN`, default 20; Scheduler `Gmap-Woodlands` must be set to `*/20` in the console) to fit the Distance Matrix free tier. Each run also writes a carried-forward copy of each `OK` reading at T+10 (`error_message` starts with `carried_forward`), so every 10-minute bin still has a row and `v_bins_10min`, `v_training_set` and `forecast-api` are unchanged. `traffic-24h.json` skips carried rows and fills 5-minute points between real points up to 20 min apart. From the switch on, half the bins are copies: filter them before comparing MAE across periods.

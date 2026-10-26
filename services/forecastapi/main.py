@@ -121,6 +121,14 @@ WHERE direction IN UNNEST(@directions)
   AND TIMESTAMP_ADD(bin_ts, INTERVAL @closed_after_sec SECOND) <= @now
 """
 
+_RECENT_SQL = f"""
+SELECT {_BIN_COLUMNS}
+FROM {BINS_VIEW}
+WHERE direction IN UNNEST(@directions)
+  AND bin_ts >= @since
+  AND TIMESTAMP_ADD(bin_ts, INTERVAL @closed_after_sec SECOND) <= @now
+"""
+
 _TRAINING_SQL = f"""
 SELECT {_BIN_COLUMNS}
 FROM {BINS_VIEW}
@@ -272,6 +280,21 @@ def fetch_latest(directions, now):
     return client.query(_LATEST_SQL, job_config=cfg, location=BQ_LOCATION).to_dataframe()
 
 
+def fetch_recent(directions, now, since):
+    """Closed ``v_bins_10min`` rows from ``since`` to ``now`` (a replay's origins, their lags and their targets)."""
+    bq = _bigquery()
+    client = bq.Client(project=BQ_PROJECT)
+    cfg = bq.QueryJobConfig(
+        query_parameters=[
+            bq.ArrayQueryParameter("directions", "STRING", list(directions)),
+            bq.ScalarQueryParameter("now", "TIMESTAMP", now),
+            bq.ScalarQueryParameter("since", "TIMESTAMP", since),
+            bq.ScalarQueryParameter("closed_after_sec", "INT64", int((BIN + INGEST_GRACE).total_seconds())),
+        ]
+    )
+    return client.query(_RECENT_SQL, job_config=cfg, location=BQ_LOCATION).to_dataframe()
+
+
 def fetch_training(labels_before):
     bq = _bigquery()
     client = bq.Client(project=BQ_PROJECT)
@@ -282,12 +305,29 @@ def fetch_training(labels_before):
 # --- fitting --------------------------------------------------------------------------------
 
 
+# Fits and training reads are kept for the two newest SGT days: today's, and yesterday's for a replay
+# (?curve=replay) whose origin is before 00:00 SGT.
+KEEP_DAYS = 2
+
+
+def _remember(store, key, value):
+    store[key] = value
+    for old in sorted(store)[:-KEEP_DAYS]:
+        store.pop(old)
+    return value
+
+
+def _keep_newest_fits(same):
+    """Drop all but the ``KEEP_DAYS`` newest versions of the fits ``same(key)`` selects."""
+    for k in sorted((k for k in _fitted if same(k)), key=lambda k: str(k[1]))[:-KEEP_DAYS]:
+        _fitted.pop(k)
+
+
 def training_bins(day_start):
     """Closed bins before ``day_start``, one read per SGT day. The mix fits on these rows."""
     key = day_start.isoformat()
     if key not in _raw_bins:
-        _raw_bins.clear()
-        _raw_bins[key] = fetch_training(day_start)
+        _remember(_raw_bins, key, fetch_training(day_start))
     return _raw_bins[key]
 
 
@@ -295,30 +335,29 @@ def _training_frame(day_start):
     """All labelled rows observed before ``day_start``; one read per SGT day per process."""
     key = day_start.isoformat()
     if key not in _training:
-        _training.clear()
-        _training[key] = lm.prepare(lm.features_from_bins(fetch_training(day_start)))
+        _remember(_training, key, lm.prepare(lm.features_from_bins(fetch_training(day_start))))
     return _training[key]
 
 
-def fitted_profile():
-    """The calendar-profile baseline of the serving day (every closed bin before 00:00 SGT)."""
-    version = profile_version(_serving_now())
+def fitted_profile(now=None):
+    """The calendar-profile baseline of the serving day of ``now`` (every closed bin before 00:00 SGT)."""
+    now = now or _serving_now()
+    version = profile_version(now)
     key = ("profile", version, 0)
     with _fit_lock:
         hit = _fitted.get(key)
         if hit is not None:
             return hit
-        frame = _training_frame(lm.serving_day_start(_serving_now()))
+        frame = _training_frame(lm.serving_day_start(now))
         profile = lm.Profile().fit(frame)
-        for k in [k for k in _fitted if k[0] == "profile"]:
-            _fitted.pop(k)
         _fitted[key] = profile
+        _keep_newest_fits(lambda k: k[0] == "profile")
         return profile
 
 
-def fitted_mix():
-    """The equal mix for the serving day. One fit per SGT day; prediction rebuilds features per request."""
-    now = _serving_now()
+def fitted_mix(now=None):
+    """The equal mix for the serving day of ``now``. One fit per SGT day; prediction rebuilds features per request."""
+    now = now or _serving_now()
     day_start = lm.serving_day_start(now)
     key = (mix_bridge.MIX_ID, mix_bridge.version_for(now), 30)
     with _fit_lock:
@@ -326,25 +365,25 @@ def fitted_mix():
         if hit is not None:
             return hit
         fitted = mix_bridge.fit_models(training_bins(day_start), day_start, protect_labels=True)
-        for k in [k for k in _fitted if k[0] == mix_bridge.MIX_ID]:
-            _fitted.pop(k)
         _fitted[key] = fitted
+        _keep_newest_fits(lambda k: k[0] == mix_bridge.MIX_ID)
         return fitted
 
 
-def fitted_model(model_id, horizon=30):
-    version = lm.version_for(model_id, _serving_now())
+def fitted_model(model_id, horizon=30, now=None):
+    now = now or _serving_now()
+    version = lm.version_for(model_id, now)
     key = (model_id, version, int(horizon))
     with _fit_lock:
         hit = _fitted.get(key)
     if hit is not None:
         return hit
-    profile = fitted_profile() if lm.LOCAL_MODELS[model_id]["kind"] == "harness_xgb_prof" else None
+    profile = fitted_profile(now) if lm.LOCAL_MODELS[model_id]["kind"] == "harness_xgb_prof" else None
     with _fit_lock:
         hit = _fitted.get(key)
         if hit is not None:
             return hit
-        day_start = lm.serving_day_start(_serving_now())
+        day_start = lm.serving_day_start(now)
         rows = lm.LOCAL_MODELS[model_id]["rows"]
         frame = _training_frame(day_start)  # every closed bin before day_start, harness features
         train = lm.training_rows(frame, rows, day_start, horizon)
@@ -353,9 +392,8 @@ def fitted_model(model_id, horizon=30):
         if profile is not None:
             train = lm.with_profile(train, profile, horizon)
         model = lm.fit(model_id, train, horizon)
-        for k in [k for k in _fitted if k[0] == model_id and k[2] == int(horizon)]:
-            _fitted.pop(k)  # yesterday's fit
         _fitted[key] = model
+        _keep_newest_fits(lambda k: k[0] == model_id and k[2] == int(horizon))  # older days' fits
         return model
 
 
@@ -530,7 +568,7 @@ def _predict_one(mid, sub, horizon, profile, now, latest_bins=None):
         day_start = lm.serving_day_start(now)
         latest = latest_bins if latest_bins is not None else fetch_latest([direction], now)
         value, parts = mix_bridge.predict_value(
-            fitted_mix(), training_bins(day_start), latest, direction, origin
+            fitted_mix(now), training_bins(day_start), latest, direction, origin
         )
         if value is None:
             raise NoRecentForecast(direction)
@@ -542,11 +580,11 @@ def _predict_one(mid, sub, horizon, profile, now, latest_bins=None):
         }
     if mid == "profile":
         return target_value, target_value, {"eval_id": "horizon_study:profile", "version": profile_version(now), "training_rows": profile.n_rows}
-    model = fitted_model(mid, horizon)
+    model = fitted_model(mid, horizon, now)
     x = lm.with_profile(sub, profile, horizon) if lm.LOCAL_MODELS[mid]["kind"] == "harness_xgb_prof" else sub
     meta = {
         "eval_id": lm.LOCAL_MODELS[mid]["eval_id"],
-        "version": lm.version_for(mid, _serving_now()),
+        "version": lm.version_for(mid, now),
         "training_rows": model.n_rows,
         "seeds": model.seeds,
     }
@@ -682,6 +720,113 @@ def profile_curve(directions, hours):
         "directions": out,
         "study": STUDY and {"status": STUDY.get("status"), "profile_mae_min": {
             str(h["horizon_min"]): h["mae_min"]["profile"] for h in STUDY.get("horizons", [])}},
+    }
+
+
+# Replay (?curve=replay): what the served curve would have said from earlier origins, scored against what
+# Maps then reported. Nothing was logged at the time; each origin is re-run now with the fits of its own SGT
+# day (labels before that day's 00:00 SGT), the fits that served that day. Bins that arrived late can make a
+# replay differ a little from what was served live.
+REPLAY_BACK_HOURS = 12
+REPLAY_STEP_HOURS = 4
+REPLAY_DEFAULT_HOURS = 5
+REPLAY_MAX_HOURS = 12
+
+
+def replay_anchor(now):
+    """Start of the newest bin that has closed plus INGEST_GRACE: the live curve's usual origin."""
+    return (pd.Timestamp(now) - BIN - INGEST_GRACE).floor("10min")
+
+
+def _replay_run(direction, own, origin, horizons, observed):
+    """One past origin: the curve as served then, each point paired with the observed bin when it has closed."""
+    served_at = (origin + BIN + INGEST_GRACE).to_pydatetime()  # when this origin first became servable
+    history = own[own["bin_ts"] <= origin]
+    run = {"origin_ts": _iso(origin), "origin_closed_at": _iso(origin + BIN), "points": []}
+    feats = lm.prepare(lm.features_from_bins(history, unknown_first_gap=True)) if len(history) else None
+    sub = None if feats is None else feats[feats["bin_ts"] == origin].reset_index(drop=True)
+    if sub is None or sub.empty or sub["after_gap"].iloc[0] != 0:
+        run["unavailable"] = "no bin at the origin" if sub is None or sub.empty else "origin within an hour of a data gap"
+        return run
+    latest = history[history["bin_ts"] >= lm.serving_day_start(served_at)]  # the mix adds the earlier bins itself
+    errors, baseline_errors = [], []
+    try:
+        profile = fitted_profile(served_at)
+        for h in horizons:
+            mid = curve_model(direction, h)
+            target = origin + pd.Timedelta(minutes=h)
+            try:
+                value, base, _ = _predict_one(mid, sub, h, profile, served_at, latest)
+            except NoRecentForecast:
+                continue  # the mix is undefined at this origin; the live curve would have answered 503
+            point = {
+                "horizon_min": h,
+                "forecast_for": _iso(target),
+                "forecast_min": round(value, 1),
+                "baseline_min": None if base is None else round(base, 1),
+                **_model_fields(mid),
+                "status": status_for(mid, h),
+            }
+            seen = observed.get(target)
+            if seen is not None and math.isfinite(seen):
+                point["observed_min"] = round(seen, 1)
+                point["error_min"] = round(value - seen, 1)
+                errors.append(abs(value - seen))
+                if base is not None:
+                    baseline_errors.append(abs(base - seen))
+            run["points"].append(point)
+    except (RuntimeError, lm.NoProfileHistory) as exc:
+        logger.warning("replay from %s for %s unavailable: %s", origin.isoformat(), direction, exc)
+        return dict(run, points=[], unavailable="no fit for that day")
+    run["scored_points"] = len(errors)
+    run["mae_min"] = round(sum(errors) / len(errors), 2) if errors else None
+    run["baseline_mae_min"] = round(sum(baseline_errors) / len(baseline_errors), 2) if len(baseline_errors) == len(errors) and errors else None
+    return run
+
+
+def replay_curve(directions, hours):
+    """Past runs every ``REPLAY_STEP_HOURS`` over the last ``REPLAY_BACK_HOURS``, the observed bins, and the profile."""
+    now = _serving_now()
+    anchor = replay_anchor(now)
+    start = anchor - pd.Timedelta(hours=REPLAY_BACK_HOURS)
+    origins = [anchor - pd.Timedelta(hours=k) for k in range(REPLAY_BACK_HOURS, 0, -REPLAY_STEP_HOURS)]
+    bins = fetch_recent(directions, now, (start - LATEST_WINDOW).to_pydatetime())
+    bins = _empty_bins() if bins is None or len(bins) == 0 else bins.copy()
+    bins["bin_ts"] = pd.to_datetime(bins["bin_ts"], utc=True)
+    bins["dur_min"] = pd.to_numeric(bins["dur_min"], errors="coerce").astype(float)
+    horizons = [h for h in lm.HORIZONS if h <= int(hours) * 60]
+    profile = fitted_profile()
+    typical_ts = pd.Series(pd.date_range(start, anchor + pd.Timedelta(hours=REPLAY_BACK_HOURS), freq="10min"))
+    out = {}
+    for direction in directions:
+        own = bins[bins["direction"] == direction].sort_values("bin_ts")
+        recent = own[own["bin_ts"] >= start]
+        observed = {t: v for t, v in zip(recent["bin_ts"], recent["dur_min"]) if math.isfinite(v)}
+        typical = profile.predict([direction] * len(typical_ts), typical_ts)
+        out[direction] = {
+            "runs": [_replay_run(direction, own, origin, horizons, observed) for origin in origins],
+            "observed": [{"bin_start": _iso(t), "observed_min": round(v, 1)} for t, v in observed.items()],
+            "typical": [{"bin_start": _iso(t), "forecast_min": round(float(v), 1)} for t, v in zip(typical_ts, typical)],
+        }
+    return {
+        "kind": "forecast replay",
+        "status": "exploratory",
+        "generated_at": _iso(now),
+        "source": "local model",
+        "label": "maps_duration_in_traffic_min",
+        "anchor_ts": _iso(anchor),
+        "back_hours": REPLAY_BACK_HOURS,
+        "step_hours": REPLAY_STEP_HOURS,
+        "hours": int(hours),
+        "note": "Each run is the forecast curve (?curve=forecast) from an earlier origin, re-run now with the fits of "
+                "that origin's SGT day, as it would have been served. Runs were not logged live; bins that arrived "
+                "late can make a replay differ slightly. observed_min is the Maps duration of the target bin once it "
+                "closed. mae_min is over a run's scored points only: Maps travel time, not crossing time, a few "
+                "points from one day, not an evaluation. typical is the calendar profile (not a forecast) from "
+                "anchor - back_hours to anchor + back_hours.",
+        "baseline_label": BASELINE_LABEL,
+        "directions": out,
+        **({"commit": COMMIT_SHA} if COMMIT_SHA else {}),
     }
 
 
@@ -1071,6 +1216,10 @@ def list_models():
             "curve": "forecast, with hours=1..%d (default %d): forecasts every 30 minutes from one origin; the model "
                      "up to %d min, the profile baseline after it" % (CURVE_MAX_HOURS, CURVE_DEFAULT_HOURS, CURVE_MODEL_MAX_MIN),
             "baseline": "profile, with hours=1..%d: the calendar-profile baseline curve (not a forecast)" % CURVE_MAX_HOURS,
+            "curve=replay": "with hours=1..%d (default %d): the forecast curve re-run from an origin every %d h over the "
+                            "last %d h, scored against the observed bins; plus the observed bins and the profile from "
+                            "-%d h to +%d h" % (REPLAY_MAX_HOURS, REPLAY_DEFAULT_HOURS, REPLAY_STEP_HOURS,
+                                                 REPLAY_BACK_HOURS, REPLAY_BACK_HOURS, REPLAY_BACK_HOURS),
             "list": "models (catalog), cards (frontend model cards), or horizon-study for the exploratory study results",
             "view": "cards: the same JSON array as list=cards",
         },
@@ -1344,9 +1493,30 @@ def _handle(request):
         return _ok(payload, headers)
 
     curve_raw = _param(body, args, "curve")
+    if curve_raw is not None and str(curve_raw).strip() == "replay":
+        hours_raw = _param(body, args, "hours")
+        text = str(REPLAY_DEFAULT_HOURS) if hours_raw is None or str(hours_raw).strip() == "" else str(hours_raw).strip()
+        if not _is_number(text) or not 1 <= int(text) <= REPLAY_MAX_HOURS:
+            return _error("hours must be 1 to %d" % REPLAY_MAX_HOURS, 400)
+        directions = _parse_directions(_param(body, args, "direction"))
+        if directions is None:
+            return _error("direction must be SG_TO_MY, MY_TO_SG, or both", 400)
+        key = ("replay", tuple(directions), int(text), _iso(replay_anchor(_serving_now())), SELECTION_ID, EXPLORATORY_SELECTION_ID)
+        payload = _cache_get(key)
+        if payload is None:
+            try:
+                payload = replay_curve(directions, int(text))
+            except lm.NoProfileHistory:
+                return _error(NO_PROFILE_ERROR, 503)
+            except Exception:
+                logger.exception("forecast replay failed")
+                return _error("Forecast query failed", 502)
+            _cache_put(key, payload)
+        return _ok(payload, headers)
+
     if curve_raw is not None and str(curve_raw).strip() != "":
         if str(curve_raw).strip() != "forecast":
-            return _error("curve must be forecast", 400)
+            return _error("curve must be forecast or replay", 400)
         hours_raw = _param(body, args, "hours")
         text = str(CURVE_DEFAULT_HOURS) if hours_raw is None or str(hours_raw).strip() == "" else str(hours_raw).strip()
         if not _is_number(text) or not 1 <= int(text) <= CURVE_MAX_HOURS:

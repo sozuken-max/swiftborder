@@ -159,11 +159,19 @@ Example (local run against live BigQuery, 2026-10-04 about 01:01 UTC; origin 00:
   - The first call took 29 s: the training read, the profile and four fits. `hours=24` then took 10 s more for its extra fits.
 - **Cost:** each 30-minute step is one daily fit, about 0.6–1 s locally. The default curve costs about 4 fits per instance per day, and `hours=24` costs 11, because the baseline points need none.
 
+**Forecast replay, `?curve=replay&hours=N`** (the Hosting card's last 12 h):
+- Re-runs the forecast curve (same per-lead model choice as `?curve=forecast`, `N` = 1–12 h, default **5**) from three earlier origins: the anchor (newest closed bin) minus 12, 8 and 4 h. Nothing was logged live, so each run is recomputed with the fits of **its own SGT day** (labels before that day's 00:00 SGT). Those are the fits that served that day, so a replayed point equals what `?horizon_min=h` answered at that origin (tested, including an origin before 00:00 SGT). Bins that arrived late can make a replay differ slightly from what was served.
+- Each point adds `observed_min` and `error_min` once its target bin has closed. Each run carries `scored_points`, `mae_min` and `baseline_mae_min` (the profile of that day on the same targets). A run with no origin bin, or one within an hour of a gap, has `unavailable` and no points.
+- Per direction it also returns `observed` (closed bins, anchor − 12 h to the anchor) and `typical` (today's profile, anchor − 12 h to anchor + 12 h).
+- **Not an evaluation:** a few Maps-duration points from one day, not crossing time. Label it as such.
+- **Cost:** one BigQuery read of the last 15 h of bins. When an origin falls before 00:00 SGT (requests before about 12:00 SGT), it also needs yesterday's profile, mix and `xgb` fits. Locally on synthetic data that cold call took about 45 s, the same as a cold `?curve=forecast`. Fits are kept for two SGT days (`KEEP_DAYS`), and the response is cached per anchor for 5 minutes.
+
 Why not model points every 30 minutes to 24 h: from 6 h on, the model points would be, within the study's uncertainty, the baseline under another name. A single horizon past 5.5 h can still be requested with `horizon_min` (exploratory).
 
 **For the page (`hosting/app.js`):**
 - Call `?curve=forecast` (or `&hours=4` for 8 points) and plot each point's `forecast_min` at `forecast_for`. This gives the three or more points 60–120 min ahead the page asked for, all from one origin and one request.
 - Plot `?baseline=profile&hours=24` as a separately styled line labelled with `label`.
+- After the live curve has drawn, call `?curve=replay&hours=5` and redraw the card from −12 h to +12 h: the actual bins, the three past runs, the live run and the typical day, plus the pooled replay error against the typical day's error. If the replay fails, the card keeps the forecast-from-now chart.
 - Show `status` on exploratory values, and use `lead_min` rather than a fixed "30 minutes ahead".
 - With `hours` above 5, draw the points where `model` is `profile` in the baseline style. The curve can step at the switch: in a live run on 2026-10-04, SG → JB went 23.5 → 27.3 between 5.5 h and 6 h. That step is the model letting go, not a predicted change.
 - Past about 5.5 h, the study found the forecast no better than the baseline. The claims register still says so. The checked-in page does not: a product decision on the Hosting commits left one sourcing line ("Based on Google Maps travel-time estimates") and labels the baseline "Typical for this day and time". See [findings.md](../findings.md#claims-register).

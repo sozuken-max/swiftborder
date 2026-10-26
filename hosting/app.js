@@ -57,6 +57,12 @@ const COMPARE_HOURS = 24;
 const FORECAST_MAX_SLOTS = 66;           // 5.5 h of 5-min slots on the trend chart
 const FORECAST_TIMEOUT_MS = 60000;       // the first curve call can take ~20 s while models fit
 const BASELINE_REFRESH_MS = 3600000;     // the typical-day profile is refitted once per day
+// Replay (`?curve=replay`): the same 5 h curve re-run from origins 12, 8 and 4 h ago, with the
+// actual Maps times and the typical day from -12 h to +12 h. Loaded after the live curve; the
+// first call of a morning also fits yesterday's models and can take about a minute.
+const REPLAY_TIMEOUT_MS = 150000;
+const REPLAY_REFRESH_MS = 600000;        // the anchor moves every 10 min
+const REPLAY_MAX_AGE_MS = 1800000;       // older than this, the -12 h .. +12 h window is too far off to draw
 
 const REFRESH_MS = 300000;               // travel times and forecast
 const CAMERA_REFRESH_MS = 60000;         // camera images, forecast view only
@@ -70,6 +76,8 @@ let trafficCache = { data: null, fetchedAt: 0, inFlight: null };
 let forecastView = null;         // { curve, dirs: { sg|jb: { originAt, points: [{ at, mins, base, model, lead }] } } }
 let baselineDay = null;          // { sg|jb: [{ t, mins }] } typical day, 24 h
 let baselineAt = 0;
+let replayView = null;           // { anchor, backH, dirs: { sg|jb: { observed, typical, runs } } }
+let replayAt = 0;
 
 // ── Small helpers ───────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -488,6 +496,128 @@ async function loadBaselineDay() {
     }
 }
 
+// Both lists as [{ t, mins }]; runs keep each point's observed value for scoring.
+function normalizeReplay(data) {
+    const valid = arr => arr.filter(p => Number.isFinite(p.t) && p.mins != null);
+    const dirs = {};
+    DIRECTIONS.forEach(d => {
+        const src = data.directions?.[d.apiKey] || {};
+        dirs[d.key] = {
+            observed: valid((src.observed || []).map(b => ({ t: Date.parse(b.bin_start), mins: b.observed_min }))),
+            typical: valid((src.typical || []).map(b => ({ t: Date.parse(b.bin_start), mins: b.forecast_min }))),
+            runs: (src.runs || []).map(r => ({
+                originAt: Date.parse(r.origin_ts),
+                points: valid((r.points || []).filter(p => p.model !== 'profile')
+                    .map(p => ({ t: Date.parse(p.forecast_for), mins: p.forecast_min }))),
+                mae: r.mae_min, baseMae: r.baseline_mae_min, scored: r.scored_points || 0, unavailable: r.unavailable
+            }))
+        };
+    });
+    return { anchor: Date.parse(data.anchor_ts), backH: data.back_hours, dirs };
+}
+
+async function loadReplay() {
+    if (replayView && Date.now() - replayAt < REPLAY_REFRESH_MS) return;
+    try {
+        const data = await fetchJson(`${FORECAST_API}?curve=replay&hours=${FORECAST_HOURS}`, REPLAY_TIMEOUT_MS, FORECAST_ERRORS);
+        const view = normalizeReplay(data);
+        if (!Number.isFinite(view.anchor) || !view.backH) throw new Error('replay without an anchor');
+        replayView = view;
+        replayAt = Date.now();
+    } catch (err) {
+        console.error('Forecast replay fetch error:', err); // the card keeps the forecast-from-now chart
+        if (Date.now() - replayAt > REPLAY_MAX_AGE_MS) replayView = null;
+    }
+}
+
+// Split a series where bins are missing, so a gap is not drawn as a straight line.
+function segments(points, maxGapMs = 1500000) {
+    const out = [];
+    points.forEach((p, i) => {
+        if (i === 0 || p.t - points[i - 1].t > maxGapMs) out.push([]);
+        out[out.length - 1].push(p);
+    });
+    return out;
+}
+
+// Day chart: actual Maps times and three past runs over the last 12 h, the live run
+// from now, and the typical day across -12 h .. +12 h.
+function forecastDay(d, view, rep) {
+    const src = rep.dirs[d.key];
+    const span = rep.backH * 3600000;
+    const t0 = rep.anchor - span, t1 = rep.anchor + span;
+    const inside = arr => arr.filter(p => p.t >= t0 && p.t <= t1);
+    const typical = inside(src.typical);
+    const observed = inside(src.observed);
+    const seenAt = new Map(observed.map(p => [p.t, p.mins]));
+    // Each run starts at the actual value of its origin bin, so it reads as "from here".
+    const fromOrigin = (originAt, points) => (seenAt.has(originAt) ? [{ t: originAt, mins: seenAt.get(originAt) }] : []).concat(points);
+    const runs = src.runs.filter(r => r.points.length).map(r => ({ ...r, line: inside(fromOrigin(r.originAt, r.points)) }));
+    const fcPts = inside(view.points.map(p => ({ t: p.at, mins: p.mins })));
+    const live = inside(fromOrigin(view.originAt, fcPts));
+
+    const vals = [typical, observed, live, ...runs.map(r => r.line)].flat().map(p => p.mins);
+    if (!vals.length) return '';
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = Math.max(1, (hi - lo) * 0.1);
+    const W = 420, H = 165, padL = 30, padR = 12, padT = 14, padB = 22;
+    const x = t => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
+    const y = v => padT + (H - padT - padB) - ((v - (lo - pad)) / ((hi - lo + 2 * pad) || 1)) * (H - padT - padB);
+    const poly = arr => arr.map(p => `${x(p.t).toFixed(1)},${y(p.mins).toFixed(1)}`).join(' ');
+    const dotsOf = (arr, r, extra = '') => arr.map(p => `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.mins).toFixed(1)}" r="${r}" fill="${d.color}"${extra}/>`).join('');
+
+    const tickEvery = 6 * 3600000;
+    let ticks = '';
+    for (let t = Math.ceil(t0 / tickEvery) * tickEvery; t <= t1; t += tickEvery) {
+        ticks += `<line class="fc-tick" x1="${x(t).toFixed(1)}" y1="${padT}" x2="${x(t).toFixed(1)}" y2="${H - padB}"/>
+                  <text class="fc-axis" x="${x(t).toFixed(1)}" y="${H - 6}" text-anchor="middle">${sgtClock(t)}</text>`;
+    }
+    const yLabel = v => `<text class="fc-axis" x="${padL - 4}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${v.toFixed(0)}</text>`;
+    const nowX = x(Math.min(Math.max(Date.now(), t0), t1)).toFixed(1);
+
+    const past = runs.map(r => `<polyline class="fc-run-line" stroke="${d.color}" points="${poly(r.line)}"/>`
+        + dotsOf(r.points.filter(p => p.t >= t0 && p.t <= t1), 1.8, ' opacity="0.55"')).join('');
+    const actual = segments(observed).filter(s => s.length > 1)
+        .map(s => `<polyline class="fc-obs-line" points="${poly(s)}"/>`).join('');
+    const lastLive = live[live.length - 1];
+
+    return `<svg viewBox="0 0 ${W} ${H}" class="fc-compare" role="img" aria-label="${d.label}: actual travel time and past forecasts over the last 12 hours, the forecast from now, and the typical day">
+        ${ticks}${yLabel(lo)}${yLabel(hi)}
+        <line class="fc-now-line" x1="${nowX}" y1="${padT - 4}" x2="${nowX}" y2="${H - padB}"/>
+        <text class="fc-axis fc-now-label" x="${nowX}" y="${padT - 6}" text-anchor="middle">Now</text>
+        ${typical.length > 1 ? `<polyline class="fc-base-line" points="${poly(typical)}"/>` : ''}
+        ${past}${actual}
+        ${live.length > 1 ? `<polyline class="fc-fc-line" stroke="${d.color}" points="${poly(live)}"/>` : ''}
+        ${dotsOf(fcPts.slice(0, -1), 2.4)}
+        ${lastLive ? `<circle cx="${x(lastLive.t).toFixed(1)}" cy="${y(lastLive.mins).toFixed(1)}" r="4" fill="${d.color}" stroke="#070b13" stroke-width="1.5"/>` : ''}
+    </svg>
+    <div class="fc-legend">
+        <span><i class="fc-key fc-key-obs"></i>Actual</span>
+        <span><i class="fc-key fc-key-run" style="background:${d.color}"></i>Past forecasts</span>
+        <span><i class="fc-key" style="background:${d.color}"></i>Forecast</span>
+        <span><i class="fc-key fc-key-base"></i>Typical</span>
+    </div>
+    ${replayAccuracy(src.runs)}`;
+}
+
+// Mean absolute error of the past runs against what Maps then reported, pooled over
+// their closed targets, next to the typical day's error on the same targets.
+function replayAccuracy(runs) {
+    const scored = runs.filter(r => r.scored > 0 && r.mae != null);
+    const chips = runs.map(r => {
+        const at = sgtClock(r.originAt);
+        if (r.mae != null && r.scored > 0) return `<span class="fc-acc-run" title="${r.scored} targets scored">${at} run <strong>${r.mae.toFixed(1)}</strong></span>`;
+        return `<span class="fc-acc-run" title="${r.unavailable || 'no target has closed yet'}">${at} run —</span>`;
+    }).join('');
+    if (!scored.length) return `<div class="fc-acc">No past forecast has a closed target yet.</div><div class="fc-acc-runs">${chips}</div>`;
+    const n = scored.reduce((a, r) => a + r.scored, 0);
+    const pooled = key => scored.reduce((a, r) => a + r[key] * r.scored, 0) / n;
+    const base = scored.every(r => r.baseMae != null) ? pooled('baseMae') : null;
+    return `<div class="fc-acc">Last 12 h: off by <strong>${pooled('mae').toFixed(1)} min</strong> on average`
+        + (base != null ? ` (typical day: ${base.toFixed(1)})` : '') + ` · ${n} targets</div>
+        <div class="fc-acc-runs">${chips}</div>`;
+}
+
 // Small chart: the forecast curve against the typical day, from the forecast origin.
 function forecastCompare(d, view, spanH) {
     const pts = view.points;
@@ -538,6 +668,7 @@ function renderForecastCards() {
     if (!forecastView) return;
     const traffic = trafficCache.data;
     const spanH = baselineDay ? COMPARE_HOURS : FORECAST_HOURS; // no typical day => the curve's own 5 h
+    const replay = forecastView.curve && replayView && Date.now() - replayAt < REPLAY_MAX_AGE_MS ? replayView : null;
 
     $('fc-cards').innerHTML = DIRECTIONS.map(d => {
         const view = forecastView.dirs[d.key];
@@ -558,14 +689,15 @@ function renderForecastCards() {
                     <span class="fc-when">min at ${sgtClock(f.at)} SGT${lead}</span>
                 </div>
                 ${nowLine}
-                ${forecastCompare(d, view, spanH)}
+                ${replay ? forecastDay(d, view, replay) : forecastCompare(d, view, spanH)}
             </div>`;
     }).join('');
 
     const origin = DIRECTIONS.map(d => forecastView.dirs[d.key].originAt).filter(Number.isFinite).sort().pop();
     $('fc-updated').textContent = origin ? `Based on ${sgtClock(origin)} SGT data` : 'Updated';
     $('fc-meta').textContent = 'Model — ' + DIRECTIONS.map(d =>
-        `${d.label}: ${[...new Set(forecastView.dirs[d.key].points.map(p => p.model))].join(', ') || '—'}`).join(' · ');
+        `${d.label}: ${[...new Set(forecastView.dirs[d.key].points.map(p => p.model))].join(', ') || '—'}`).join(' · ')
+        + (replay ? ' · Past runs re-run with the models of their own day (not logged live); errors are Maps travel time, not crossing time.' : '');
 }
 
 function setForecastStatus(text) {
@@ -610,6 +742,7 @@ async function fetchForecast() {
     try { await loadTrafficData(); } catch (_) { /* "Now" on the cards is optional */ }
     setForecastStatus(view.curve ? '' : 'Showing the 30-minute forecast only; the longer forecast did not load.');
     renderForecastCards();
+    if (view.curve) loadReplay().then(renderForecastCards); // past runs and actuals: slower, drawn when they arrive
 }
 
 // ── LTA cameras (forecast view) ─────────────────────────────────────────────

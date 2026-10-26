@@ -28,6 +28,10 @@ Top-level `model` is the id the caller asked for (`served` by default). Each dir
 
 A blend point (not what `served` returns) looks like `"model": "mean[models]"` plus `"components": [{"model": "lin_bq[frozen]", "weight": 0.5}, {"model": "persistence", "weight": 0.5}]`.
 
+## Replay
+
+`GET /?curve=replay&hours=5` re-runs the forecast curve from origins 12, 8 and 4 hours before the newest closed bin. Each run uses the fits of its own SGT day, so it reproduces what was served then; nothing was logged live. Points whose target has closed carry `observed_min` and `error_min`, and each run has `mae_min` and `baseline_mae_min` (the profile on the same targets). Each direction also returns the `observed` bins of the last 12 hours and the `typical` profile from −12 h to +12 h. These are a few Maps-duration points from one day: not an evaluation, and not crossing time. See the [runbook](../../docs/runbooks/forecast-api.md).
+
 ## Model cards
 
 `GET /?list=cards` (same body as `GET /?view=cards`) returns a JSON array the frontend can render as cards. `GET /?list=models` is unchanged. A card's `callable` flag matches the forecast allow-list. `timesfm` is a card only. `fcm_mlp` is not its own query id; the mix calls that network as one half.
