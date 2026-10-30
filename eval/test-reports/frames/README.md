@@ -1,13 +1,12 @@
 # Labelled frames (camera 2701)
 
-All 90 labelled frames of Roboflow dataset v6, unannotated, 1920 x 1080 JPEG, as three zips plus the label export. Unzip before use; the zips hold the files at their top level.
+All 90 labelled frames of Roboflow dataset v6, unannotated, 1920 x 1080 JPEG, as three zips. The labels are in [`annotations_with_predictions.json`](../../runs/layer_a_count/annotations_with_predictions.json) (all 90 images, with the YOLO-S predictions). Unzip before use; the zips hold the files at their top level.
 
 | File | Contents |
 | --- | --- |
 | [`test_frames15.zip`](test_frames15.zip) | The 15 `test` frames (described below) |
 | [`train_frames60.zip`](train_frames60.zip) | The 60 `train` frames ([list](#train-frames-60)) |
-| [`valid_frames15.zip`](valid_frames15.zip) | The `valid` frames ([list](#valid-frames-15)). **Holds 14 of 15**: `3dc0bb9d-49ce-4936-9e90-eb8b37e0a779.jpg` is not in the zip |
-| [`annotations_with_predictions.json`](annotations_with_predictions.json) | Labels for all 90 images plus YOLO-S predictions. Identical to [`eval/runs/layer_a_count/annotations_with_predictions.json`](../../runs/layer_a_count/annotations_with_predictions.json) |
+| [`valid_frames15.zip`](valid_frames15.zip) | The 15 `valid` frames ([list](#valid-frames-15)) |
 
 The rest of this page describes the 15 `test` frames. These are the frames behind every count and box score in the [test report](../README.md). They were not used to train any of the fine-tuned detectors or to select their training checkpoint epoch (note that the comparison notebook's per-model confidence threshold in the artifact table was swept on these 15 frames, whereas the served `model=local` operating point is fixed at `conf=0.20, overlap=0.60`).
 
@@ -110,7 +109,7 @@ File names are `2701_<YYYYMMDD>T<HHMMSS>.jpg`; the last column is the Roboflow e
 
 ## Valid frames (15)
 
-One image (#15) has no capture time in its name; keep the name as is. Totals: 473 cars, 72 buses, 96 trucks.
+One image (#15) has no capture time in its name; in the zip it keeps its full Roboflow export name (`3dc0bb9d-...-9e90-eb8b37e0a779_jpg.rf.9812aafbe13e485c806f8e110b367e4a.jpg`), not the short name below. Totals: 473 cars, 72 buses, 96 trucks.
 
 | # | File | Captured (SGT) | Cars | Buses | Trucks | Roboflow export name |
 | ---: | --- | --- | ---: | ---: | ---: | --- |
