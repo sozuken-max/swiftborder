@@ -12,7 +12,7 @@ The unit tests for the service itself are in [`services/camdetect/tests/`](../..
 | [`eval/runs/layer_a_count/roboflow_v6_conf02.json`](../runs/layer_a_count/roboflow_v6_conf02.json) | Live `swiftbackend` `model=v6` at its served setting (confidence 0.2), 17 Oct 2026 |
 | [`eval/runs/layer_a_count/annotations_with_predictions.json`](../runs/layer_a_count/annotations_with_predictions.json) | Roboflow dataset v6 labels for all 90 images (train 60 / valid 15 / test 15; boxes, plus polygons where labelled), each with the YOLO-S `best.pt` predictions (class, confidence, box) at confidence >= 0.01 after class-aware NMS, no overlap dedupe. Exported from Colab, 17 Oct 2026 |
 | [`images/`](images/) | The annotated prediction images from the comparison page, one folder per frame |
-| [`frames/`](frames/README.md) | The 15 test frames themselves (1920 x 1080 JPEG, unannotated) and a manifest |
+| [`frames/`](frames/README.md) | All 90 labelled frames as three zips (test 15, train 60, valid 15; 1920 x 1080 JPEG, unannotated) and a manifest |
 | [`speed_benchmark.py`](speed_benchmark.py) | The ONNX speed test (CPU or GPU), from the speed-test notebook |
 | [`notebooks/vehicle_detection_comparison.ipynb`](notebooks/vehicle_detection_comparison.ipynb) | Colab notebook with outputs: YOLO26s/m training on dataset v6, the five-detector comparison (box AP50, recall/precision sweep, count error) and the `test_predictions` export. Roboflow key removed; it reads the Colab secret `ROBOFLOW_API_KEY` |
 | [`notebooks/onnx_gpu_speed_test.ipynb`](notebooks/onnx_gpu_speed_test.ipynb) | Colab notebook with outputs: the recorded GPU speed run |
@@ -181,13 +181,13 @@ The `Time per image` column is Ultralytics predict on a T4 at each model's input
 | Run | Hardware | onnxruntime | Frames | Preprocess avg | Inference avg (median) | Total avg | Images/s |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
 | Colab, [`onnx_gpu_speed_test.ipynb`](notebooks/onnx_gpu_speed_test.ipynb) | Colab GPU, `CUDAExecutionProvider` (card not logged) | 1.31.0 | 20 live frames, cameras 2701 and 2702 | 14.7 ms | 4.4 ms (4.4) | 19.2 ms | 52.1 |
-| This repo, 17 Oct 2026 | 4 vCPU Intel Xeon 2.10 GHz, `CPUExecutionProvider` | 1.29.0 | the 15 [`frames/`](frames/README.md) | 55.1 ms | 154.2 ms (159.6) | 209.3 ms | 4.8 |
+| This repo, 17 Oct 2026 | 4 vCPU Intel Xeon 2.10 GHz, `CPUExecutionProvider` | 1.29.0 | the 15 test frames in [`frames/test_frames15.zip`](frames/README.md) | 55.1 ms | 154.2 ms (159.6) | 209.3 ms | 4.8 |
 
 The Colab run downloaded the 20 most recent frames (every 10 minutes going back from an hour before the run) and did not save them, so that exact set cannot be recovered. To repeat the test on fixed images, run it on the committed test frames:
 
 ```bash
 # from repo root
-python eval/test-reports/speed_benchmark.py --model services/camdetect/models/yolo26s_v6_boxfix.onnx --frames eval/test-reports/frames --n 15
+python eval/test-reports/speed_benchmark.py --model services/camdetect/models/yolo26s_v6_boxfix.onnx --frames <folder with test_frames15.zip unzipped> --n 15
 ```
 
 The `swiftbackend` Cloud Run service is CPU-only. The earlier local measurement of the full `model=local` handler is about 0.5 s per frame ([CHANGELOG](../../CHANGELOG.md)).
