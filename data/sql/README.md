@@ -18,6 +18,7 @@ Run in BigQuery (location **US** for `traffic_prediction`; **asia-southeast1** f
 | 6 | [bigquery/traffic_prediction/v_forecast_recent.sql](bigquery/traffic_prediction/v_forecast_recent.sql) | Needs models + registry |
 | — | [bigquery/weatherforecast/v_weather_features_10min.sql](bigquery/weatherforecast/v_weather_features_10min.sql) | Not joined to training today |
 | — | [bigquery/cam2701/v_congestion_index_10min.sql](bigquery/cam2701/v_congestion_index_10min.sql) | Not joined to training today |
+| — | [bigquery/causeway/v_provider_compare.sql](bigquery/causeway/v_provider_compare.sql) | Google vs TomTom per 10-min bin (TomTom trial); needs `causeway.travel_times_tomtom`; not used by training |
 
 **Not in this folder:** `causeway.travel_times` ingest ([`services/gmapfetcher/`](../../services/gmapfetcher/README.md)), `traffic_images` backfill ([`services/camdetect/`](../../services/camdetect/README.md)). The weather tables are appended by [`data/weather/load_bigquery.py`](../weather/load_bigquery.py) (manual; adds nullable `weatherforecast.update_timestamp`). See [docs/roadmap.md](../../docs/roadmap.md).
 
