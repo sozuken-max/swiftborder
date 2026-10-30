@@ -125,7 +125,7 @@ def main():
     ap.add_argument("--bucket", default=BUCKET)
     ap.add_argument("--project", default=PROJECT)
     ap.add_argument("--exclude", nargs="*", default=["2701"], help="camera ids to skip (default 2701)")
-    ap.add_argument("--workers", type=int, default=16)
+    ap.add_argument("--workers", type=int, default=32)
     ap.add_argument("--no-zip", action="store_true")
     args, _ = ap.parse_known_args()  # notebooks add their own flags (-f kernel.json)
 
@@ -143,6 +143,11 @@ def main():
     except ImportError:
         sys.exit("pip install google-cloud-storage")
     client = storage.Client(project=args.project)
+    try:  # the default pool is 10 connections, which throttles the worker threads
+        from requests.adapters import HTTPAdapter
+        client._http.mount("https://", HTTPAdapter(pool_connections=args.workers, pool_maxsize=args.workers))
+    except Exception:
+        pass
     bucket = client.bucket(args.bucket)
 
     cams = discover(client, args.bucket, set(args.exclude))
@@ -156,8 +161,14 @@ def main():
         for (bi, month) in plan_slots(args.n, months, rng):
             jobs.append((cam, bi, month, random.Random(rng.random())))  # one rng per pick: reproducible threads
     taken, lock = set(), Lock()
+    print(f"choosing {len(jobs)} frames (one bucket lookup each; progress every 250)...")
+    picks = []
     with ThreadPoolExecutor(args.workers) as ex:
-        picks = list(ex.map(lambda j: draw_frame(client, args.bucket, j[0], j[1], j[2], j[3], taken, lock), jobs))
+        for i, pick in enumerate(ex.map(lambda j: draw_frame(client, args.bucket, j[0], j[1], j[2], j[3], taken, lock),
+                                        jobs), 1):
+            picks.append(pick)
+            if i % 250 == 0 or i == len(jobs):
+                print(f"chosen {i}/{len(jobs)}", flush=True)
     rows = [p for p in picks if p]
     print(f"picked {len(rows)} of {len(jobs)} frames ({len(jobs) - len(rows)} slots found no frame)")
 
