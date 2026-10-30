@@ -17,6 +17,10 @@ Sampling, repeated independently for each camera (--n frames each, default 1000)
   * A pick that lands on an hour with no frames is redrawn, so an unlucky month can end up a frame
     short. The summary printed at the end shows the final spread per camera.
 
+In Google Colab: upload this file and run `!python sample_other_cameras.py`. It signs you in (a pop-up
+asks for the Google account), writes to /content and downloads the zips to your computer at the end.
+Nothing else to set up; do not close the tab until the downloads start.
+
 Setup (Anaconda prompt):
 
     pip install google-cloud-storage
@@ -115,7 +119,8 @@ def draw_frame(client, bucket, cam, bi, month, rng, taken, lock, tries=60):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=1000, help="frames PER CAMERA (default 1000)")
-    ap.add_argument("--out", default="other_cameras_1000", help="output folder (default other_cameras_1000)")
+    ap.add_argument("--out", default="other_cameras_1000",
+                    help="output folder (default other_cameras_1000; /content/other_cameras in Colab)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--bucket", default=BUCKET)
     ap.add_argument("--project", default=PROJECT)
@@ -123,6 +128,15 @@ def main():
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--no-zip", action="store_true")
     args = ap.parse_args()
+
+    try:
+        from google.colab import auth as colab_auth  # only exists inside Colab
+        colab_auth.authenticate_user()
+        in_colab = True
+        if args.out == "other_cameras_1000":
+            args.out = "/content/other_cameras"
+    except ImportError:
+        in_colab = False
 
     try:
         from google.cloud import storage
@@ -186,6 +200,7 @@ def main():
         print("  by hour bucket:", dict(sorted(Counter(r["hour_bucket"] for r in mine).items())))
 
     if not args.no_zip:
+        zips = []
         for cam in sorted(cams):
             mine = [r for r in rows if r["camera"] == cam]
             zpath = Path(f"{out}_{cam}.zip")
@@ -195,7 +210,12 @@ def main():
                 for r in mine:
                     z.write(dest_of(r), f"{cam}/{dest_of(r).name}")
             print("zip:", zpath.resolve())
+            zips.append(zpath)
     print("folder:", out.resolve())
+    if in_colab and not args.no_zip:
+        from google.colab import files
+        for z in zips:  # the browser may ask to allow multiple downloads
+            files.download(str(z))
 
 
 if __name__ == "__main__":
