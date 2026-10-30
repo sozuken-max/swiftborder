@@ -38,7 +38,7 @@ Frozen numbers from the artifact page (not re-run in this rescoring pass). Summa
 | COCO YOLO-S @1280 | 0.10 | 11.60 | −9.87 | 9.60 | 2/15 | 5/15 |
 | COCO YOLO-S @640 | 0.10 | 17.40 | −13.13 | 19.47 | 1/15 | 5/15 |
 
-**Weights:** "YOLO-S trained (freeze)" is the same checkpoint as production **`model=local`**: `local:yolo26s-v6-boxfix` (Colab `v6_yolo26s_boxfix`, dataset v6, `freeze=10`, ONNX `camdetect/models/yolo26s_v6_boxfix.onnx`, SHA-256 `dc43db2fe30ab8cf08b6d7056bd7d20d0f111f0a5ec577a51ed86cb593f65fe8` at report run). YOLO-M is artifact-only (not in git, not served).
+**Weights:** "YOLO-S trained (freeze)" is the same checkpoint as production **`model=local`**: `local:yolo26s-v6-boxfix` (Colab `v6_yolo26s_boxfix`, dataset v6, `freeze=10`, ONNX `camdetect/models/yolo26s_v6_boxfix.onnx`, SHA-256 `dc43db2fe30ab8cf08b6d7056bd7d20d0f111f0a5ec577a51ed86cb593f65fe8` at report run). YOLO-M's `best.pt` is in git under `eval/test-reports/runs/yolo26m/`, but it is not served.
 
 ### 2.2 Production-aligned rescoring (same 15 GCS files)
 

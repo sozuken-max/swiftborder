@@ -13,8 +13,8 @@ Nothing here is used by the service. The served model is the ONNX export in
 ```
 runs/
 ├── yolo26s/                     YOLO26s fine-tuned (freeze=10): the served model, model=local
-│   ├── training/                was v6_yolo26s_boxfix/
-│   │   ├── weights/             training checkpoints (best.pt not in git; see Drive `swiftborder_runs`)
+│   ├── best (yolo26s).pt        the best.pt checkpoint (20 MB)
+│   ├── training/                was v6_yolo26s_boxfix/ (no weights/ folder: best.pt is the file above)
 │   │   ├── args.yaml            training settings
 │   │   ├── results.csv/.png     loss and metrics per epoch
 │   │   ├── labels.jpg           label statistics of the training set
@@ -23,6 +23,7 @@ runs/
 │   │                            end-of-training check of best.pt on the valid split
 │   └── eval_test/               was val_yolo26s_test_boxfix/: Ultralytics val on the test split
 ├── yolo26m/                     YOLO26m fine-tuned the same way; compared, not served
+│   ├── best (yolo26m).pt        the best.pt checkpoint (44 MB)
 │   ├── training/                was v6_yolo26m_boxfix/ (same layout)
 │   └── eval_test/               was val_yolo26m_test_boxfix/
 └── comparison_5_detectors/      summary CSVs only in git (annotated frames: [`../images/`](../images/) WebPs; full JPEG tree on Drive)
@@ -42,13 +43,13 @@ notebook use the Roboflow export names (`..._jpg.rf.<hash>.jpg`); the frames man
 | Run | Base | Image size | Batch | Epochs run (patience 50) | Best epoch | valid mAP50 | valid mAP50-95 | `best.pt` |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `yolo26s/training` | `yolo26s.pt` | 1280 | 8 | 138 of 150 | 88 | 0.833 | 0.558 | 20,389,957 bytes, sha256 `de7d105b...abf0e` |
-| `yolo26m/training` | `yolo26m.pt` | 1280 | 4 | 148 of 150 | 98 | 0.837 | 0.572 | 44,104,281 bytes |
+| `yolo26m/training` | `yolo26m.pt` | 1280 | 4 | 148 of 150 | 98 | 0.837 | 0.572 | 44,104,281 bytes, sha256 `b01464f5...1fa02` |
 
 Both: AdamW, `lr0=0.001`, cosine LR, `freeze=10`, seed 0, labels converted from polygons to boxes
 first (the `boxfix` in the old names). Best epoch and its scores are read from `results.csv`. The
 `valid` split also picked the checkpoint, so these two columns are not held-out scores. The YOLO-S
 `best.pt` hash matches the checkpoint recorded for the served ONNX file in the
-[camdetect README](../../../services/camdetect/README.md#in-container-model-modellocal). `last.pt` (the final epoch) was left
+[camdetect README](../../../services/camdetect/README.md#in-container-model-modellocal). The two `best.pt` files are the files named `best (<model>).pt` next to each `training/` folder. `last.pt` (the final epoch) was left
 on Drive.
 
 Per-epoch curves for both runs, in one table and one chart:

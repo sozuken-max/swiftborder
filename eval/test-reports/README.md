@@ -198,8 +198,8 @@ The training runs, both checkpoints, the Ultralytics test-split evaluations and 
 
 | Detector | Weights | Notes |
 | --- | --- | --- |
-| YOLO-S trained (freeze) | [`runs/yolo26s/training/`](runs/yolo26s/training/) (`best.pt` on Drive; see [`runs/README.md`](runs/README.md)), and the served ONNX export [`services/camdetect/models/yolo26s_v6_boxfix.onnx`](../../services/camdetect/models/yolo26s_v6_boxfix.onnx) | Ultralytics on the test split: mAP50 0.836, mAP50-95 0.562 |
-| YOLO-M trained (freeze) | [`runs/yolo26m/training/`](runs/yolo26m/training/) (`best.pt` on Drive; see [`runs/README.md`](runs/README.md)) | Not exported, not served. Test split: mAP50 0.872, mAP50-95 0.583 |
+| YOLO-S trained (freeze) | [`runs/yolo26s/training/`](runs/yolo26s/training/) (`best.pt`: `runs/yolo26s/best (yolo26s).pt`, sha256 `de7d105b...abf0e`; see [`runs/README.md`](runs/README.md)), and the served ONNX export [`services/camdetect/models/yolo26s_v6_boxfix.onnx`](../../services/camdetect/models/yolo26s_v6_boxfix.onnx) | Ultralytics on the test split: mAP50 0.836, mAP50-95 0.562 |
+| YOLO-M trained (freeze) | [`runs/yolo26m/training/`](runs/yolo26m/training/) (`best.pt`: `runs/yolo26m/best (yolo26m).pt`, 44,104,281 bytes, sha256 `b01464f5...1fa02`; see [`runs/README.md`](runs/README.md)) | Not exported, not served. Test split: mAP50 0.872, mAP50-95 0.583 |
 | COCO YOLO-S @640 / @1280 | stock `yolo26s.pt`, downloaded by Ultralytics | No fine-tuning |
 | Roboflow v6 | Hosted by Roboflow; weight download needs a Core plan | Raw API replies on Drive with the comparison JPEG tree (summary CSVs in [`runs/comparison_5_detectors/`](runs/comparison_5_detectors/)) |
 
