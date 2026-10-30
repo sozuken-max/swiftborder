@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""Download a stratified random sample of frames from every LTA camera except 2701.
+"""Download a stratified random sample of frames, N per camera, from every LTA camera except 2701.
 
 Reads ``gs://sg-lta-traffic-cameras/camera_id=<id>/month=<YYYY-MM>/<id>_<YYYYMMDD>T<HHMMSS>.jpg``
 (capture time in SGT, as in the file name) and writes:
 
-    <out>/images/<file name>.jpg   the sampled frames
-    <out>/manifest.csv             one row per frame: object path, camera, month, hour, hour bucket
-    <out>.zip                      the two above, unless --no-zip
+    <out>/images/<camera>/<file name>.jpg   the sampled frames
+    <out>/manifest.csv                      one row per frame: object path, camera, month, hour, hour bucket
+    <out>_<camera>.zip                      one zip per camera (its images and its manifest rows), unless --no-zip
 
-Sampling:
+Sampling, repeated independently for each camera (--n frames each, default 1000):
   * Hour buckets are 0, 1, 2-5 (one bucket: almost no traffic), then 6, 7, ... 23. That is 21
     buckets, each given the same quota (N // 21, with the remainder spread over random buckets).
-  * Inside each bucket the picks cycle through every month that has data, in shuffled order, so
-    months are equally represented too. The camera is drawn at random from the cameras that have
-    that month; the day and the hour inside the bucket are random; the minute comes from the
-    frames that exist in that hour.
+  * Inside each bucket the picks cycle through every month that camera has data for, in shuffled
+    order, so its months are equally represented too. The day and the hour inside the bucket are
+    random; the minute comes from the frames that exist in that hour.
   * A pick that lands on an hour with no frames is redrawn, so an unlucky month can end up a frame
-    short. The summary printed at the end shows the final spread.
+    short. The summary printed at the end shows the final spread per camera.
 
 Setup (Anaconda prompt):
 
@@ -77,9 +76,9 @@ def quotas(n, rng):
     return [base + (i in plus) for i in range(len(HOUR_BUCKETS))]
 
 
-def plan_slots(n, cams, rng):
+def plan_slots(n, months, rng):
     """[(bucket_index, month)] with n entries: equal per hour bucket, months cycled within each."""
-    months = sorted({m for ms in cams.values() for m in ms})
+    months = sorted(months)
     slots = []
     for bi, q in enumerate(quotas(n, rng)):
         order = []
@@ -91,13 +90,11 @@ def plan_slots(n, cams, rng):
     return slots
 
 
-def draw_frame(client, bucket, cams, bi, month, rng, taken, lock, tries=60):
-    """One random frame in hour bucket bi and the given month, or None if nothing turns up."""
-    have = [c for c, ms in cams.items() if month in ms]
+def draw_frame(client, bucket, cam, bi, month, rng, taken, lock, tries=60):
+    """One random frame from camera cam in hour bucket bi and the given month, or None."""
     year, mon = map(int, month.split("-"))
     ndays = calendar.monthrange(year, mon)[1]
     for _ in range(tries):
-        cam = rng.choice(have)
         hour = rng.choice(HOUR_BUCKETS[bi])
         day = rng.randint(1, ndays)
         prefix = f"camera_id={cam}/month={month}/{cam}_{year:04d}{mon:02d}{day:02d}T{hour:02d}"
@@ -117,7 +114,7 @@ def draw_frame(client, bucket, cams, bi, month, rng, taken, lock, tries=60):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--n", type=int, default=1000, help="number of frames (default 1000)")
+    ap.add_argument("--n", type=int, default=1000, help="frames PER CAMERA (default 1000)")
     ap.add_argument("--out", default="other_cameras_1000", help="output folder (default other_cameras_1000)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--bucket", default=BUCKET)
@@ -140,21 +137,24 @@ def main():
     print("cameras:", ", ".join(f"{c} ({len(m)} months)" for c, m in sorted(cams.items())))
 
     rng = random.Random(args.seed)
-    slots = plan_slots(args.n, cams, rng)
-    rngs = [random.Random(rng.random()) for _ in slots]  # one per pick, so threads stay reproducible
+    jobs = []  # (camera, bucket_index, month, rng) for every pick, 1000 per camera
+    for cam, months in sorted(cams.items()):
+        for (bi, month) in plan_slots(args.n, months, rng):
+            jobs.append((cam, bi, month, random.Random(rng.random())))  # one rng per pick: reproducible threads
     taken, lock = set(), Lock()
     with ThreadPoolExecutor(args.workers) as ex:
-        picks = list(ex.map(lambda a: draw_frame(client, args.bucket, cams, a[0][0], a[0][1], a[1], taken, lock),
-                            zip(slots, rngs)))
+        picks = list(ex.map(lambda j: draw_frame(client, args.bucket, j[0], j[1], j[2], j[3], taken, lock), jobs))
     rows = [p for p in picks if p]
-    print(f"picked {len(rows)} of {args.n} frames ({args.n - len(rows)} slots found no frame)")
+    print(f"picked {len(rows)} of {len(jobs)} frames ({len(jobs) - len(rows)} slots found no frame)")
 
     out = Path(args.out)
-    img_dir = out / "images"
-    img_dir.mkdir(parents=True, exist_ok=True)
+
+    def dest_of(row):
+        return out / "images" / row["camera"] / row["path"].rsplit("/", 1)[-1]
 
     def fetch(row):
-        dest = img_dir / row["path"].rsplit("/", 1)[-1]
+        dest = dest_of(row)
+        dest.parent.mkdir(parents=True, exist_ok=True)
         if not dest.exists():
             tmp = dest.with_suffix(".part")
             bucket.blob(row["path"]).download_to_filename(tmp)
@@ -163,29 +163,38 @@ def main():
 
     with ThreadPoolExecutor(args.workers) as ex:
         for i, _ in enumerate(ex.map(fetch, rows), 1):
-            if i % 100 == 0 or i == len(rows):
+            if i % 250 == 0 or i == len(rows):
                 print(f"downloaded {i}/{len(rows)}")
 
-    rows.sort(key=lambda r: r["path"].rsplit("/", 1)[-1])
-    with open(out / "manifest.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["file", "camera", "month", "day", "hour", "hour_bucket", "size", "gcs_path"])
-        w.writeheader()
-        for r in rows:
-            w.writerow(dict(file=r["path"].rsplit("/", 1)[-1], camera=r["camera"], month=r["month"], day=r["day"],
-                            hour=r["hour"], hour_bucket=r["hour_bucket"], size=r["size"],
-                            gcs_path=f"gs://{args.bucket}/{r['path']}"))
+    rows.sort(key=lambda r: (r["camera"], r["path"].rsplit("/", 1)[-1]))
+    fields = ["file", "camera", "month", "day", "hour", "hour_bucket", "size", "gcs_path"]
 
-    for title, key in (("camera", "camera"), ("month", "month"), ("hour bucket", "hour_bucket")):
-        print(f"by {title}:", dict(sorted(Counter(r[key] for r in rows).items())))
+    def manifest_row(r):
+        return dict(file=r["path"].rsplit("/", 1)[-1], camera=r["camera"], month=r["month"], day=r["day"],
+                    hour=r["hour"], hour_bucket=r["hour_bucket"], size=r["size"],
+                    gcs_path=f"gs://{args.bucket}/{r['path']}")
+
+    with open(out / "manifest.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(manifest_row(r) for r in rows)
+
+    for cam in sorted(cams):
+        mine = [r for r in rows if r["camera"] == cam]
+        print(f"camera {cam}: {len(mine)} frames")
+        print("  by month:", dict(sorted(Counter(r["month"] for r in mine).items())))
+        print("  by hour bucket:", dict(sorted(Counter(r["hour_bucket"] for r in mine).items())))
 
     if not args.no_zip:
-        zpath = out.with_suffix(".zip") if out.suffix == "" else Path(str(out) + ".zip")
-        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:  # JPEGs do not compress further
-            z.write(out / "manifest.csv", "manifest.csv")
-            for r in rows:
-                name = r["path"].rsplit("/", 1)[-1]
-                z.write(img_dir / name, f"images/{name}")
-        print("zip:", zpath.resolve())
+        for cam in sorted(cams):
+            mine = [r for r in rows if r["camera"] == cam]
+            zpath = Path(f"{out}_{cam}.zip")
+            with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:  # JPEGs do not compress further
+                z.writestr("manifest.csv", ",".join(fields) + "\n" + "".join(
+                    ",".join(str(manifest_row(r)[k]) for k in fields) + "\n" for r in mine))
+                for r in mine:
+                    z.write(dest_of(r), f"{cam}/{dest_of(r).name}")
+            print("zip:", zpath.resolve())
     print("folder:", out.resolve())
 
 
