@@ -4,9 +4,11 @@
 Reads ``gs://sg-lta-traffic-cameras/camera_id=<id>/month=<YYYY-MM>/<id>_<YYYYMMDD>T<HHMMSS>.jpg``
 (capture time in SGT, as in the file name) and writes:
 
-    <out>/images/<camera>/<file name>.jpg   the sampled frames
-    <out>/manifest.csv                      one row per frame: object path, camera, month, hour, hour bucket
-    <out>_<camera>.zip                      one zip per camera (its images and its manifest rows), unless --no-zip
+    lta_samples/<camera>/<file name>.jpg    the sampled frames, one folder per camera
+    lta_samples/manifest.csv                one row per frame: file, camera, month, hour, hour bucket, gs:// path
+    lta_samples_<camera>.zip                one zip per camera, unless --no-zip. Each holds
+                                            lta_samples/<camera>/... and lta_samples/manifest_<camera>.csv,
+                                            so unzipping them all into one place gives a single lta_samples/ tree
 
 Sampling, repeated independently for each camera (--n frames each, default 1000):
   * Hour buckets are 0, 1, 2-5 (one bucket: almost no traffic), then 6, 7, ... 23. That is 21
@@ -25,9 +27,11 @@ Setup (Anaconda prompt):
 
     pip install google-cloud-storage
     gcloud auth application-default login      # an account with Storage Object Viewer on the bucket
-    python sample_other_cameras.py --out other_cameras_1000
+    python sample_other_cameras.py
 
-Re-running with the same --seed and --out resumes: files already on disk are not downloaded again.
+The sample is fixed by --seed (default 0): the same seed picks the same frames every run, as long as the
+bucket still holds the same files. Use --seed 1, 2, ... for a different sample. Re-running with the same
+--out resumes: files already on disk are not downloaded again.
 """
 from __future__ import annotations
 
@@ -41,7 +45,6 @@ import zipfile
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Lock
 
 BUCKET = "sg-lta-traffic-cameras"
 PROJECT = "swiftborder"
@@ -94,7 +97,7 @@ def plan_slots(n, months, rng):
     return slots
 
 
-def draw_frame(client, bucket, cam, bi, month, rng, taken, lock, tries=60):
+def draw_frame(client, bucket, cam, bi, month, rng, avoid=frozenset(), tries=60):
     """One random frame from camera cam in hour bucket bi and the given month, or None."""
     year, mon = map(int, month.split("-"))
     ndays = calendar.monthrange(year, mon)[1]
@@ -107,10 +110,8 @@ def draw_frame(client, bucket, cam, bi, month, rng, taken, lock, tries=60):
         if not blobs:
             continue
         blob = rng.choice(blobs)
-        with lock:
-            if blob.name in taken:
-                continue
-            taken.add(blob.name)
+        if blob.name in avoid:
+            continue
         return dict(path=blob.name, camera=cam, month=month, day=day, hour=hour,
                     hour_bucket=bucket_label(HOUR_BUCKETS[bi]), size=blob.size)
     return None
@@ -119,9 +120,9 @@ def draw_frame(client, bucket, cam, bi, month, rng, taken, lock, tries=60):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=1000, help="frames PER CAMERA (default 1000)")
-    ap.add_argument("--out", default="other_cameras_1000",
-                    help="output folder (default other_cameras_1000; /content/other_cameras in Colab)")
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out", default="lta_samples",
+                    help="output folder (default lta_samples; /content/lta_samples in Colab)")
+    ap.add_argument("--seed", type=int, default=0, help="same seed = same sample (default 0)")
     ap.add_argument("--bucket", default=BUCKET)
     ap.add_argument("--project", default=PROJECT)
     ap.add_argument("--exclude", nargs="*", default=["2701"], help="camera ids to skip (default 2701)")
@@ -133,8 +134,8 @@ def main():
         from google.colab import auth as colab_auth  # only exists inside Colab
         colab_auth.authenticate_user()
         in_colab = True
-        if args.out == "other_cameras_1000":
-            args.out = "/content/other_cameras"
+        if args.out == "lta_samples":
+            args.out = "/content/lta_samples"
     except ImportError:
         in_colab = False
 
@@ -160,22 +161,30 @@ def main():
     for cam, months in sorted(cams.items()):
         for (bi, month) in plan_slots(args.n, months, rng):
             jobs.append((cam, bi, month, random.Random(rng.random())))  # one rng per pick: reproducible threads
-    taken, lock = set(), Lock()
     print(f"choosing {len(jobs)} frames (one bucket lookup each; progress every 250)...")
     picks = []
     with ThreadPoolExecutor(args.workers) as ex:
-        for i, pick in enumerate(ex.map(lambda j: draw_frame(client, args.bucket, j[0], j[1], j[2], j[3], taken, lock),
+        for i, pick in enumerate(ex.map(lambda j: draw_frame(client, args.bucket, j[0], j[1], j[2], j[3]),
                                         jobs), 1):
             picks.append(pick)
             if i % 250 == 0 or i == len(jobs):
                 print(f"chosen {i}/{len(jobs)}", flush=True)
+    # Two picks can land on the same file. Keep the first (job order) and redraw the rest one by one
+    # with a seeded rng, so the final sample does not depend on thread timing.
+    seen, redraw_rng = set(), random.Random(args.seed + 1)
+    for k, pick in enumerate(picks):
+        if pick and pick["path"] in seen:
+            cam, bi, month, _ = jobs[k]
+            pick = picks[k] = draw_frame(client, args.bucket, cam, bi, month, redraw_rng, avoid=seen)
+        if pick:
+            seen.add(pick["path"])
     rows = [p for p in picks if p]
     print(f"picked {len(rows)} of {len(jobs)} frames ({len(jobs) - len(rows)} slots found no frame)")
 
     out = Path(args.out)
 
     def dest_of(row):
-        return out / "images" / row["camera"] / row["path"].rsplit("/", 1)[-1]
+        return out / row["camera"] / row["path"].rsplit("/", 1)[-1]
 
     def fetch(row):
         dest = dest_of(row)
@@ -214,12 +223,12 @@ def main():
         zips = []
         for cam in sorted(cams):
             mine = [r for r in rows if r["camera"] == cam]
-            zpath = Path(f"{out}_{cam}.zip")
+            zpath = out.parent / f"{out.name}_{cam}.zip"
             with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:  # JPEGs do not compress further
-                z.writestr("manifest.csv", ",".join(fields) + "\n" + "".join(
+                z.writestr(f"{out.name}/manifest_{cam}.csv", ",".join(fields) + "\n" + "".join(
                     ",".join(str(manifest_row(r)[k]) for k in fields) + "\n" for r in mine))
                 for r in mine:
-                    z.write(dest_of(r), f"{cam}/{dest_of(r).name}")
+                    z.write(dest_of(r), f"{out.name}/{cam}/{dest_of(r).name}")
             print("zip:", zpath.resolve())
             zips.append(zpath)
     print("folder:", out.resolve())
