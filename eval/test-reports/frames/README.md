@@ -6,6 +6,8 @@ The 15 frames of the Roboflow dataset v6 `test` split, unannotated, 1920 x 1080 
 
 **Where the bytes came from.** Downloaded on 17 Oct 2026 from the data.gov.sg URL in the last column (the URL the live `swiftbackend` resolved for that timestamp). The 03:15 frame was earlier checked byte-identical to its GCS object; the other 14 were not compared. The box labels are in the Roboflow project (`vehicle-detection-proejct`, version 6); an export of them is in [`annotations_with_predictions.json`](../../runs/layer_a_count/annotations_with_predictions.json).
 
+**Train and valid frames.** The other 75 labelled images of dataset v6 go in [`train/`](train/README.md) (60) and [`valid/`](valid/README.md) (15); each folder's README lists the expected file names and label counts.
+
 **Day / night.** Day is 07:00-18:59 SGT (7 frames), night the other 8.
 
 | # | File | Captured (SGT) | Day/night | GT cars | GT vehicles | Roboflow export name | sha256 (first 12) | data.gov.sg source |
