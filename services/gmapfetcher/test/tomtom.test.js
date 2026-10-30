@@ -31,6 +31,13 @@ test('url puts origin:destination in the path and asks for live traffic', () => 
   assert.equal(url.searchParams.get('traffic'), 'true');
   assert.equal(url.searchParams.get('travelMode'), 'car');
   assert.equal(url.searchParams.get('computeTravelTimeFor'), 'all');
+  assert.equal(url.searchParams.has('vehicleHeading'), false);
+});
+
+test('url sends vehicleHeading only when the route sets one', () => {
+  const url = new URL(tomtomUrl({ ...route, tomtom_heading: 198 }, 'k3y'));
+  assert.equal(url.searchParams.get('vehicleHeading'), '198');
+  assert.equal(new URL(tomtomUrl({ ...route, tomtom_heading: 0 }, 'k3y')).searchParams.get('vehicleHeading'), '0');
 });
 
 test('OK reply fills the same columns as a Distance Matrix row', () => {
