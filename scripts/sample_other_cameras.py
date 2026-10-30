@@ -43,7 +43,8 @@ import re
 import sys
 import zipfile
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 BUCKET = "sg-lta-traffic-cameras"
@@ -133,6 +134,35 @@ def sample_camera(n, index, rng):
     return rows, short
 
 
+def clock(seconds):
+    m, s = divmod(int(seconds), 60)
+    return f"{m}:{s:02d}"
+
+
+def run_parallel(label, items, fn, workers, every=10.0):
+    """fn over items in a thread pool, results in item order. Prints a line at least every `every`
+    seconds (count, percent, rate, elapsed, ETA), even when nothing has finished, so a slow step
+    never looks like a hang."""
+    t0 = last = time.time()
+    results, done, n = [None] * len(items), 0, len(items)
+    print(f"{label}: 0/{n} started", flush=True)
+    with ThreadPoolExecutor(workers) as ex:
+        futs = {ex.submit(fn, it): i for i, it in enumerate(items)}
+        pending = set(futs)
+        while pending:
+            finished, pending = wait(pending, timeout=1.0, return_when=FIRST_COMPLETED)
+            for f in finished:
+                results[futs[f]] = f.result()
+                done += 1
+            now = time.time()
+            if now - last >= every or not pending:
+                last, el = now, now - t0
+                eta = clock(el / done * (n - done)) if done else "?"
+                print(f"{label}: {done}/{n} ({100 * done // n}%), {done / max(el, 1e-9):.1f}/s, "
+                      f"elapsed {clock(el)}, ETA {eta}", flush=True)
+    return results
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=1000, help="frames PER CAMERA (default 1000)")
@@ -142,7 +172,7 @@ def main():
     ap.add_argument("--bucket", default=BUCKET)
     ap.add_argument("--project", default=PROJECT)
     ap.add_argument("--exclude", nargs="*", default=["2701"], help="camera ids to skip (default 2701)")
-    ap.add_argument("--workers", type=int, default=32)
+    ap.add_argument("--workers", type=int, default=48, help="parallel requests (default 48)")
     ap.add_argument("--no-zip", action="store_true")
     args, _ = ap.parse_known_args()  # notebooks add their own flags (-f kernel.json)
 
@@ -174,13 +204,11 @@ def main():
 
     # 1) list the frames that actually exist, one listing per camera-month (names only)
     todo = [(c, m) for c, ms in sorted(cams.items()) for m in sorted(ms)]
-    print(f"listing {len(todo)} camera-months (progress every 10)...", flush=True)
+    print(f"listing frames in {len(todo)} camera-months (a status line every 10 s)...", flush=True)
     indexes = {c: {} for c in cams}
-    with ThreadPoolExecutor(args.workers) as ex:
-        for i, ((c, m), idx) in enumerate(zip(todo, ex.map(lambda t: index_month(client, args.bucket, *t), todo)), 1):
-            indexes[c][m] = idx
-            if i % 10 == 0 or i == len(todo):
-                print(f"listed {i}/{len(todo)}", flush=True)
+    listed = run_parallel("listing", todo, lambda t: index_month(client, args.bucket, *t), args.workers)
+    for (c, m), idx in zip(todo, listed):
+        indexes[c][m] = idx
     for c in sorted(cams):
         counts = {m: sum(len(v) for v in indexes[c][m].values()) for m in sorted(indexes[c])}
         print(f"camera {c} frames available by month:", counts)
@@ -204,15 +232,20 @@ def main():
         dest = dest_of(row)
         dest.parent.mkdir(parents=True, exist_ok=True)
         if not dest.exists():
-            tmp = dest.with_suffix(".part")
-            bucket.blob(row["path"]).download_to_filename(tmp)
-            tmp.replace(dest)
+            for attempt in range(4):  # a dropped connection should not kill a 5000-file run
+                try:
+                    tmp = dest.with_suffix(".part")
+                    bucket.blob(row["path"]).download_to_filename(tmp)
+                    tmp.replace(dest)
+                    break
+                except Exception:
+                    if attempt == 3:
+                        raise
+                    time.sleep(2 ** attempt)
         return dest
 
-    with ThreadPoolExecutor(args.workers) as ex:
-        for i, _ in enumerate(ex.map(fetch, rows), 1):
-            if i % 250 == 0 or i == len(rows):
-                print(f"downloaded {i}/{len(rows)}")
+    print(f"downloading {len(rows)} frames (a status line every 10 s)...", flush=True)
+    run_parallel("downloading", rows, fetch, args.workers)
 
     rows.sort(key=lambda r: (r["camera"], r["path"].rsplit("/", 1)[-1]))
     fields = ["file", "camera", "month", "day", "hour", "hour_bucket", "size", "gcs_path"]
@@ -238,6 +271,7 @@ def main():
         for cam in sorted(cams):
             mine = [r for r in rows if r["camera"] == cam]
             zpath = out.parent / f"{out.name}_{cam}.zip"
+            print(f"zipping camera {cam} ({len(mine)} files)...", flush=True)
             with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:  # JPEGs do not compress further
                 z.writestr(f"{out.name}/manifest_{cam}.csv", ",".join(fields) + "\n" + "".join(
                     ",".join(str(manifest_row(r)[k]) for k in fields) + "\n" for r in mine))
