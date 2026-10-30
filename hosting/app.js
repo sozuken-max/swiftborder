@@ -235,8 +235,9 @@ async function updateSummary() {
 }
 
 // ── Trend chart (forecast view) ─────────────────────────────────────────────
-// Today's samples for both directions, plus the forecast drawn as a dashed
-// extension in extra 5-min slots after the newest observation.
+// The last 24 hours of samples for both directions (a rolling window, so it is not empty just
+// after midnight), plus the forecast drawn as a dashed extension in extra 5-min slots after
+// the newest observation.
 async function renderTrendChart() {
     const area = $('lc-chart-area');
     const showMessage = msg => {
@@ -253,19 +254,21 @@ async function renderTrendChart() {
         return;
     }
 
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: SGT });
+    // Points are keyed by their full timestamp: a clock time such as 00:40 can occur twice in 24 h.
+    const cutoff = Date.now() - 24 * 3600 * 1000;
     const series = DIRECTIONS.map(d => {
         const pts = (data.series?.[d.series]?.points || [])
-            .filter(p => p[0].startsWith(today) && p[1] != null)
-            .map(p => ({ label: p[0].slice(11, 16), mins: p[1] / 60 }));
-        return { d, pts, map: Object.fromEntries(pts.map(p => [p.label, p.mins])), fc: {} };
+            .filter(p => p[1] != null && parseSgt(p[0]) >= cutoff)
+            .map(p => ({ key: p[0], label: p[0].slice(11, 16), mins: p[1] / 60 }));
+        return { d, pts, map: Object.fromEntries(pts.map(p => [p.key, p.mins])), fc: {} };
     });
-    if (series.every(s => !s.pts.length)) { showMessage('No data available for today yet.'); return; }
+    if (series.every(s => !s.pts.length)) { showMessage('No data in the last 24 hours yet.'); return; }
 
-    // x axis: one slot per observed label, then one per forecast slot.
-    const labels = [...new Set(series.flatMap(s => s.pts.map(p => p.label)))].sort();
-    const n = labels.length;
-    const lastEpoch = parseSgt(`${today}T${labels[n - 1]}`);
+    // x axis: one slot per observed timestamp, then one per forecast slot.
+    const keys = [...new Set(series.flatMap(s => s.pts.map(p => p.key)))].sort();
+    const labels = keys.map(k => k.slice(11, 16));
+    const n = keys.length;
+    const lastEpoch = parseSgt(keys[n - 1]);
     let maxSlot = 0;
     series.forEach(s => {
         (forecastView?.dirs[s.d.key].points || []).forEach(p => {
@@ -294,13 +297,13 @@ async function renderTrendChart() {
     const yOf = v => padT + plotH - ((v - minVal) / (maxVal - minVal || 1)) * plotH;
     const xy = (x, y) => `${x.toFixed(1)},${y.toFixed(1)}`;
 
-    // Dots shrink as the day fills up and disappear past ~120 points.
+    // Dots shrink as the window fills up and disappear past ~120 points.
     const dotR = n > 120 ? 0 : n > 60 ? 1.8 : n > 30 ? 2.6 : 3.5;
     const dotStroke = dotR >= 2.6 ? 1.5 : 1;
     const lineW = n > 120 ? 1.8 : 2.5;
 
     function seriesSvg({ d, map, fc }) {
-        const pts = labels.map((l, i) => map[l] != null ? [xOf(i), yOf(map[l])] : null).filter(Boolean);
+        const pts = keys.map((k, i) => map[k] != null ? [xOf(i), yOf(map[k])] : null).filter(Boolean);
         if (!pts.length) return '';
         const [lx, ly] = pts[pts.length - 1];
         const base = (padT + plotH).toFixed(1);
@@ -383,7 +386,7 @@ async function renderTrendChart() {
 
         const rows = [];
         series.forEach(({ d, map, fc }) => {
-            const v = isFc ? fc[i - (n - 1)]?.mins : map[axis[i]];
+            const v = isFc ? fc[i - (n - 1)]?.mins : map[keys[i]];
             const ring = rings[d.key];
             if (v == null) { ring.style.display = 'none'; return; }
             ring.setAttribute('cx', cx);
