@@ -11,13 +11,14 @@ Reads ``gs://sg-lta-traffic-cameras/camera_id=<id>/month=<YYYY-MM>/<id>_<YYYYMMD
                                             so unzipping them all into one place gives a single lta_samples/ tree
 
 Sampling, repeated independently for each camera (--n frames each, default 1000):
+  * The script first lists the frames that exist in every month of the camera (names only), then
+    samples from that list, so it never aims at an hour that has no frame.
   * Hour buckets are 0, 1, 2-5 (one bucket: almost no traffic), then 6, 7, ... 23. That is 21
     buckets, each given the same quota (N // 21, with the remainder spread over random buckets).
-  * Inside each bucket the picks cycle through every month that camera has data for, in shuffled
-    order, so its months are equally represented too. The day and the hour inside the bucket are
-    random; the minute comes from the frames that exist in that hour.
-  * A pick that lands on an hour with no frames is redrawn, so an unlucky month can end up a frame
-    short. The summary printed at the end shows the final spread per camera.
+  * Inside each bucket the months take turns in shuffled order, each turn drawing a random unused
+    frame from that month. A month that has run out (a sparse or partial month) drops out of the
+    rotation and the other months carry on, so you still get N frames unless the camera has fewer
+    than a bucket's quota of frames in total. The final summary lists any bucket that fell short.
 
 In Google Colab: upload this file and run `!python sample_other_cameras.py`. It signs you in (a pop-up
 asks for the Google account), writes to /content and downloads the zips to your computer at the end.
@@ -36,7 +37,6 @@ bucket still holds the same files. Use --seed 1, 2, ... for a different sample. 
 from __future__ import annotations
 
 import argparse
-import calendar
 import csv
 import random
 import re
@@ -83,38 +83,54 @@ def quotas(n, rng):
     return [base + (i in plus) for i in range(len(HOUR_BUCKETS))]
 
 
-def plan_slots(n, months, rng):
-    """[(bucket_index, month)] with n entries: equal per hour bucket, months cycled within each."""
-    months = sorted(months)
-    slots = []
+def index_month(client, bucket, cam, month):
+    """{hour: [(object name, size), ...]} for every frame that exists in one camera-month."""
+    out = {}
+    it = client.list_blobs(bucket, prefix=f"camera_id={cam}/month={month}/",
+                           fields="items(name,size),nextPageToken")
+    for b in it:
+        m = NAME_RE.match(b.name.rsplit("/", 1)[-1])
+        if m:
+            out.setdefault(int(m["time"][:2]), []).append((b.name, b.size))
+    return out
+
+
+def sample_camera(n, index, rng):
+    """Pick n frames for one camera from index {month: {hour: [(name, size)]}}.
+
+    Every hour bucket gets the same quota. Inside a bucket the months take turns (in shuffled order)
+    and each turn draws an unused frame at random from that month's frames in the bucket. A month
+    with no frames left in the bucket drops out of the rotation, and the others carry on, so the
+    quota is met whenever the camera has enough frames in that bucket at all.
+    Returns (rows, shortfall_by_bucket_label).
+    """
+    rows, short = [], {}
     for bi, q in enumerate(quotas(n, rng)):
-        order = []
-        while len(order) < q:
-            cycle = months[:]
-            rng.shuffle(cycle)
-            order += cycle
-        slots += [(bi, m) for m in order[:q]]
-    return slots
-
-
-def draw_frame(client, bucket, cam, bi, month, rng, avoid=frozenset(), tries=60):
-    """One random frame from camera cam in hour bucket bi and the given month, or None."""
-    year, mon = map(int, month.split("-"))
-    ndays = calendar.monthrange(year, mon)[1]
-    for _ in range(tries):
-        hour = rng.choice(HOUR_BUCKETS[bi])
-        day = rng.randint(1, ndays)
-        prefix = f"camera_id={cam}/month={month}/{cam}_{year:04d}{mon:02d}{day:02d}T{hour:02d}"
-        blobs = [b for b in client.list_blobs(bucket, prefix=prefix, max_results=200)
-                 if NAME_RE.match(b.name.rsplit("/", 1)[-1])]
-        if not blobs:
-            continue
-        blob = rng.choice(blobs)
-        if blob.name in avoid:
-            continue
-        return dict(path=blob.name, camera=cam, month=month, day=day, hour=hour,
-                    hour_bucket=bucket_label(HOUR_BUCKETS[bi]), size=blob.size)
-    return None
+        label = bucket_label(HOUR_BUCKETS[bi])
+        pools = {}
+        for month in sorted(index):
+            frames = sorted(f for h in HOUR_BUCKETS[bi] for f in index[month].get(h, []))
+            if frames:
+                rng.shuffle(frames)
+                pools[month] = frames
+        got = 0
+        while got < q and pools:
+            order = sorted(pools)
+            rng.shuffle(order)
+            for month in order:
+                if got == q:
+                    break
+                name, size = pools[month].pop()
+                if not pools[month]:
+                    del pools[month]
+                fname = name.rsplit("/", 1)[-1]
+                m = NAME_RE.match(fname)
+                rows.append(dict(path=name, month=month, day=int(m["date"][6:]), hour=int(m["time"][:2]),
+                                 hour_bucket=label, size=size))
+                got += 1
+        if got < q:
+            short[label] = q - got
+    return rows, short
 
 
 def main():
@@ -156,30 +172,28 @@ def main():
         sys.exit("no cameras found (check the bucket name, your login, and --exclude)")
     print("cameras:", ", ".join(f"{c} ({len(m)} months)" for c, m in sorted(cams.items())))
 
-    rng = random.Random(args.seed)
-    jobs = []  # (camera, bucket_index, month, rng) for every pick, 1000 per camera
-    for cam, months in sorted(cams.items()):
-        for (bi, month) in plan_slots(args.n, months, rng):
-            jobs.append((cam, bi, month, random.Random(rng.random())))  # one rng per pick: reproducible threads
-    print(f"choosing {len(jobs)} frames (one bucket lookup each; progress every 250)...")
-    picks = []
+    # 1) list the frames that actually exist, one listing per camera-month (names only)
+    todo = [(c, m) for c, ms in sorted(cams.items()) for m in sorted(ms)]
+    print(f"listing {len(todo)} camera-months (progress every 10)...", flush=True)
+    indexes = {c: {} for c in cams}
     with ThreadPoolExecutor(args.workers) as ex:
-        for i, pick in enumerate(ex.map(lambda j: draw_frame(client, args.bucket, j[0], j[1], j[2], j[3]),
-                                        jobs), 1):
-            picks.append(pick)
-            if i % 250 == 0 or i == len(jobs):
-                print(f"chosen {i}/{len(jobs)}", flush=True)
-    # Two picks can land on the same file. Keep the first (job order) and redraw the rest one by one
-    # with a seeded rng, so the final sample does not depend on thread timing.
-    seen, redraw_rng = set(), random.Random(args.seed + 1)
-    for k, pick in enumerate(picks):
-        if pick and pick["path"] in seen:
-            cam, bi, month, _ = jobs[k]
-            pick = picks[k] = draw_frame(client, args.bucket, cam, bi, month, redraw_rng, avoid=seen)
-        if pick:
-            seen.add(pick["path"])
-    rows = [p for p in picks if p]
-    print(f"picked {len(rows)} of {len(jobs)} frames ({len(jobs) - len(rows)} slots found no frame)")
+        for i, ((c, m), idx) in enumerate(zip(todo, ex.map(lambda t: index_month(client, args.bucket, *t), todo)), 1):
+            indexes[c][m] = idx
+            if i % 10 == 0 or i == len(todo):
+                print(f"listed {i}/{len(todo)}", flush=True)
+    for c in sorted(cams):
+        counts = {m: sum(len(v) for v in indexes[c][m].values()) for m in sorted(indexes[c])}
+        print(f"camera {c} frames available by month:", counts)
+    cams = {c: [m for m in ms if indexes[c][m]] for c, ms in cams.items()}  # months with no frames drop out
+
+    # 2) sample from them, camera by camera, with one seeded rng
+    rng = random.Random(args.seed)
+    rows = []
+    for c in sorted(cams):
+        picked, short = sample_camera(args.n, indexes[c], rng)
+        rows += [dict(r, camera=c) for r in picked]
+        msg = f"camera {c}: picked {len(picked)} of {args.n}"
+        print(msg + (f"; no frames left in hour buckets {short}" if short else ""))
 
     out = Path(args.out)
 
