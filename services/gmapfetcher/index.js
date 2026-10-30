@@ -48,6 +48,9 @@ const ROUTES = [
     direction: 'MY_TO_SG',
     origin: { lat: 1.4884465059461982, lng: 103.78625911225137 },
     destination: { lat: 1.4401375461664851, lng: 103.76842889302142 },
+    // Without a heading TomTom starts on the northbound carriageway and U-turns ~0.9 km north
+    // (8,453 m vs Google's 6,639 m). Facing south-south-west it takes Google's road (6,610 m).
+    tomtom_heading: 198,
   },
 ];
 

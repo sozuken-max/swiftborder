@@ -35,6 +35,10 @@ fails does not stop the other; the run then returns 500.
   Failed calls are kept as `HTTP_<code>`, `NO_ROUTE` or `ERROR` rows. Carried-forward rows work as for Google.
 - **Snapshot:** `gs://swiftborder-public/traffic-24h-tomtom.json` (`TOMTOM_SNAPSHOT_OBJECT`), same format.
   The website still reads only `traffic-24h.json`.
+- **Same road as Google:** `jb_to_woodlands` sends `vehicleHeading=198`. Without it TomTom started on the
+  northbound carriageway and U-turned (8,453 m vs Google's 6,639 m); with it, 6,610 m on 2026-10-30.
+  TomTom rows for that route written before 1.4.1 took the longer road (`distance_m` about 8,450): drop
+  them from comparisons. `mandai_to_shell_jb` already matched (6,980 m vs 7,046 m) and has no heading.
 - **Not measured:** whether TomTom's times track Google's, or the crossing, on these routes. Run both
   until a comparison exists before pointing anything downstream at TomTom.
 

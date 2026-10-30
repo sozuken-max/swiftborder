@@ -3,6 +3,8 @@
 export const TOMTOM_ROUTING_URL = 'https://api.tomtom.com/routing/1/calculateRoute';
 
 // Live-traffic car route leaving now. computeTravelTimeFor=all adds noTrafficTravelTimeInSeconds.
+// `route.tomtom_heading` (degrees from north) sets which way the car faces at the origin, so TomTom
+// snaps to the same carriageway as Google instead of starting the wrong way.
 export function tomtomUrl(route, key) {
   const loc = (p) => `${p.lat},${p.lng}`;
   const params = new URLSearchParams({
@@ -13,6 +15,7 @@ export function tomtomUrl(route, key) {
     departAt: 'now',
     computeTravelTimeFor: 'all',
   });
+  if (route.tomtom_heading != null) params.set('vehicleHeading', String(route.tomtom_heading));
   return `${TOMTOM_ROUTING_URL}/${loc(route.origin)}:${loc(route.destination)}/json?${params}`;
 }
 
