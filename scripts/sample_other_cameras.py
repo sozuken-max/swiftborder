@@ -127,7 +127,7 @@ def main():
     ap.add_argument("--exclude", nargs="*", default=["2701"], help="camera ids to skip (default 2701)")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--no-zip", action="store_true")
-    args = ap.parse_args()
+    args, _ = ap.parse_known_args()  # notebooks add their own flags (-f kernel.json)
 
     try:
         from google.colab import auth as colab_auth  # only exists inside Colab
