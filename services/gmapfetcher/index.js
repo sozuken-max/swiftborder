@@ -3,16 +3,32 @@ import { Client } from '@googlemaps/google-maps-services-js';
 import { BigQuery } from '@google-cloud/bigquery';
 import { Storage } from '@google-cloud/storage';
 import { fillMidpoints } from './snapshot.js';
-import { CARRY_TAG, carryForward, parseInterval, toSgtParts } from './carry.js';
+import { CARRY_TAG, carryForward, parseFlag, parseInterval, toSgtParts } from './carry.js';
+import { applyTomTomResponse, tomtomUrl } from './tomtom.js';
 
 const MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const TOMTOM_KEY = process.env.TOMTOM_API_KEY;
+// Each provider is switched on or off on its own. Google stays on and TomTom off unless set.
+const GMAPS_ENABLED = parseFlag('GMAPS_ENABLED', process.env.GMAPS_ENABLED, true);
+const TOMTOM_ENABLED = parseFlag('TOMTOM_ENABLED', process.env.TOMTOM_ENABLED, false);
 const BQ_DATASET = process.env.BQ_DATASET || 'causeway';
 const BQ_TABLE = process.env.BQ_TABLE || 'travel_times';
+// TomTom rows go to their own table: v_bins_10min averages every OK row in a bin, so sharing
+// travel_times would blend the two providers into the training set and forecast-api.
+const TOMTOM_BQ_TABLE = process.env.TOMTOM_BQ_TABLE || 'travel_times_tomtom';
 const BQ_LOCATION = process.env.BQ_LOCATION || 'US';
 const SNAPSHOT_BUCKET = process.env.SNAPSHOT_BUCKET || 'swiftborder-public';
 const SNAPSHOT_OBJECT = process.env.SNAPSHOT_OBJECT || 'traffic-24h.json';
+const TOMTOM_SNAPSHOT_OBJECT = process.env.TOMTOM_SNAPSHOT_OBJECT || 'traffic-24h-tomtom.json';
 // Must match the Cloud Scheduler `Gmap-Woodlands` cadence.
 const FETCH_INTERVAL_MIN = parseInterval(process.env.FETCH_INTERVAL_MIN);
+
+if (TOMTOM_BQ_TABLE === BQ_TABLE) {
+  throw new Error(`TOMTOM_BQ_TABLE must differ from BQ_TABLE (${BQ_TABLE})`);
+}
+if (TOMTOM_SNAPSHOT_OBJECT === SNAPSHOT_OBJECT) {
+  throw new Error(`TOMTOM_SNAPSHOT_OBJECT must differ from SNAPSHOT_OBJECT (${SNAPSHOT_OBJECT})`);
+}
 
 const maps = new Client({});
 const bigquery = new BigQuery();
@@ -111,15 +127,51 @@ async function fetchRoute(route, observedAt) {
   }
 }
 
-// Query the last 24h and overwrite the public JSON snapshot the website reads.
-async function writeSnapshot(observedAt) {
+async function fetchTomTomRoute(route, observedAt) {
+  const row = { ...baseRow(route, observedAt), provider: 'tomtom' };
+
+  try {
+    const res = await fetch(tomtomUrl(route, TOMTOM_KEY), { signal: AbortSignal.timeout(10000) });
+    const body = await res.json().catch(() => null);
+    return applyTomTomResponse(row, res.status, body);
+  } catch (err) {
+    // The key is in the URL; keep it out of BigQuery and the logs.
+    row.error_message = String(err?.message || err).split(TOMTOM_KEY).join('***').slice(0, 1000);
+    return row;
+  }
+}
+
+// Google rows are written exactly as before (no `provider` column in travel_times; null = Google).
+const PROVIDERS = [
+  {
+    name: 'gmaps',
+    enabled: GMAPS_ENABLED,
+    key: MAPS_KEY,
+    keyVar: 'GOOGLE_MAPS_API_KEY',
+    fetchRoute,
+    table: BQ_TABLE,
+    snapshotObject: SNAPSHOT_OBJECT,
+  },
+  {
+    name: 'tomtom',
+    enabled: TOMTOM_ENABLED,
+    key: TOMTOM_KEY,
+    keyVar: 'TOMTOM_API_KEY',
+    fetchRoute: fetchTomTomRoute,
+    table: TOMTOM_BQ_TABLE,
+    snapshotObject: TOMTOM_SNAPSHOT_OBJECT,
+  },
+];
+
+// Query the last 24h of `table` and overwrite its public JSON snapshot (the website reads Google's).
+async function writeSnapshot(observedAt, table, snapshotObject) {
   const query = `
     SELECT
       FORMAT_DATETIME('%Y-%m-%dT%H:%M', observed_at_sgt) AS t,
       route_id,
       duration_in_traffic_sec AS sec,
       speed_kmh
-    FROM \`${BQ_DATASET}.${BQ_TABLE}\`
+    FROM \`${BQ_DATASET}.${table}\`
     WHERE observed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
       AND status = 'OK'
       AND duration_in_traffic_sec IS NOT NULL
@@ -148,7 +200,7 @@ async function writeSnapshot(observedAt) {
 
   await storage
     .bucket(SNAPSHOT_BUCKET)
-    .file(SNAPSHOT_OBJECT)
+    .file(snapshotObject)
     .save(JSON.stringify(payload), {
       contentType: 'application/json',
       metadata: { cacheControl: 'public, max-age=300' },
@@ -157,25 +209,22 @@ async function writeSnapshot(observedAt) {
   return rows.length;
 }
 
-http('fetchTravelTimes', async (req, res) => {
-  if (!MAPS_KEY) {
-    res.status(500).json({ error: 'GOOGLE_MAPS_API_KEY not set' });
-    return;
-  }
+// One provider's run: fetch both routes, insert into its table, rebuild its snapshot.
+// Never throws, so one provider failing cannot stop the other.
+async function runProvider(p, observedAt) {
+  if (!p.key) return { error: `${p.keyVar} not set` };
 
-  const observedAt = new Date();
-  const rows = await Promise.all(ROUTES.map((r) => fetchRoute(r, observedAt)));
+  const rows = await Promise.all(ROUTES.map((r) => p.fetchRoute(r, observedAt)));
   const carried = carryForward(rows, FETCH_INTERVAL_MIN);
 
   try {
-    await bigquery.dataset(BQ_DATASET).table(BQ_TABLE).insert([...rows, ...carried]);
+    await bigquery.dataset(BQ_DATASET).table(p.table).insert([...rows, ...carried]);
   } catch (err) {
     const detail = err?.errors
       ? JSON.stringify(err.errors).slice(0, 2000)
       : String(err?.message || err);
-    console.error('BigQuery insert failed:', detail);
-    res.status(500).json({ error: 'bigquery_insert_failed', detail });
-    return;
+    console.error(`[${p.name}] BigQuery insert failed:`, detail);
+    return { error: 'bigquery_insert_failed', detail };
   }
 
   // A snapshot failure must not fail the run: the data is already safely in
@@ -183,28 +232,15 @@ http('fetchTravelTimes', async (req, res) => {
   let snapshotPoints = null;
   let snapshotError = null;
   try {
-    snapshotPoints = await writeSnapshot(observedAt);
+    snapshotPoints = await writeSnapshot(observedAt, p.table, p.snapshotObject);
   } catch (err) {
     snapshotError = String(err?.message || err).slice(0, 500);
-    console.error('Snapshot write failed:', snapshotError);
+    console.error(`[${p.name}] Snapshot write failed:`, snapshotError);
   }
 
-  const okCount = rows.filter((r) => r.status === 'OK').length;
-  console.log(
-    JSON.stringify({
-      observed_at: observedAt.toISOString(),
-      inserted: rows.length,
-      ok: okCount,
-      carried_forward: carried.length,
-      snapshot_points: snapshotPoints,
-      snapshot_error: snapshotError,
-    })
-  );
-
-  res.status(200).json({
-    observed_at_sgt: toSgtParts(observedAt).datetime,
+  return {
     inserted: rows.length,
-    ok: okCount,
+    ok: rows.filter((r) => r.status === 'OK').length,
     carried_forward: carried.length,
     snapshot_points: snapshotPoints,
     snapshot_error: snapshotError,
@@ -215,5 +251,31 @@ http('fetchTravelTimes', async (req, res) => {
       duration_in_traffic_sec: r.duration_in_traffic_sec,
       speed_kmh: r.speed_kmh,
     })),
+  };
+}
+
+http('fetchTravelTimes', async (req, res) => {
+  const observedAt = new Date();
+  const enabled = PROVIDERS.filter((p) => p.enabled);
+  const results = await Promise.all(enabled.map((p) => runProvider(p, observedAt)));
+
+  const providers = {};
+  enabled.forEach((p, i) => {
+    providers[p.name] = results[i];
+  });
+  if (enabled.length === 0) console.warn('No provider enabled (GMAPS_ENABLED and TOMTOM_ENABLED are both off)');
+
+  const summary = {};
+  for (const [name, r] of Object.entries(providers)) {
+    const { rows, ...rest } = r;
+    summary[name] = rest;
+  }
+  console.log(JSON.stringify({ observed_at: observedAt.toISOString(), providers: summary }));
+
+  // 500 if any enabled provider failed to write; the others have still written their rows.
+  const failed = results.some((r) => r.error);
+  res.status(failed ? 500 : 200).json({
+    observed_at_sgt: toSgtParts(observedAt).datetime,
+    providers,
   });
 });

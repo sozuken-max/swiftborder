@@ -13,6 +13,56 @@ expects every 20, set by `FETCH_INTERVAL_MIN`):
 3. Rebuilds the last-24 h snapshot `gs://swiftborder-public/traffic-24h.json` that `hosting/` reads.
    A snapshot failure does not fail the run.
 
+If `TOMTOM_ENABLED` is on, the same run does steps 1-3 a second time with TomTom (below), into its own
+table and snapshot.
+
+## TomTom (trial, runs beside Google)
+
+TomTom's [Routing API](https://developer.tomtom.com/routing-api/documentation/tomtom-maps/calculate-route)
+`calculateRoute` (`traffic=true`, `travelMode=car`, `departAt=now`) is called for the same two routes
+and coordinates. `GMAPS_ENABLED` and `TOMTOM_ENABLED` switch each provider on or off on its own; the
+defaults (Google on, TomTom off) keep the service exactly as before. A provider whose call or insert
+fails does not stop the other; the run then returns 500.
+
+- **Table:** `causeway.travel_times_tomtom` (`TOMTOM_BQ_TABLE`), same columns as `travel_times` plus
+  `provider` (`'tomtom'`). It is not `travel_times` on purpose: `v_bins_10min` averages every `OK` row
+  in a route's 10-minute bin, so shared rows would silently blend the two providers into
+  `v_training_set`, the BQML models and `forecast-api`. Google rows are unchanged and have no `provider`
+  column (absent/null = Google). To compare, `UNION ALL` the two tables on `route_id` and the 10-minute bin.
+- **Columns:** `duration_in_traffic_sec` = `travelTimeInSeconds`; `duration_sec` =
+  `noTrafficTravelTimeInSeconds` (free flow). Google's `duration` is a typical-traffic time, so
+  `congestion_ratio` is **not** comparable across providers; compare `duration_in_traffic_sec`.
+  Failed calls are kept as `HTTP_<code>`, `NO_ROUTE` or `ERROR` rows. Carried-forward rows work as for Google.
+- **Snapshot:** `gs://swiftborder-public/traffic-24h-tomtom.json` (`TOMTOM_SNAPSHOT_OBJECT`), same format.
+  The website still reads only `traffic-24h.json`.
+- **Not measured:** whether TomTom's times track Google's, or the crossing, on these routes. Run both
+  until a comparison exists before pointing anything downstream at TomTom.
+
+One-time setup before turning it on (the table must exist, or every TomTom insert fails):
+
+```bash
+bq show --schema --format=json swiftborder:causeway.travel_times \
+  | jq '. + [{"name":"provider","type":"STRING","mode":"NULLABLE"}]' > /tmp/tt_tomtom_schema.json
+bq mk --table --location=US --time_partitioning_field=observed_date_sgt --time_partitioning_type=DAY \
+  --clustering_fields=route_id swiftborder:causeway.travel_times_tomtom /tmp/tt_tomtom_schema.json
+```
+
+Keep the key in Secret Manager and expose it to the service as `TOMTOM_API_KEY`. The runtime identity is
+the default compute service account (see [inventory](../../docs/inventory.md)):
+
+```bash
+printf '%s' "$TOMTOM_KEY" | gcloud secrets create tomtom-api-key --project=swiftborder --data-file=-
+gcloud secrets add-iam-policy-binding tomtom-api-key --project=swiftborder \
+  --member=serviceAccount:1095552466513-compute@developer.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor
+gcloud run services update gmap-woodlands-fetcher --project=swiftborder --region=asia-southeast1 \
+  --update-secrets=TOMTOM_API_KEY=tomtom-api-key:latest --update-env-vars=TOMTOM_ENABLED=true
+```
+
+Turn either provider off with `--update-env-vars=GMAPS_ENABLED=false` (or `TOMTOM_ENABLED=false`). Each
+change makes a new revision; a misspelled value fails that revision at startup and the old one keeps
+serving. The Cloud Build deploy (`services update --image`) leaves env vars and secrets alone.
+
 ## 20-minute fetch, 10-minute bins, 5-minute snapshot
 
 The fetcher runs every `FETCH_INTERVAL_MIN` minutes (default 20, a multiple of 10) to stay within the
@@ -48,7 +98,11 @@ Tests: `npm test` (Node's built-in runner, no install needed for `test/`).
 
 | Env var | Default |
 | --- | --- |
-| `GOOGLE_MAPS_API_KEY` | none, required |
+| `GOOGLE_MAPS_API_KEY` | none, required while `GMAPS_ENABLED` |
+| `TOMTOM_API_KEY` | none, required while `TOMTOM_ENABLED` (Secret Manager `tomtom-api-key`) |
+| `GMAPS_ENABLED` / `TOMTOM_ENABLED` | `true` / `false` (`true/false`, `1/0`, `yes/no`, `on/off`) |
+| `TOMTOM_BQ_TABLE` | `travel_times_tomtom` (must differ from `BQ_TABLE`) |
+| `TOMTOM_SNAPSHOT_OBJECT` | `traffic-24h-tomtom.json` (must differ from `SNAPSHOT_OBJECT`) |
 | `FETCH_INTERVAL_MIN` | `20` (must match the scheduler) |
 | `BQ_DATASET` / `BQ_TABLE` | `causeway` / `travel_times` |
 | `BQ_LOCATION` | `US` |
