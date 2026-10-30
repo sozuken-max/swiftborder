@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-10-30
+
+- `gmapfetcher/` 1.4.0: optional TomTom Routing API fetch for the same two Woodlands routes, beside Google. `GMAPS_ENABLED` (default on) and `TOMTOM_ENABLED` (default off) switch each provider independently, so merging changes nothing until TomTom is turned on. TomTom rows go to a new table `causeway.travel_times_tomtom` (same columns plus `provider`), not `travel_times`, because `v_bins_10min` would average both providers into one bin; its snapshot is `traffic-24h-tomtom.json`. The table, the `tomtom-api-key` secret and the env vars are not created yet (commands in the service README). No TomTom data or comparison exists.
+
 ## 2026-10-24
 
 - `gmapfetcher/` 1.3.0: built for a 20-minute fetch (`FETCH_INTERVAL_MIN`, default 20; Scheduler `Gmap-Woodlands` must be set to `*/20` in the console) to fit the Distance Matrix free tier. Each run also writes a carried-forward copy of each `OK` reading at T+10 (`error_message` starts with `carried_forward`), so every 10-minute bin still has a row and `v_bins_10min`, `v_training_set` and `forecast-api` are unchanged. `traffic-24h.json` skips carried rows and fills 5-minute points between real points up to 20 min apart. From the switch on, half the bins are copies: filter them before comparing MAE across periods.

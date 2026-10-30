@@ -21,6 +21,16 @@ export function parseInterval(value, fallback = 20) {
   return n;
 }
 
+// On/off switch from an env var: true/false, 1/0, yes/no, on/off (any case); unset or empty = fallback.
+// Anything else throws, so a typo fails the revision at startup instead of silently stopping a provider.
+export function parseFlag(name, value, fallback) {
+  if (value == null || value.trim() === '') return fallback;
+  const v = value.trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(v)) return true;
+  if (['false', '0', 'no', 'off'].includes(v)) return false;
+  throw new Error(`${name} must be true or false, got ${value}`);
+}
+
 // The fetcher runs every `intervalMin`, but v_bins_10min, v_training_set and forecast-api expect one
 // row per route in every 10-min bin (y_30 is 3 bins ahead; with 20-min rows it would always be empty).
 // For each OK row observed at T, add a copy of the same reading at T+10, T+20, ... up to the next run.
