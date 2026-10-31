@@ -19,6 +19,8 @@ htmlcov/
 !services/camdetect/backfill/*.csv
 # Layer A training logs and detector-comparison tables (committed run outputs, small).
 !eval/test-reports/runs/**/*.csv
+# Published Layer B input (Google Maps travel times) for the final report's reproducibility appendix.
+!data/inputs/*.csv
 **/*.log
 # Test fixtures are small, hand-built, and must be committed
 !**/tests/fixtures/**
