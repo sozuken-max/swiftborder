@@ -304,14 +304,15 @@ def _summary_stub():
     return {"sg_my": {"count": 1, "congestion": "Free Flow"}, "my_sg": {"count": 0, "congestion": "Free Flow"}}
 
 
-def test_directional_boxes_are_one_pixel_and_unlabelled():
+def test_directional_boxes_are_two_pixels_and_unlabelled():
     image = Image.new("RGB", (1920, 1080), (40, 40, 40))
     pred = {"x": 1000, "y": 500, "width": 200, "height": 100, "confidence": 0.9, "direction": main.DIR_SG_MY}
     main._draw_directional(image, [pred], None, _summary_stub())
     x1, y1, x2, y2 = main._box(pred)
     red = main.DIR_COLORS[main.DIR_SG_MY]
     assert image.getpixel((x1 + 50, y1)) == red          # top edge drawn
-    assert image.getpixel((x1 + 50, y1 + 1)) == (40, 40, 40)  # 1 px only
+    assert image.getpixel((x1 + 50, y1 + 1)) == red      # 2 px thick
+    assert image.getpixel((x1 + 50, y1 + 2)) == (40, 40, 40)  # 2 px only
     assert image.getpixel((x1 + 50, y1 - 5)) == (40, 40, 40)  # no filled label above the box
 
 

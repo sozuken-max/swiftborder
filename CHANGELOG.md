@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-05
+
+- `camdetect` `format=directional` boxes are now 2 px wide (were 1 px, too faint on the summary page). Takes effect on the next `camdetect` deploy. Counts, headers and JSON are unchanged.
+
 ## 2026-10-30
 
 - `hosting/app.js`: the Travel Time Trend chart now plots the last 24 hours instead of the current Singapore date, so it is no longer empty (one dot) just after midnight. Points are keyed by full timestamp, so a clock time that occurs twice in 24 hours cannot collide. The summary cards and the forecast were already time-window based and are unchanged. The x axis is still one slot per sample, not proportional to time, so a long outage is drawn as a short step.
