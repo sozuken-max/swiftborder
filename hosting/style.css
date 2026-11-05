@@ -969,7 +969,7 @@ h4 {
 
 .cam-modal-box {
     width: 100%;
-    max-width: 900px;
+    max-width: min(96vw, 1920px);
     overflow: hidden;
     background: rgba(14, 23, 38, 0.97);
     border: 1px solid rgba(0, 242, 254, 0.25);
@@ -1020,7 +1020,7 @@ h4 {
 .cam-modal-img {
     display: block;
     width: 100%;
-    max-height: 70vh;
+    max-height: 78vh;
     object-fit: contain;
     background: #060e1a;
 }
@@ -1089,6 +1089,9 @@ h4 {
     border-radius: 12px;
 }
 
+/* Empty once the frame is in: hide it, or its padding pushes the image down */
+.ai-detection-status:empty { display: none; }
+
 .ai-detection-status {
     padding: 1rem;
     text-align: center;
@@ -1101,6 +1104,145 @@ h4 {
     width: 100%;
     max-height: 520px;
     object-fit: contain;
+    cursor: zoom-in;
+    transition: filter 0.2s ease;
+}
+
+.ai-detection-body { position: relative; }
+
+.ai-detection-img:hover,
+.ai-detection-img:focus-visible { filter: brightness(1.08); }
+
+.ai-detection-img:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+/* "Click to zoom" tag: shown on hover / keyboard focus, only once the frame is in */
+.ai-zoom-hint {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid rgba(0, 242, 254, 0.35);
+    border-radius: 999px;
+    background: rgba(7, 11, 19, 0.82);
+    color: var(--text-white);
+    font-size: 0.75rem;
+    font-weight: 600;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.ai-detection-img[hidden] ~ .ai-zoom-hint { display: none; }
+
+.ai-detection-body:hover .ai-zoom-hint,
+.ai-detection-img:focus-visible ~ .ai-zoom-hint {
+    opacity: 1;
+    transform: none;
+}
+
+/* Touch screens have no hover: keep the tag visible */
+@media (hover: none) {
+    .ai-zoom-hint { opacity: 0.9; transform: none; }
+}
+
+/* Zoom viewer: near full window, image fitted then zoom / pan */
+body.modal-open { overflow: hidden; }
+
+.zoom-backdrop { padding: 1rem; }
+
+.zoom-box {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: rgba(14, 23, 38, 0.97);
+    border: 1px solid rgba(0, 242, 254, 0.25);
+    border-radius: 16px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+    transform: scale(0.97);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cam-modal-backdrop.visible .zoom-box { transform: scale(1); }
+
+.zoom-stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: #060e1a;
+    cursor: zoom-in;
+    touch-action: none;
+    user-select: none;
+}
+
+.zoom-stage.pannable { cursor: grab; }
+.zoom-stage.pannable.dragging { cursor: grabbing; }
+
+.zoom-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: none;
+    transform-origin: 0 0;
+    opacity: 0;
+    will-change: transform;
+}
+
+.zoom-img.ready { opacity: 1; }
+
+.zoom-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.25rem;
+    padding: 0.6rem 1rem;
+    border-top: 1px solid var(--border-color);
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.zoom-btn {
+    min-width: 34px;
+    height: 32px;
+    padding: 0 0.55rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-white);
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.zoom-btn-text { font-size: 0.78rem; font-weight: 600; }
+
+.zoom-btn:hover { background: rgba(0, 242, 254, 0.12); }
+
+.zoom-level {
+    min-width: 3.4rem;
+    text-align: center;
+    color: var(--text-white);
+}
+
+.zoom-res { margin-left: auto; }
+
+@media (max-width: 640px) {
+    .zoom-backdrop { padding: 0; }
+    .zoom-box { border-radius: 0; border: 0; }
+    .zoom-help { display: none; }
 }
 
 /* Per-direction counts under each image */
