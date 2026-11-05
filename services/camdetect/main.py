@@ -721,8 +721,12 @@ def _draw_direction_banner(draw, image, segments):
         x += w
 
 
+# Outline width of the direction-coloured boxes (2 px: 1 px was too faint on the site).
+DIRECTIONAL_BOX_WIDTH = 2
+
+
 def _draw_directional(image, predictions, points, summary, tracked=(DIR_SG_MY, DIR_MY_SG), draw_line=True):
-    """Same frame: boxes outlined 1 px in the direction colour, the divider drawn in, and a banner.
+    """Same frame: boxes outlined 2 px in the direction colour, the divider drawn in, and a banner.
 
     Boxes carry no per-box labels (in heavy traffic they hid the vehicles). The banner's blocks
     are filled with the same colours, so it is both the count and the colour key. A direction not
@@ -745,7 +749,7 @@ def _draw_directional(image, predictions, points, summary, tracked=(DIR_SG_MY, D
         box = _box(pred)
         if box is None:
             continue
-        draw.rectangle(box, outline=color, width=1)
+        draw.rectangle(box, outline=color, width=DIRECTIONAL_BOX_WIDTH)
 
     segments = [
         (DIR_SG_MY, f"SG to MY: {summary['sg_my']['count']} ({summary['sg_my']['congestion']})"),

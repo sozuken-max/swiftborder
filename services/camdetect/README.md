@@ -306,7 +306,7 @@ Limits of this proxy, stated so reports do not over-read it:
 
 `format=directional` — same frame with the dividing line drawn in white (only
 with `line=1` or `DRAW_DIVIDING_LINE=1`; hidden by default since 11 Oct 2026, so
-front-end users do not see the internal divider), 1 px
+front-end users do not see the internal divider), 2 px
 boxes coloured by direction (SG-MY red, MY-SG blue, Unknown grey) with no
 per-box labels, and a top-left banner whose blocks are filled with the same
 colours and carry each direction's count and congestion level (plus an
