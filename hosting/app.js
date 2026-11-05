@@ -749,11 +749,196 @@ function ensureDetectionPanes() {
             </div>
             <div class="ai-detection-body">
                 <p class="ai-detection-status" id="ai-status-${p.camera}">Fetching AI detection result…</p>
-                <img id="ai-img-${p.camera}" class="ai-detection-img" alt="CAM ${p.camera} vehicle detections" hidden>
+                <img id="ai-img-${p.camera}" class="ai-detection-img" alt="CAM ${p.camera} vehicle detections"
+                     role="button" tabindex="0" aria-label="CAM ${p.camera} vehicle detections, open zoom view" hidden>
+                <span class="ai-zoom-hint" aria-hidden="true">🔍 Click to zoom</span>
             </div>
             <div class="ai-dir-grid" id="ai-dirs-${p.camera}"></div>
         </div>`).join('');
+    AI_PANES.forEach(p => {
+        const img = $(`ai-img-${p.camera}`);
+        const open = () => {
+            if (img.hidden || !img.src) return;
+            const time = $(`ai-time-${p.camera}`).textContent;
+            openZoomViewer(img.src, `🤖 CAM ${p.camera} · AI detection${time ? ` · ${time}` : ''}`, img.alt);
+        };
+        img.addEventListener('click', open);
+        img.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
     wrap.dataset.ready = '1';
+}
+
+// ── Zoom viewer (AI detection frames) ───────────────────────────────────────
+// Full-window lightbox. The frame opens fitted to the window, enlarged past its
+// own size when the window is bigger. Wheel or pinch zooms about the pointer, drag
+// pans, double-click toggles fit / 100 % (one image pixel per screen pixel).
+// Zoom stops at 4x the fitted size or 4x real pixels, whichever is larger.
+// Keys: + / - zoom, 0 fit, 1 real size, Esc close.
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 1.5;
+
+function openZoomViewer(src, title, alt) {
+    $('zoom-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'zoom-modal';
+    modal.className = 'cam-modal-backdrop zoom-backdrop';
+    modal.innerHTML = `
+        <div class="zoom-box" role="dialog" aria-modal="true" aria-label="${alt}, zoom view">
+            <div class="cam-modal-header">
+                <span class="cam-modal-title">${title}</span>
+                <button class="cam-modal-close" aria-label="Close zoom view">&times;</button>
+            </div>
+            <div class="zoom-stage">
+                <img class="zoom-img" src="${src}" alt="${alt}" draggable="false">
+            </div>
+            <div class="zoom-bar">
+                <div class="zoom-controls">
+                    <button type="button" class="zoom-btn" data-zoom="out" aria-label="Zoom out">&minus;</button>
+                    <span class="zoom-level" aria-live="polite">—</span>
+                    <button type="button" class="zoom-btn" data-zoom="in" aria-label="Zoom in">+</button>
+                    <button type="button" class="zoom-btn zoom-btn-text" data-zoom="fit">Fit</button>
+                    <button type="button" class="zoom-btn zoom-btn-text" data-zoom="real">100%</button>
+                </div>
+                <span class="zoom-help">Scroll or pinch to zoom · drag to pan · double-click for 100%</span>
+                <span class="zoom-res"></span>
+            </div>
+        </div>`;
+
+    const stage = modal.querySelector('.zoom-stage');
+    const img = modal.querySelector('.zoom-img');
+    const levelEl = modal.querySelector('.zoom-level');
+    // scale = screen px per image px; (tx, ty) = image top-left in stage px.
+    const v = { scale: 1, fit: 1, tx: 0, ty: 0, atFit: true };
+    const pointers = new Map();
+    let pinch = null;
+
+    const maxScale = () => Math.max(v.fit * ZOOM_MAX, ZOOM_MAX);
+
+    function clampPan() {
+        const w = img.naturalWidth * v.scale, h = img.naturalHeight * v.scale;
+        const sw = stage.clientWidth, sh = stage.clientHeight;
+        v.tx = w <= sw ? (sw - w) / 2 : Math.min(0, Math.max(sw - w, v.tx));
+        v.ty = h <= sh ? (sh - h) / 2 : Math.min(0, Math.max(sh - h, v.ty));
+    }
+
+    function apply() {
+        clampPan();
+        img.style.transform = `translate(${v.tx}px, ${v.ty}px) scale(${v.scale})`;
+        levelEl.textContent = `${Math.round(v.scale * 100)}%`;
+        stage.classList.toggle('pannable',
+            img.naturalWidth * v.scale > stage.clientWidth + 1 || img.naturalHeight * v.scale > stage.clientHeight + 1);
+    }
+
+    function fit() {
+        v.fit = Math.min(stage.clientWidth / img.naturalWidth, stage.clientHeight / img.naturalHeight) || 1;
+        v.scale = v.fit;
+        v.atFit = true;
+        apply();
+    }
+
+    // Zoom to `scale`, keeping the image point under stage point (px, py) fixed.
+    function zoomTo(scale, px = stage.clientWidth / 2, py = stage.clientHeight / 2) {
+        const next = Math.min(maxScale(), Math.max(Math.min(v.fit, 1), scale));
+        v.tx = px - (px - v.tx) * (next / v.scale);
+        v.ty = py - (py - v.ty) * (next / v.scale);
+        v.scale = next;
+        v.atFit = Math.abs(next - v.fit) < 1e-3;
+        apply();
+    }
+
+    const stagePoint = e => {
+        const r = stage.getBoundingClientRect();
+        return [e.clientX - r.left, e.clientY - r.top];
+    };
+
+    stage.addEventListener('wheel', e => {
+        e.preventDefault();
+        zoomTo(v.scale * Math.exp(-e.deltaY * 0.0015), ...stagePoint(e));
+    }, { passive: false });
+
+    stage.addEventListener('dblclick', e => {
+        // At fit, jump to real pixels; if the window already shows the frame at
+        // or above real size, jump to 2.5x fit instead so the click still zooms.
+        if (v.atFit) zoomTo(v.fit < 1 ? 1 : v.fit * 2.5, ...stagePoint(e));
+        else fit();
+    });
+
+    stage.addEventListener('pointerdown', e => {
+        stage.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, stagePoint(e));
+        if (pointers.size === 2) {
+            const [a, b] = [...pointers.values()];
+            pinch = { dist: Math.hypot(a[0] - b[0], a[1] - b[1]), scale: v.scale };
+        }
+        stage.classList.add('dragging');
+    });
+
+    stage.addEventListener('pointermove', e => {
+        if (!pointers.has(e.pointerId)) return;
+        const prev = pointers.get(e.pointerId);
+        const cur = stagePoint(e);
+        pointers.set(e.pointerId, cur);
+        if (pointers.size === 2 && pinch) {
+            const [a, b] = [...pointers.values()];
+            const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
+            zoomTo(pinch.scale * dist / pinch.dist, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+        } else if (pointers.size === 1) {
+            v.tx += cur[0] - prev[0];
+            v.ty += cur[1] - prev[1];
+            apply();
+        }
+    });
+
+    const release = e => {
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) pinch = null;
+        if (!pointers.size) stage.classList.remove('dragging');
+    };
+    stage.addEventListener('pointerup', release);
+    stage.addEventListener('pointercancel', release);
+
+    modal.querySelector('.zoom-controls').addEventListener('click', e => {
+        const action = e.target.closest('[data-zoom]')?.dataset.zoom;
+        if (action === 'in') zoomTo(v.scale * ZOOM_STEP);
+        else if (action === 'out') zoomTo(v.scale / ZOOM_STEP);
+        else if (action === 'fit') fit();
+        else if (action === 'real') zoomTo(1);
+    });
+
+    const onResize = () => {
+        const wasFit = v.atFit;
+        v.fit = Math.min(stage.clientWidth / img.naturalWidth, stage.clientHeight / img.naturalHeight) || 1;
+        if (wasFit) fit(); else zoomTo(v.scale);
+    };
+    const onKey = e => {
+        if (e.key === 'Escape') close();
+        else if (e.key === '+' || e.key === '=') zoomTo(v.scale * ZOOM_STEP);
+        else if (e.key === '-') zoomTo(v.scale / ZOOM_STEP);
+        else if (e.key === '0') fit();
+        else if (e.key === '1') zoomTo(1);
+    };
+    function close() {
+        document.removeEventListener('keydown', onKey);
+        window.removeEventListener('resize', onResize);
+        document.body.classList.remove('modal-open');
+        modal.classList.remove('visible');
+        setTimeout(() => modal.remove(), 300);
+    }
+    modal.querySelector('.cam-modal-close').addEventListener('click', close);
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+
+    const ready = () => {
+        modal.querySelector('.zoom-res').textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
+        fit();
+        img.classList.add('ready');
+    };
+    document.body.appendChild(modal);
+    document.body.classList.add('modal-open');
+    if (img.complete && img.naturalWidth) ready(); else img.addEventListener('load', ready, { once: true });
+    requestAnimationFrame(() => modal.classList.add('visible'));
+    modal.querySelector('.cam-modal-close').focus();
 }
 
 function renderDetection(box, det, pane) {
