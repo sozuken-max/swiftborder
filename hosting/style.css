@@ -1089,6 +1089,9 @@ h4 {
     border-radius: 12px;
 }
 
+/* Empty once the frame is in: hide it, or its padding pushes the image down */
+.ai-detection-status:empty { display: none; }
+
 .ai-detection-status {
     padding: 1rem;
     text-align: center;

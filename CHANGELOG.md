@@ -4,7 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-11-05
 
-- `hosting/`: clicking an AI detection frame on the summary page opens a full-window zoom viewer. The frame opens fitted to the window, enlarged when the window is bigger than the frame. Scroll or pinch zooms up to 4x, drag pans, double-click and the 100% button show real pixels. A "Click to zoom" tag appears on hover. The live-camera popup is no longer capped at 900 px wide.
+- `hosting/`: clicking an AI detection frame on the summary page opens a full-window zoom viewer. The frame opens fitted to the window, enlarged when the window is bigger than the frame. Scroll or pinch zooms up to 4x, drag pans, double-click and the 100% button show real pixels. A "Click to zoom" tag appears on hover. The live-camera popup is no longer capped at 900 px wide. The empty status line above each AI frame no longer leaves a 32 px gap above the image.
 - `camdetect` `format=directional` boxes are now 2 px wide (were 1 px, too faint on the summary page). Takes effect on the next `camdetect` deploy. Counts, headers and JSON are unchanged.
 
 ## 2026-10-30
