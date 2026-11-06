@@ -963,6 +963,31 @@ function renderDetection(box, det, pane) {
     box.innerHTML = cards + unknownNote + untrackedNote;
 }
 
+// swiftbackend answers errors as JSON {"error": "..."}. Turn the status into a
+// sentence that says which side failed: LTA's camera feed, or our model.
+const LTA_FEED_ERRORS = {
+    'Traffic camera API request failed': 'its traffic camera service did not respond',
+    'Failed to download source image': 'the camera image could not be downloaded',
+    'Source frame is not a valid image': 'the camera image was damaged or empty'
+};
+
+async function detectionErrorMessage(res, pane, dateTime) {
+    let detail = '';
+    try { detail = (await res.json()).error || ''; } catch { /* not JSON */ }
+    const time = dateTime.slice(11, 16);
+    if (res.status === 404) {
+        return `No camera image from LTA: the data.gov.sg traffic camera feed has no frame for CAM ${pane.camera} at ${time} SGT. ` +
+            'This happens when LTA\'s feed is down or missing cameras. Try Refresh Detection in a few minutes.';
+    }
+    if (res.status === 502 && LTA_FEED_ERRORS[detail]) {
+        return `Could not get the CAM ${pane.camera} image from LTA (data.gov.sg): ${LTA_FEED_ERRORS[detail]}. Try again in a few minutes.`;
+    }
+    if (res.status === 502 || res.status === 503) {
+        return `The AI model could not process the CAM ${pane.camera} frame (${detail || `HTTP ${res.status}`}). Try again shortly.`;
+    }
+    return `AI detection unavailable: ${detail || `HTTP ${res.status}`}`;
+}
+
 async function fetchPaneDetection(pane, dateTime) {
     const img = $(`ai-img-${pane.camera}`);
     const status = $(`ai-status-${pane.camera}`);
@@ -982,8 +1007,13 @@ async function fetchPaneDetection(pane, dateTime) {
         url.searchParams.set('camera_id', pane.camera);
         url.searchParams.set('model', AI_MODEL);
         url.searchParams.set('date_time', dateTime);
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        let res;
+        try {
+            res = await fetch(url);
+        } catch {
+            throw new Error('Could not reach the AI detection service. Check your connection and try again.');
+        }
+        if (!res.ok) throw new Error(await detectionErrorMessage(res, pane, dateTime));
 
         const det = readDetection(res.headers);
         const objectUrl = URL.createObjectURL(await res.blob());
@@ -1005,7 +1035,7 @@ async function fetchPaneDetection(pane, dateTime) {
         if (shown != null) $(`ai-count-${pane.camera}`).textContent = `${shown} vehicles`;
         $(`ai-time-${pane.camera}`).textContent = `${(det.frameTime || dateTime).slice(11, 19)} SGT`;
     } catch (err) {
-        status.textContent = `AI detection unavailable: ${err.message}`;
+        status.textContent = err.message;
         console.error(`Detection error (CAM ${pane.camera}):`, err);
         throw err;
     }
