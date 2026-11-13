@@ -48,6 +48,12 @@ METADATA_TOKEN_URL = "http://metadata.google.internal/computeMetadata/v1/instanc
 LOOKAHEAD_DAYS = 21
 GOOD_WINDOW_MIN = 2.0  # a slot within this many minutes of the best counts as "about as good"
 NOW_STALE_MIN = 20  # an older Maps reading is not offered as "leave now"
+# Recommendation (decide): the earliest span of at least WINDOW_MIN whose slots are all in the
+# fastest GOOD_QUANTILE of the reachable slots
+GOOD_QUANTILE = 0.25
+WINDOW_MIN = 60
+SLOT_MIN = 30  # forecast step; each slot stands for the 30 minutes from its time
+APPROACH_MIN = int(os.environ.get("APPROACH_MIN", "30"))  # drive from home to the start of the measured route
 
 DIRECTIONS = (
     # key in forecast-api, key in traffic-24h.json, words
@@ -117,48 +123,105 @@ def latest_now(traffic, series, now=None):
     return {"at": _clock(at), "at_iso": at.isoformat(), "minutes": round(sec / 60.0, 1)}
 
 
-def direction_facts(curve_dir, now_point):
-    """Best and worst time to leave, from now to 5 hours ahead, and the comparison with the typical day.
+def _quantile(values, q):
+    """Inclusive (linear) quantile, as numpy's default."""
+    xs = sorted(values)
+    pos = (len(xs) - 1) * q
+    lo = int(pos)
+    return xs[lo] + (xs[min(lo + 1, len(xs) - 1)] - xs[lo]) * (pos - lo)
 
-    Leaving now (the latest Maps reading) is a candidate alongside the forecast slots, so the advice
-    can be "leave now". The best window is the contiguous run of candidates within GOOD_WINDOW_MIN
-    of the best one.
+
+def decide(slots, now):
+    """The span to recommend, in leave-home times. ``slots`` are leave-home slots, oldest first.
+
+    1. Candidates: slots you can still make, leave-home time >= now (the route itself is then at
+       least APPROACH_MIN away).
+    2. Good slots: trip time at or below the GOOD_QUANTILE (25th percentile) of the candidates.
+    3. Recommend the earliest run of consecutive good slots spanning at least WINDOW_MIN (1 hour,
+       two 30-min slots) - ``basis: "fastest_quarter"``.
+    4. If no good run is that long, the WINDOW_MIN stretch with the lowest mean trip time -
+       ``basis: "quickest_hour"``.
     """
+    cands = [s for s in slots if s["at"] >= now] or slots[-1:]
+    need = max(1, -(-WINDOW_MIN // SLOT_MIN))  # slots per window, rounded up
+    p25 = _quantile([s["min"] for s in cands], GOOD_QUANTILE)
+    good = [s["min"] <= p25 + 1e-9 for s in cands]
+    pick, basis, i = None, "fastest_quarter", 0
+    while i < len(cands):
+        if good[i]:
+            j = i
+            while j + 1 < len(cands) and good[j + 1]:
+                j += 1
+            if j - i + 1 >= need:
+                pick = (i, j)
+                break
+            i = j + 1
+        else:
+            i += 1
+    if pick is None:
+        basis = "quickest_hour"
+        k = min(need, len(cands))
+        starts = range(len(cands) - k + 1)
+        i = min(starts, key=lambda st: sum(c["min"] for c in cands[st:st + k]) / k)
+        pick = (i, i + k - 1)
+    run = cands[pick[0]:pick[1] + 1]
+    vals = [s["min"] for s in run]
+    first = cands[0]["min"]
+    return {
+        "basis": basis,
+        "window_start_iso": run[0]["at"].isoformat(),
+        "window_end_iso": (run[-1]["at"] + datetime.timedelta(minutes=SLOT_MIN)).isoformat(),
+        "crossing_min": round(sum(vals) / len(vals), 1),
+        "range_min": [round(min(vals), 1), round(max(vals), 1)],
+        "p25_min": round(p25, 1),
+        "saving_vs_soonest_min": round(first - sum(vals) / len(vals), 1),
+    }
+
+
+def direction_facts(curve_dir, now_point, now=None):
+    """When to leave home, from now to about 4.5 hours ahead, and the comparison with the typical day.
+
+    A forecast slot is the Maps time for the measured route starting at ``forecast_for``. A driver
+    needs about APPROACH_MIN to get there, so every time here is a leave-home time: the slot's start
+    minus APPROACH_MIN. The first slot is therefore "leave now". The latest Maps reading (``now``) is
+    kept for context only: leaving home now reaches the route after it.
+    """
+    approach = datetime.timedelta(minutes=APPROACH_MIN)
     pts = [
-        {"at": _parse(p["forecast_for"]), "min": float(p["forecast_min"]),
-         "typical": None if p.get("baseline_min") is None else float(p["baseline_min"]), "now": False}
+        {"at": _parse(p["forecast_for"]) - approach, "min": float(p["forecast_min"]),
+         "typical": None if p.get("baseline_min") is None else float(p["baseline_min"])}
         for p in (curve_dir or {}).get("points", [])
         if p.get("forecast_min") is not None and p.get("model") != "profile"
     ]
     if not pts:
         return None
-    slots = ([{"at": _parse(now_point["at_iso"]), "min": now_point["minutes"], "typical": None, "now": True}]
-             if now_point else []) + pts
-    best_i = min(range(len(slots)), key=lambda i: slots[i]["min"])
-    worst_i = max(range(len(slots)), key=lambda i: slots[i]["min"])
-    best = slots[best_i]["min"]
+    best_i = min(range(len(pts)), key=lambda i: pts[i]["min"])
+    worst_i = max(range(len(pts)), key=lambda i: pts[i]["min"])
+    best = pts[best_i]["min"]
     lo = hi = best_i
-    while lo > 0 and slots[lo - 1]["min"] <= best + GOOD_WINDOW_MIN:
+    while lo > 0 and pts[lo - 1]["min"] <= best + GOOD_WINDOW_MIN:
         lo -= 1
-    while hi < len(slots) - 1 and slots[hi + 1]["min"] <= best + GOOD_WINDOW_MIN:
+    while hi < len(pts) - 1 and pts[hi + 1]["min"] <= best + GOOD_WINDOW_MIN:
         hi += 1
     diffs = [p["min"] - p["typical"] for p in pts if p["typical"] is not None]
     gaps = [p for p in pts if p["typical"] is not None]
     gap = max(gaps, key=lambda p: abs(p["min"] - p["typical"])) if gaps else None
     facts = {
+        "times_are": f"when to leave home, assuming about {APPROACH_MIN} min to reach the Causeway route",
         "forecast": [{"leave_at": _clock(p["at"]), "at_iso": p["at"].isoformat(), "crossing_min": round(p["min"], 1),
                       "typical_min": None if p["typical"] is None else round(p["typical"], 1)} for p in pts],
-        "best": {"leave_at": _clock(slots[best_i]["at"]), "crossing_min": round(best, 1),
-                 "window": f"{_clock(slots[lo]['at'])}-{_clock(slots[hi]['at'])}",
-                 "window_start_iso": slots[lo]["at"].isoformat(), "window_end_iso": slots[hi]["at"].isoformat(),
-                 "leave_now": bool(slots[lo]["now"])},
-        "worst": {"leave_at": _clock(slots[worst_i]["at"]), "crossing_min": round(slots[worst_i]["min"], 1)},
+        "best": {"leave_at": _clock(pts[best_i]["at"]), "crossing_min": round(best, 1),
+                 "window": f"{_clock(pts[lo]['at'])}-{_clock(pts[hi]['at'])}",
+                 "window_start_iso": pts[lo]["at"].isoformat(), "window_end_iso": pts[hi]["at"].isoformat(),
+                 "leave_now": lo == 0},
+        "worst": {"leave_at": _clock(pts[worst_i]["at"]), "crossing_min": round(pts[worst_i]["min"], 1)},
         "vs_typical_avg_min": round(sum(diffs) / len(diffs), 1) if diffs else None,
         # the slot furthest from usual, so the insight can say when the difference is largest
         "biggest_gap_vs_typical": None if gap is None else {
             "leave_at": _clock(gap["at"]), "crossing_min": round(gap["min"], 1),
             "typical_min": round(gap["typical"], 1), "diff_min": round(gap["min"] - gap["typical"], 1)},
-        "now": now_point,
+        "now": now_point,  # the latest reading on the route itself, for context
+        "decision": decide(pts, now or datetime.datetime.now(datetime.timezone.utc)),  # what the card says
     }
     if now_point:
         facts["saving_vs_now_min"] = round(now_point["minutes"] - best, 1)
@@ -225,7 +288,7 @@ def build_facts(curve, traffic, now):
     dirs = {}
     for d in DIRECTIONS:
         now_point = latest_now(traffic, d["series"], now) if traffic else None
-        f = direction_facts((curve.get("directions") or {}).get(d["api"]), now_point)
+        f = direction_facts((curve.get("directions") or {}).get(d["api"]), now_point, now)
         if f:
             dirs[d["api"]] = dict(f, label=d["label"])
     return {
@@ -241,8 +304,9 @@ def build_facts(curve, traffic, now):
 SYSTEM_PROMPT = """You are a seasoned daily commuter across the Woodlands Causeway between Singapore and Johor Bahru. The app already shows, for each direction, when to leave and the expected trip time on a clock. Your job is the "why": explain in ONE line why traffic is different from usual today.
 
 Facts (user JSON):
-- "crossing_min": forecast Google Maps driving time if you leave at "leave_at". "typical_min": the usual time for that weekday and hour.
+- Every "leave_at" and decision time is when to LEAVE HOME (about 30 min before reaching the Causeway route; "times_are"). "crossing_min": forecast Google Maps time for the Causeway route for that departure. "typical_min": the usual time. Do not mention the 30 minutes.
 - "vs_typical_avg_min": average over the next 5 hours; > 0 means slower than usual. "biggest_gap_vs_typical": the slot furthest from usual.
+- "decision": the leave-home span the app already recommends (the earliest hour in the fastest quarter of the next 5 hours). Never contradict it.
 - "calendar": weekday, Singapore and Malaysia public holidays, eves, Singapore long weekends, school holidays, upcoming public holidays.
 
 General Causeway patterns you may use as likely causes (they are well known, not facts about today):

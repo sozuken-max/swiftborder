@@ -95,19 +95,21 @@ def test_best_window_worst_and_typical():
     values = [40, 38, 33, 32, 34, 45, 50, 41, 37, 36]
     facts = main.direction_facts(_curve(values, values)["directions"]["SG_TO_MY"], NOW_POINT)
     best = facts["best"]
-    assert (best["leave_at"], best["crossing_min"], best["window"], best["leave_now"]) == ("14:40", 32.0, "14:10-15:10", False)
-    assert best["window_start_iso"].startswith("2026-11-13T06:10")
-    assert facts["worst"] == {"leave_at": "16:10", "crossing_min": 50.0}
+    # leave-home times: each route slot minus APPROACH_MIN (30 min)
+    assert (best["leave_at"], best["crossing_min"], best["window"], best["leave_now"]) == ("14:10", 32.0, "13:40-14:40", False)
+    assert best["window_start_iso"].startswith("2026-11-13T05:40")
+    assert facts["worst"] == {"leave_at": "15:40", "crossing_min": 50.0}
     assert facts["vs_typical_avg_min"] == pytest.approx(8.6)
-    assert facts["biggest_gap_vs_typical"] == {"leave_at": "16:10", "crossing_min": 50.0, "typical_min": 30.0, "diff_min": 20.0}
+    assert facts["biggest_gap_vs_typical"] == {"leave_at": "15:40", "crossing_min": 50.0, "typical_min": 30.0, "diff_min": 20.0}
     assert facts["saving_vs_now_min"] == 5.0
 
 
-def test_leaving_now_can_be_the_best_window():
+def test_first_slot_is_leaving_home_now():
+    # route slot 13:10 SGT minus the 30-min drive: leave home at 12:40; the 12:55 route reading is context only
     facts = main.direction_facts(_curve([26, 30, 40], [26, 30, 40])["directions"]["SG_TO_MY"],
-                                 dict(NOW_POINT, minutes=25.0))
-    assert facts["best"]["leave_now"] is True
-    assert facts["best"]["window"] == "12:55-13:10"
+                                 dict(NOW_POINT, minutes=20.0))
+    assert facts["best"]["leave_now"] is True and facts["best"]["window"] == "12:40-12:40"
+    assert facts["forecast"][0]["leave_at"] == "12:40" and facts["now"]["minutes"] == 20.0
 
 
 def test_stale_now_reading_is_ignored():
@@ -143,7 +145,8 @@ def test_advice_is_cached_per_origin(monkeypatch):
     assert first is second and len(calls) == 1
     assert first["advice"]["insight"].startswith("To Johor runs 8 min slower")
     sent = json.loads(calls[0]["messages"][1]["content"])
-    assert sent["directions"]["SG_TO_MY"]["best"]["leave_at"] == "14:10"
+    assert sent["directions"]["SG_TO_MY"]["best"]["leave_at"] == "13:40"  # route 14:10 minus the drive
+    assert "leave home" in sent["directions"]["SG_TO_MY"]["times_are"]
     assert sent["calendar"]["sg_school_holidays"].startswith("start 2026-11-21")
     assert calls[0]["response_format"] == {"type": "json_object"}
     newer = _curve([40, 35, 30], [30, 30, 30])
@@ -211,3 +214,65 @@ def test_endpoint_errors(monkeypatch):
         raise api.NoRecentForecast(d)
     monkeypatch.setattr(api, "cached_curve", none)
     assert _get({"advice": "commute"})[1] == 503
+
+
+# --- recommendation (decide): earliest hour in the fastest quarter -------------------------
+
+T0 = datetime.datetime(2026, 11, 13, 6, 40, tzinfo=UTC)  # 14:40 SGT
+
+
+def _home(values, start=T0):
+    """Leave-home slots every 30 min from ``start``."""
+    return [{"at": start + datetime.timedelta(minutes=30 * i), "min": v} for i, v in enumerate(values)]
+
+
+def _sgt(iso):
+    return datetime.datetime.fromisoformat(iso).astimezone(main.SGT).strftime("%H:%M")
+
+
+def _span(d):
+    return _sgt(d["window_start_iso"]), _sgt(d["window_end_iso"])
+
+
+def _live(vals):
+    # live 13 Nov: forecast origin 14:40 SGT, route slots from 15:10, page opened at 14:57 SGT
+    curve = {"origin_ts": T0.isoformat(), "points": [
+        {"forecast_for": (T0 + datetime.timedelta(minutes=30 * (i + 1))).isoformat(), "forecast_min": v,
+         "baseline_min": v, "model": "xgb"} for i, v in enumerate(vals)]}
+    return main.direction_facts(curve, None, T0 + datetime.timedelta(minutes=17))["decision"]
+
+
+def test_live_13_nov_to_johor():
+    d = _live([36.5, 38.7, 35.3, 39.3, 45.7, 47.1, 48.6, 47.6, 46.8, 46.2])
+    # reachable: leave home 15:10 (route 15:40) onwards; 25th percentile 39.3 -> 15:10, 15:40, 16:10
+    assert d["basis"] == "fastest_quarter" and d["p25_min"] == 39.3
+    assert _span(d) == ("15:10", "16:40") and d["range_min"] == [35.3, 39.3]
+
+
+def test_live_13_nov_to_singapore():
+    d = _live([31.8, 35.6, 44.8, 50.5, 49.6, 47.3, 43.6, 36.9, 31.9, 28.5])
+    # 25th percentile 35.6: 15:10 alone is under an hour, so the next good run 18:40-19:10 (to 19:40)
+    assert d["basis"] == "fastest_quarter" and d["p25_min"] == 35.6
+    assert _span(d) == ("18:40", "19:40") and d["range_min"] == [28.5, 31.9] and d["crossing_min"] == 30.2
+
+
+def test_past_slots_are_not_candidates():
+    d = main.decide(_home([10, 10, 30, 31, 30, 32, 40]), T0 + datetime.timedelta(minutes=45))
+    assert _span(d)[0] != "14:40" and _sgt(d["window_start_iso"]) >= "15:40"
+
+
+def test_falls_back_to_the_quickest_hour():
+    # the fastest quarter is two separate single slots, so no good run reaches an hour
+    d = main.decide(_home([30, 45, 31, 46, 47, 48, 49, 50]), T0)
+    assert d["basis"] == "quickest_hour" and _span(d) == ("14:40", "15:40")
+
+
+def test_window_is_at_least_an_hour():
+    d = main.decide(_home([40, 39, 20, 41, 42, 43, 44, 45]), T0)
+    start, end = (datetime.datetime.fromisoformat(d[k]) for k in ("window_start_iso", "window_end_iso"))
+    assert end - start >= datetime.timedelta(minutes=60)
+
+
+def test_decision_is_in_the_facts():
+    facts = main.direction_facts(_curve([40, 35, 30], [30, 30, 30])["directions"]["SG_TO_MY"], NOW_POINT, NOW)
+    assert facts["decision"]["basis"] in ("fastest_quarter", "quickest_hour")

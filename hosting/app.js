@@ -728,9 +728,8 @@ function clockSvg(f, key, nowMs) {
     };
     const arc = (m0, m1, r) => `M${pt(r, ang(m0))} A${r},${r} 0 ${m1 - m0 > 360 ? 1 : 0} 1 ${pt(r, ang(m1))}`;
 
-    const samples = [];
-    if (f.now) samples.push({ t: nowMs, v: f.now.minutes });
-    f.forecast.forEach(p => { const t = Date.parse(p.at_iso); if (t > nowMs) samples.push({ t, v: p.crossing_min }); });
+    // leave-home times (the service subtracts the drive to the Causeway); a slot owns +/-15 min
+    const samples = f.forecast.map(p => ({ t: Date.parse(p.at_iso), v: p.crossing_min })).filter(p => p.t + 15 * 60000 > nowMs);
     let svg = `<svg viewBox="0 0 240 240" class="cb-clock" aria-hidden="true">
         <defs><filter id="cb-glow-${key}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6" result="b"/>
         <feComponentTransfer in="b" result="g"><feFuncA type="linear" slope="0.6"/></feComponentTransfer>
@@ -739,7 +738,7 @@ function clockSvg(f, key, nowMs) {
         <circle cx="${C}" cy="${C}" r="${CLOCK_R_OUT + 16}" fill="url(#cb-face-${key})" stroke="rgba(0,242,254,0.18)"/>
         <path d="${wedge(0, 719.9, CLOCK_R_IN, CLOCK_R_OUT)}" fill="rgba(255,255,255,0.06)"/><g filter="url(#cb-glow-${key})">`;
     samples.forEach((p, i) => {
-        const m0 = i === 0 ? dial(nowMs) : dial((samples[i - 1].t + p.t) / 2);
+        const m0 = Math.max(dial(nowMs), i === 0 ? dial(p.t) - 15 : dial((samples[i - 1].t + p.t) / 2));
         const m1 = i === samples.length - 1 ? dial(p.t) + 15 : dial((p.t + samples[i + 1].t) / 2);
         if (m1 - m0 > 1.6) svg += `<path d="${wedge(m0 + 0.8, m1 - 0.8, CLOCK_R_IN, CLOCK_R_OUT)}" fill="${heatColour(p.v)}" opacity="0.9"/>`;
     });
@@ -753,10 +752,10 @@ function clockSvg(f, key, nowMs) {
         const a = (k / 60) * 2 * Math.PI - Math.PI / 2;
         svg += `<line x1="${pt(CLOCK_R_IN - 4, a).replace(',', '" y1="')}" x2="${pt(CLOCK_R_IN - 6.5, a).replace(',', '" y2="')}" class="cb-tick"/>`;
     }
-    const b = f.best;
-    const ws = b.leave_now ? nowMs : Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
-    const a0 = b.leave_now ? dial(nowMs) : dial(ws) - 6, a1 = Math.max(dial(we) + 6, a0 + 12);
-    svg += `<path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc-halo"/><path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc"/>`;
+    leaveArcs(f, nowMs).forEach(([s0, s1, fromNow]) => {
+        const a0 = fromNow ? dial(nowMs) : dial(s0) - 6, a1 = Math.max(dial(s1) + 6, a0 + 12);
+        svg += `<path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc-halo"/><path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc"/>`;
+    });
     const n = ang(dial(nowMs));
     svg += `<line x1="${pt(CLOCK_R_IN - 2, n).replace(',', '" y1="')}" x2="${pt(CLOCK_R_OUT + 2, n).replace(',', '" y2="')}" class="cb-now"/>`;
     svg += `<g class="cb-hand-h"><line x1="${C}" y1="${C + 8}" x2="${C}" y2="${C - 44}"/></g>
@@ -766,15 +765,30 @@ function clockSvg(f, key, nowMs) {
     return svg;
 }
 
-function leaveText(b, nowMs) {
-    const ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
+// forecast-api commute_advisor.decide: the earliest leave-home span of at least an hour whose
+// slots are all in the fastest quarter of the next 5 h (else the quickest hour). A response
+// without `decision` (an older forecast-api) falls back to the plain best window.
+function leaveArcs(f, nowMs) { // [[startMs, endMs, startsNow]]
+    const d = f.decision;
+    if (d) return [[Math.max(Date.parse(d.window_start_iso), nowMs), Date.parse(d.window_end_iso), Date.parse(d.window_start_iso) <= nowMs]];
+    const b = f.best;
+    return [[b.leave_now ? nowMs : Date.parse(b.window_start_iso), Date.parse(b.window_end_iso), b.leave_now]];
+}
+
+function leaveText(f, nowMs) {
+    const d = f.decision;
+    if (d) {
+        const ws = Date.parse(d.window_start_iso), we = Date.parse(d.window_end_iso);
+        return ws <= nowMs ? `Now – ${fmt12(we)}` : fmtRange(ws, we); // under "Best time to leave"
+    }
+    const b = f.best, ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
     if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
     return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
 }
 
 function vsChip(vs) {
     if (vs == null) return '';
-    if (Math.abs(vs) < 1) return '<span class="cb-vs ok">● About usual</span>';
+    if (Math.abs(vs) < 2) return '<span class="cb-vs ok">● About usual</span>'; // same 2-min band as the insight
     const n = Math.round(Math.abs(vs));
     return vs > 0 ? `<span class="cb-vs up">▲ ${n} min slower than usual</span>` : `<span class="cb-vs ok">▼ ${n} min faster than usual</span>`;
 }
@@ -792,8 +806,9 @@ function renderClocks() {
             <div class="cb-body">
                 <div class="cb-clock-wrap">${clockSvg(f, d.key, nowMs)}<div class="cb-clock-cap">Now <b>${nowText}</b></div></div>
                 <div class="cb-side">
-                    <div class="cb-verb">${esc(leaveText(f.best, nowMs))}</div>
-                    <div class="cb-chips"><span class="cb-trip"><b>${Math.round(f.best.crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
+                    <div class="cb-label">Best time to leave</div>
+                    <div class="cb-verb">${esc(leaveText(f, nowMs))}</div>
+                    <div class="cb-chips"><span class="cb-trip"><b>${Math.round((f.decision || f.best).crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
                 </div>
             </div>
         </div>`;
@@ -829,9 +844,6 @@ function renderAdvice(data) {
     $('cb-tips').innerHTML = (a?.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
     $('cb-tips').hidden = !a?.tips?.length;
     $('cb-content').hidden = false;
-    $('advice-note').textContent = a
-        ? 'Times and colours come from the SwiftBorder forecast. The insight and tips are AI-written; causes are educated guesses. Estimates only.'
-        : 'From the SwiftBorder forecast. Estimates only.';
     $('advice-card').hidden = false;
     if (!clockTimer) clockTimer = setInterval(tickClocks, 1000);
 }

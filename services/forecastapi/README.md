@@ -34,6 +34,17 @@ Feeds the Commute Buddy card on the Hosting forecast page. Code: [`commute_advis
 
 - **Input:** none from the caller. It uses the same cached 5-hour curve as `?curve=forecast&hours=5` (`cached_curve`), plus the latest reading in the public `traffic-24h.json`.
 - **Facts, in code:** for each direction, the best window to leave from now to 5 h ahead. Leaving now counts as a slot (the latest Maps reading, if under 20 min old). The window is the run of slots within 2 min of the best one. Also the worst time, `vs_typical_avg_min`, `biggest_gap_vs_typical`, and every slot's time and forecast for the page's clock. Calendar: SG/MY public holidays, eves, SG long weekends, school holidays, and public holidays in the next 21 days.
+- **Leave-home times:** each route slot (`forecast_for`, the start of the measured Causeway route) minus `APPROACH_MIN` (30 min, env `APPROACH_MIN`), the drive to get there. So the first slot is "leave now", and every time on the card and in `facts` is when to leave home. The latest route reading (`now`) is context only. The card says so in one footnote line; it never shows the arithmetic.
+- **Recommendation (`decide`), what the card says.** All times are leave-home times.
+
+  | Step | Rule |
+  | --- | --- |
+  | 1. Candidates | Forecast slots you can still make: leave-home time at or after now, so the route itself is at least 30 min away. |
+  | 2. Good slots | Trip time at or below the 25th percentile (`GOOD_QUANTILE`, linear) of the candidates. |
+  | 3. Recommend | The **earliest** run of consecutive good slots spanning at least 1 hour (`WINDOW_MIN`; each slot stands for its 30 minutes, so two or more in a row). `basis: "fastest_quarter"`. |
+  | 4. Fallback | No good run is an hour long: the 1-hour stretch with the lowest mean trip time. `basis: "quickest_hour"`. |
+  | Card | Labelled "Best time to leave": "3:10–4:40 PM" (or "Now – 4:40 PM" if the span has started), "N min expected" = the span's mean, and one cyan arc on the span. A two-sentence intro under the card title says the times are for leaving home or the office (about 30 min to the checkpoint), come from the forecast, and that the insight and tips are AI estimates. |
+
 - **LLM:** OpenAI Chat Completions (`OPENAI_MODEL`, default `gpt-4o-mini`) returns JSON with one `insight` line (at most 22 words) and at most 2 `tips`. The insight names the direction furthest from usual, by how much and when, and the likely cause from the calendar and a few well-known Causeway patterns in the prompt (Friday evenings and holiday eves heavy towards Johor, Sunday evenings and holiday ends heavy towards Singapore, weekday commuter peaks). It must hedge ("likely") and may not invent events, accidents, weather or checkpoint conditions. No events or incident APIs are read.
 - **Cost:** one cached answer per forecast origin (10 min) per instance. A failed OpenAI call is retried after 60 s, not per visit.
 - **Key:** `OPENAI_API_KEY` if set (local runs), else Secret Manager secret `openai-api-key` in `BQ_PROJECT`, read at run time with the instance's metadata token and cached for an hour. The key is **not** mounted at deploy, so a missing secret or permission cannot fail a deploy. The response then has `facts`, `advice: null` and `advice_error`, and the card shows the clocks without AI text.

@@ -739,6 +739,15 @@ h4 {
     color: var(--primary);
 }
 
+.cb-label {
+    margin-bottom: -0.45rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
 .cb-chips {
     display: flex;
     flex-wrap: wrap;
@@ -826,9 +835,12 @@ h4 {
     color: var(--text-main);
 }
 
-.advice-note {
-    margin-top: 0.85rem;
-    font-size: 0.72rem;
+.cb-intro {
+    margin: -0.35rem 0 1rem;
+    max-width: 62rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-muted);
 }
 
 /* Direction switch: phones only (both clocks side by side on wider screens) */

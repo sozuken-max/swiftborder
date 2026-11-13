@@ -2,6 +2,11 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13 (commute buddy recommendation)
+
+- `forecast-api` `?advice=commute`: each direction's `decision` is the earliest leave-home span of at least 1 hour whose 30-min slots are all in the fastest quarter (at or below the 25th percentile) of the reachable slots in the next 5 hours. It falls back to the quickest hour when no such run exists (`basis`). Leave-home time is the route slot minus `APPROACH_MIN` (30 min, the drive to the Causeway), and only slots at least 30 min away count. It replaces "the single fastest slot". On 13 Nov 14:40 SGT that rule said "Leave at 4:10 PM" To Johor (35.3 min vs 37.2 now) and "Leave at 7:40 PM" To Singapore (28.5 vs 28.6). The new rule gives "Leave 3:10–4:40 PM" (35–39 min, 25th percentile 39.3) and "Leave 6:40–7:40 PM" (29–32 min; 3:10 PM alone was good but under an hour). The LLM is told not to contradict it.
+- `hosting/`: the card shows the span under a "Best time to leave" label ("3:10–4:40 PM"), the span's mean as "N min expected", and one cyan arc. A two-sentence intro under the card title replaces the footnote: the times are for leaving home or the office (about 30 min to the checkpoint), they come from the forecast (past and today's traffic), and the insight and tips are AI-written estimates. A response without `decision` falls back to the plain best window. "About usual" covers ±2 min, as the insight does.
+
 ## 2026-11-13 (commute buddy fixes)
 
 - `hosting/`: Commute Buddy states. While it waits the card shows "Asking your Commute Buddy…". If `?advice=commute` fails or answers without advice (for example the old `forecast-api` during a deploy), it shows "Couldn't reach your Commute Buddy right now. Retry, or refresh the page later." with a Retry button. The tabs, clocks, key and tips appear only with advice. The hide rule is `!important`: the general card styling overrode it on the live page, so the empty card and colour key showed.
