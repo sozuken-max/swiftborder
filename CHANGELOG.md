@@ -4,7 +4,7 @@ Repo and deploy changes that are not worth repeating in long-lived READMEs. For 
 
 ## 2026-11-13
 
-- `hosting/app.js`: cold-start forecast fix. The page asked for the 5-hour curve first with a 60 s timeout; on a cold `forecast-api` instance the curve fits a model per horizon and takes longer, so the browser aborted it and fell back to the single 30-minute point until a manual refresh. The page now shows the 30-minute forecast first (about 20 s cold) with a "still loading" note, then asks for the curve with a 240 s timeout and replaces the point when it arrives. Once a curve is on screen, refreshes ask for the curve directly. A newer refresh supersedes an older one still in flight. No `forecast-api` change.
+- `hosting/app.js`: cold-start forecast fix. The page asked for the 5-hour curve first with a 60 s timeout; on a cold `forecast-api` instance the curve fits a model per horizon and takes longer, so the browser aborted it and fell back to the single 30-minute point until a manual refresh. Cloud Run logs for 2026-11-13 12:40 SGT: the curve request finished with 200 after 91.5 s (30 s after the browser gave up), and the fallback `GET /` started at exactly +60 s and took 21.4 s. The page now shows the 30-minute forecast first (about 20 s cold) with a "still loading" note, then asks for the curve with a 240 s timeout and replaces the point when it arrives. Once a curve is on screen, refreshes ask for the curve directly. A newer refresh supersedes an older one still in flight. No `forecast-api` change.
 
 ## 2026-11-05
 
