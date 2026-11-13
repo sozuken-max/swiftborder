@@ -779,7 +779,7 @@ function leaveText(f, nowMs) {
     const d = f.decision;
     if (d) {
         const ws = Date.parse(d.window_start_iso), we = Date.parse(d.window_end_iso);
-        return ws <= nowMs ? `Now – ${fmt12(we)}` : fmtRange(ws, we); // under "AI recommended time to leave home"
+        return ws <= nowMs ? `Now – ${fmt12(we)}` : fmtRange(ws, we); // under "Best time to leave"
     }
     const b = f.best, ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
     if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
@@ -806,7 +806,7 @@ function renderClocks() {
             <div class="cb-body">
                 <div class="cb-clock-wrap">${clockSvg(f, d.key, nowMs)}<div class="cb-clock-cap">Now <b>${nowText}</b></div></div>
                 <div class="cb-side">
-                    <div class="cb-label">${f.decision ? 'AI recommended time to leave home' : 'Best time to leave'}</div>
+                    <div class="cb-label">Best time to leave</div>
                     <div class="cb-verb">${esc(leaveText(f, nowMs))}</div>
                     <div class="cb-chips"><span class="cb-trip"><b>${Math.round((f.decision || f.best).crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
                 </div>
@@ -844,11 +844,6 @@ function renderAdvice(data) {
     $('cb-tips').innerHTML = (a?.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
     $('cb-tips').hidden = !a?.tips?.length;
     $('cb-content').hidden = false;
-    const drive = Object.values(data.facts?.directions || {}).some(f => f.times_are)
-        ? 'Leave times allow about 30 min to reach the Causeway. ' : '';
-    $('advice-note').textContent = drive + (a
-        ? 'Times and colours come from the SwiftBorder forecast. The insight and tips are AI-written; causes are educated guesses. Estimates only.'
-        : 'From the SwiftBorder forecast. Estimates only.');
     $('advice-card').hidden = false;
     if (!clockTimer) clockTimer = setInterval(tickClocks, 1000);
 }

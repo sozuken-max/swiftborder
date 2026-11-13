@@ -835,9 +835,12 @@ h4 {
     color: var(--text-main);
 }
 
-.advice-note {
-    margin-top: 0.85rem;
-    font-size: 0.72rem;
+.cb-intro {
+    margin: -0.35rem 0 1rem;
+    max-width: 62rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-muted);
 }
 
 /* Direction switch: phones only (both clocks side by side on wider screens) */
