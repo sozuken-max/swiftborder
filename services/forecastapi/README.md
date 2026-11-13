@@ -64,6 +64,8 @@ Feeds the Commute Buddy card on the Hosting forecast page. Code: [`commute_advis
             "tips": ["...", "..."]}}
 ```
 
+**Trying prompt changes without a deploy:** [`scripts/commute_prompt_lab.py`](../../scripts/commute_prompt_lab.py) exports the deployed `SYSTEM_PROMPT` to a text file, then runs your edited copy against today's live facts with your own OpenAI key and prints the insight and tips. Production is untouched. When a prompt is better, put it into `SYSTEM_PROMPT` (a PR, which redeploys `forecast-api`).
+
 **One-time setup (project owner).** Nothing here changes the deploy; until it is done the card shows the clocks without AI text.
 
 ```bash

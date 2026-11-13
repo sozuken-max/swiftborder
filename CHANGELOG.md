@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13 (commute buddy prompt lab)
+
+- `scripts/commute_prompt_lab.py`: try Commute Buddy prompts locally. `--export prompt.txt` writes the deployed `SYSTEM_PROMPT`; `--prompt prompt.txt` sends today's live `?advice=commute` facts (or `--facts` saved with `--save-facts`) to OpenAI with your own key and prints the insight and tips; `--runs` and `--model` compare variants. No deploy and no production change.
+
 ## 2026-11-13 (commute buddy recommendation)
 
 - `forecast-api` `?advice=commute`: each direction's `decision` is the earliest leave-home span of at least 1 hour whose 30-min slots are all in the fastest quarter (at or below the 25th percentile) of the reachable slots in the next 5 hours. It falls back to the quickest hour when no such run exists (`basis`). Leave-home time is the route slot minus `APPROACH_MIN` (30 min, the drive to the Causeway), and only slots at least 30 min away count. It replaces "the single fastest slot". On 13 Nov 14:40 SGT that rule said "Leave at 4:10 PM" To Johor (35.3 min vs 37.2 now) and "Leave at 7:40 PM" To Singapore (28.5 vs 28.6). The new rule gives "Leave 3:10–4:40 PM" (35–39 min, 25th percentile 39.3) and "Leave 6:40–7:40 PM" (29–32 min; 3:10 PM alone was good but under an hour). The LLM is told not to contradict it.
