@@ -48,10 +48,11 @@ METADATA_TOKEN_URL = "http://metadata.google.internal/computeMetadata/v1/instanc
 LOOKAHEAD_DAYS = 21
 GOOD_WINDOW_MIN = 2.0  # a slot within this many minutes of the best counts as "about as good"
 NOW_STALE_MIN = 20  # an older Maps reading is not offered as "leave now"
-# Decision tree (decide): minutes that make a difference worth acting on
-SAVE_MIN = 5.0  # waiting must save at least this much against leaving now
-WORSE_MIN = 5.0  # traffic "gets worse" once a slot is this much slower than now
-REOPEN_MIN = 2.0  # after the peak, back to "about now" within this much
+# Recommendation (decide): the earliest span of at least WINDOW_MIN whose slots are all in the
+# fastest GOOD_QUANTILE of the reachable slots
+GOOD_QUANTILE = 0.25
+WINDOW_MIN = 60
+SLOT_MIN = 30  # forecast step; each slot stands for the 30 minutes from its time
 APPROACH_MIN = int(os.environ.get("APPROACH_MIN", "30"))  # drive from home to the start of the measured route
 
 DIRECTIONS = (
@@ -122,45 +123,62 @@ def latest_now(traffic, series, now=None):
     return {"at": _clock(at), "at_iso": at.isoformat(), "minutes": round(sec / 60.0, 1)}
 
 
-def decide(slots):
-    """What to tell a driver, as one of four scenarios. ``slots`` are leave-home times; ``slots[0]`` is now.
+def _quantile(values, q):
+    """Inclusive (linear) quantile, as numpy's default."""
+    xs = sorted(values)
+    pos = (len(xs) - 1) * q
+    lo = int(pos)
+    return xs[lo] + (xs[min(lo + 1, len(xs) - 1)] - xs[lo]) * (pos - lo)
 
-    - ``wait``: a later window saves at least SAVE_MIN against now. Window: the run of slots within
-      GOOD_WINDOW_MIN of the best one.
-    - ``steady``: nothing later saves SAVE_MIN and nothing gets WORSE_MIN worse: leave any time.
-    - ``leave_now``: nothing later saves SAVE_MIN, but traffic gets WORSE_MIN worse later. Window:
-      now until the last slot before it does.
-    - ``leave_now_or_later``: as ``leave_now``, and after the peak it comes back to within REOPEN_MIN
-      of now before the 5 hours end (``reopen_iso``).
+
+def decide(slots, now):
+    """The span to recommend, in leave-home times. ``slots`` are leave-home slots, oldest first.
+
+    1. Candidates: slots you can still make, leave-home time >= now (the route itself is then at
+       least APPROACH_MIN away).
+    2. Good slots: trip time at or below the GOOD_QUANTILE (25th percentile) of the candidates.
+    3. Recommend the earliest run of consecutive good slots spanning at least WINDOW_MIN (1 hour,
+       two 30-min slots) - ``basis: "fastest_quarter"``.
+    4. If no good run is that long, the WINDOW_MIN stretch with the lowest mean trip time -
+       ``basis: "quickest_hour"``.
     """
-    iso = lambda s: s["at"].isoformat()  # noqa: E731
-    n = slots[0]["min"]
-    best_i = min(range(len(slots)), key=lambda i: slots[i]["min"])
-    best = slots[best_i]["min"]
-    if n - best >= SAVE_MIN:
-        lo = hi = best_i
-        while lo > 1 and slots[lo - 1]["min"] <= best + GOOD_WINDOW_MIN:
-            lo -= 1
-        while hi < len(slots) - 1 and slots[hi + 1]["min"] <= best + GOOD_WINDOW_MIN:
-            hi += 1
-        return {"scenario": "wait", "window_start_iso": iso(slots[lo]), "window_end_iso": iso(slots[hi]),
-                "crossing_min": round(best, 1), "saving_min": round(n - best, 1)}
-    bad_i = next((i for i, s in enumerate(slots) if s["min"] >= n + WORSE_MIN), None)
-    if bad_i is None:
-        return {"scenario": "steady", "window_start_iso": iso(slots[0]), "window_end_iso": iso(slots[-1]),
-                "crossing_min": round(n, 1), "range_min": [round(min(s["min"] for s in slots), 1),
-                                                           round(max(s["min"] for s in slots), 1)]}
-    peak_i = max(range(bad_i, len(slots)), key=lambda i: slots[i]["min"])
-    out = {"scenario": "leave_now", "window_start_iso": iso(slots[0]), "window_end_iso": iso(slots[max(bad_i - 1, 0)]),
-           "crossing_min": round(n, 1), "worse_from_iso": iso(slots[bad_i]),
-           "peak": {"at_iso": iso(slots[peak_i]), "crossing_min": round(slots[peak_i]["min"], 1)}}
-    reopen = next((s for s in slots[peak_i + 1:] if s["min"] <= n + REOPEN_MIN), None)
-    if reopen is not None:
-        out.update(scenario="leave_now_or_later", reopen_iso=iso(reopen), reopen_crossing_min=round(reopen["min"], 1))
-    return out
+    cands = [s for s in slots if s["at"] >= now] or slots[-1:]
+    need = max(1, -(-WINDOW_MIN // SLOT_MIN))  # slots per window, rounded up
+    p25 = _quantile([s["min"] for s in cands], GOOD_QUANTILE)
+    good = [s["min"] <= p25 + 1e-9 for s in cands]
+    pick, basis, i = None, "fastest_quarter", 0
+    while i < len(cands):
+        if good[i]:
+            j = i
+            while j + 1 < len(cands) and good[j + 1]:
+                j += 1
+            if j - i + 1 >= need:
+                pick = (i, j)
+                break
+            i = j + 1
+        else:
+            i += 1
+    if pick is None:
+        basis = "quickest_hour"
+        k = min(need, len(cands))
+        starts = range(len(cands) - k + 1)
+        i = min(starts, key=lambda st: sum(c["min"] for c in cands[st:st + k]) / k)
+        pick = (i, i + k - 1)
+    run = cands[pick[0]:pick[1] + 1]
+    vals = [s["min"] for s in run]
+    first = cands[0]["min"]
+    return {
+        "basis": basis,
+        "window_start_iso": run[0]["at"].isoformat(),
+        "window_end_iso": (run[-1]["at"] + datetime.timedelta(minutes=SLOT_MIN)).isoformat(),
+        "crossing_min": round(sum(vals) / len(vals), 1),
+        "range_min": [round(min(vals), 1), round(max(vals), 1)],
+        "p25_min": round(p25, 1),
+        "saving_vs_soonest_min": round(first - sum(vals) / len(vals), 1),
+    }
 
 
-def direction_facts(curve_dir, now_point):
+def direction_facts(curve_dir, now_point, now=None):
     """When to leave home, from now to about 4.5 hours ahead, and the comparison with the typical day.
 
     A forecast slot is the Maps time for the measured route starting at ``forecast_for``. A driver
@@ -203,7 +221,7 @@ def direction_facts(curve_dir, now_point):
             "leave_at": _clock(gap["at"]), "crossing_min": round(gap["min"], 1),
             "typical_min": round(gap["typical"], 1), "diff_min": round(gap["min"] - gap["typical"], 1)},
         "now": now_point,  # the latest reading on the route itself, for context
-        "decision": decide(pts),  # what the card says; see decide()
+        "decision": decide(pts, now or datetime.datetime.now(datetime.timezone.utc)),  # what the card says
     }
     if now_point:
         facts["saving_vs_now_min"] = round(now_point["minutes"] - best, 1)
@@ -270,7 +288,7 @@ def build_facts(curve, traffic, now):
     dirs = {}
     for d in DIRECTIONS:
         now_point = latest_now(traffic, d["series"], now) if traffic else None
-        f = direction_facts((curve.get("directions") or {}).get(d["api"]), now_point)
+        f = direction_facts((curve.get("directions") or {}).get(d["api"]), now_point, now)
         if f:
             dirs[d["api"]] = dict(f, label=d["label"])
     return {
@@ -288,7 +306,7 @@ SYSTEM_PROMPT = """You are a seasoned daily commuter across the Woodlands Causew
 Facts (user JSON):
 - Every "leave_at" and decision time is when to LEAVE HOME (about 30 min before reaching the Causeway route; "times_are"). "crossing_min": forecast Google Maps time for the Causeway route for that departure. "typical_min": the usual time. Do not mention the 30 minutes.
 - "vs_typical_avg_min": average over the next 5 hours; > 0 means slower than usual. "biggest_gap_vs_typical": the slot furthest from usual.
-- "decision": what the app already tells the driver (wait for a better window, leave now before it gets worse, leave any time). Never contradict it.
+- "decision": the leave-home span the app already recommends (the earliest hour in the fastest quarter of the next 5 hours). Never contradict it.
 - "calendar": weekday, Singapore and Malaysia public holidays, eves, Singapore long weekends, school holidays, upcoming public holidays.
 
 General Causeway patterns you may use as likely causes (they are well known, not facts about today):

@@ -110,7 +110,6 @@ def test_first_slot_is_leaving_home_now():
                                  dict(NOW_POINT, minutes=20.0))
     assert facts["best"]["leave_now"] is True and facts["best"]["window"] == "12:40-12:40"
     assert facts["forecast"][0]["leave_at"] == "12:40" and facts["now"]["minutes"] == 20.0
-    assert facts["decision"]["scenario"] == "leave_now"
 
 
 def test_stale_now_reading_is_ignored():
@@ -217,65 +216,63 @@ def test_endpoint_errors(monkeypatch):
     assert _get({"advice": "commute"})[1] == 503
 
 
-# --- decision tree (decide) ------------------------------------------------------------------
+# --- recommendation (decide): earliest hour in the fastest quarter -------------------------
+
+T0 = datetime.datetime(2026, 11, 13, 6, 40, tzinfo=UTC)  # 14:40 SGT
 
 
-def _slots(now_min, values):
-    t0 = datetime.datetime(2026, 11, 13, 6, 40, tzinfo=UTC)  # 14:40 SGT
-    return [{"at": t0, "min": now_min}] + [
-        {"at": t0 + datetime.timedelta(minutes=30 * (i + 1)), "min": v} for i, v in enumerate(values)]
+def _home(values, start=T0):
+    """Leave-home slots every 30 min from ``start``."""
+    return [{"at": start + datetime.timedelta(minutes=30 * i), "min": v} for i, v in enumerate(values)]
 
 
 def _sgt(iso):
     return datetime.datetime.fromisoformat(iso).astimezone(main.SGT).strftime("%H:%M")
 
 
-def test_decide_leave_now_before_it_gets_worse():
-    # live 13 Nov 14:40, To Johor: 4:10 PM is only 1.9 min faster than now
-    d = main.decide(_slots(37.2, [36.5, 38.7, 35.3, 39.3, 45.7, 47.1, 48.6, 47.6, 46.8, 46.2]))
-    assert d["scenario"] == "leave_now" and d["crossing_min"] == 37.2
-    assert (_sgt(d["window_end_iso"]), _sgt(d["worse_from_iso"]), _sgt(d["peak"]["at_iso"])) == ("16:40", "17:10", "18:10")
+def _span(d):
+    return _sgt(d["window_start_iso"]), _sgt(d["window_end_iso"])
 
 
-def test_decide_leave_now_or_after_the_peak():
-    # live 13 Nov 14:40, To Singapore: 7:40 PM (28.5) is no better than now (28.6)
-    d = main.decide(_slots(28.6, [31.8, 35.6, 44.8, 50.5, 49.6, 47.3, 43.6, 36.9, 31.9, 28.5]))
-    assert d["scenario"] == "leave_now_or_later"
-    assert (_sgt(d["window_end_iso"]), _sgt(d["worse_from_iso"]), _sgt(d["reopen_iso"])) == ("15:10", "15:40", "19:40")
-    assert d["peak"]["crossing_min"] == 50.5
+def _live(vals):
+    # live 13 Nov: forecast origin 14:40 SGT, route slots from 15:10, page opened at 14:57 SGT
+    curve = {"origin_ts": T0.isoformat(), "points": [
+        {"forecast_for": (T0 + datetime.timedelta(minutes=30 * (i + 1))).isoformat(), "forecast_min": v,
+         "baseline_min": v, "model": "xgb"} for i, v in enumerate(vals)]}
+    return main.direction_facts(curve, None, T0 + datetime.timedelta(minutes=17))["decision"]
 
 
-def test_decide_wait_for_a_real_saving():
-    d = main.decide(_slots(48.0, [47.0, 44.0, 38.0, 37.5, 39.0, 45.0]))
-    assert d["scenario"] == "wait" and d["saving_min"] == 10.5 and d["crossing_min"] == 37.5
-    assert (_sgt(d["window_start_iso"]), _sgt(d["window_end_iso"])) == ("16:10", "17:10")
+def test_live_13_nov_to_johor():
+    d = _live([36.5, 38.7, 35.3, 39.3, 45.7, 47.1, 48.6, 47.6, 46.8, 46.2])
+    # reachable: leave home 15:10 (route 15:40) onwards; 25th percentile 39.3 -> 15:10, 15:40, 16:10
+    assert d["basis"] == "fastest_quarter" and d["p25_min"] == 39.3
+    assert _span(d) == ("15:10", "16:40") and d["range_min"] == [35.3, 39.3]
 
 
-def test_decide_steady():
-    d = main.decide(_slots(25.0, [26.0, 24.0, 27.5, 25.5]))
-    assert d["scenario"] == "steady" and d["range_min"] == [24.0, 27.5]
+def test_live_13_nov_to_singapore():
+    d = _live([31.8, 35.6, 44.8, 50.5, 49.6, 47.3, 43.6, 36.9, 31.9, 28.5])
+    # 25th percentile 35.6: 15:10 alone is under an hour, so the next good run 18:40-19:10 (to 19:40)
+    assert d["basis"] == "fastest_quarter" and d["p25_min"] == 35.6
+    assert _span(d) == ("18:40", "19:40") and d["range_min"] == [28.5, 31.9] and d["crossing_min"] == 30.2
 
 
-def test_decide_worse_from_the_first_slot():
-    d = main.decide(_slots(30.0, [36.0, 40.0, 42.0]))
-    assert d["scenario"] == "leave_now" and d["window_end_iso"] == d["window_start_iso"]
+def test_past_slots_are_not_candidates():
+    d = main.decide(_home([10, 10, 30, 31, 30, 32, 40]), T0 + datetime.timedelta(minutes=45))
+    assert _span(d)[0] != "14:40" and _sgt(d["window_start_iso"]) >= "15:40"
+
+
+def test_falls_back_to_the_quickest_hour():
+    # the fastest quarter is two separate single slots, so no good run reaches an hour
+    d = main.decide(_home([30, 45, 31, 46, 47, 48, 49, 50]), T0)
+    assert d["basis"] == "quickest_hour" and _span(d) == ("14:40", "15:40")
+
+
+def test_window_is_at_least_an_hour():
+    d = main.decide(_home([40, 39, 20, 41, 42, 43, 44, 45]), T0)
+    start, end = (datetime.datetime.fromisoformat(d[k]) for k in ("window_start_iso", "window_end_iso"))
+    assert end - start >= datetime.timedelta(minutes=60)
 
 
 def test_decision_is_in_the_facts():
-    facts = main.direction_facts(_curve([40, 35, 30], [30, 30, 30])["directions"]["SG_TO_MY"], NOW_POINT)
-    assert facts["decision"]["scenario"] == "wait"
-
-
-def test_live_13_nov_with_the_drive_to_the_checkpoint():
-    # live 13 Nov 14:40 SGT origin; route slots from 15:10, so leave-home times from 14:40
-    t0 = datetime.datetime(2026, 11, 13, 6, 40, tzinfo=UTC)
-
-    def curve(vals):
-        return {"origin_ts": t0.isoformat(), "points": [
-            {"forecast_for": (t0 + datetime.timedelta(minutes=30 * (i + 1))).isoformat(), "forecast_min": v,
-             "baseline_min": v, "model": "xgb"} for i, v in enumerate(vals)]}
-    jb = main.direction_facts(curve([36.5, 38.7, 35.3, 39.3, 45.7, 47.1, 48.6, 47.6, 46.8, 46.2]), None)["decision"]
-    sg = main.direction_facts(curve([31.8, 35.6, 44.8, 50.5, 49.6, 47.3, 43.6, 36.9, 31.9, 28.5]), None)["decision"]
-    assert jb["scenario"] == "leave_now" and _sgt(jb["window_end_iso"]) == "16:10" and _sgt(jb["worse_from_iso"]) == "16:40"
-    assert sg["scenario"] == "leave_now_or_later"
-    assert (_sgt(sg["window_end_iso"]), _sgt(sg["reopen_iso"]), sg["reopen_crossing_min"]) == ("15:10", "18:40", 31.9)
+    facts = main.direction_facts(_curve([40, 35, 30], [30, 30, 30])["directions"]["SG_TO_MY"], NOW_POINT, NOW)
+    assert facts["decision"]["basis"] in ("fastest_quarter", "quickest_hour")

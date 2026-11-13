@@ -765,54 +765,34 @@ function clockSvg(f, key, nowMs) {
     return svg;
 }
 
-// The service's decision tree (forecast-api commute_advisor.decide): wait, steady, leave_now or
-// leave_now_or_later. An older response without `decision` falls back to the plain best window.
-const lastSlotMs = f => Math.max(...f.forecast.map(p => Date.parse(p.at_iso)));
-
+// forecast-api commute_advisor.decide: the earliest leave-home span of at least an hour whose
+// slots are all in the fastest quarter of the next 5 h (else the quickest hour). A response
+// without `decision` (an older forecast-api) falls back to the plain best window.
 function leaveArcs(f, nowMs) { // [[startMs, endMs, startsNow]]
     const d = f.decision;
-    if (!d) {
-        const b = f.best;
-        return [[b.leave_now ? nowMs : Date.parse(b.window_start_iso), Date.parse(b.window_end_iso), b.leave_now]];
-    }
-    if (d.scenario === 'wait') return [[Date.parse(d.window_start_iso), Date.parse(d.window_end_iso), false]];
-    if (d.scenario === 'steady') return [[nowMs, lastSlotMs(f), true]];
-    const arcs = [[nowMs, Math.max(Date.parse(d.window_end_iso), nowMs), true]];
-    if (d.scenario === 'leave_now_or_later') arcs.push([Date.parse(d.reopen_iso), lastSlotMs(f), false]);
-    return arcs;
+    if (d) return [[Math.max(Date.parse(d.window_start_iso), nowMs), Date.parse(d.window_end_iso), Date.parse(d.window_start_iso) <= nowMs]];
+    const b = f.best;
+    return [[b.leave_now ? nowMs : Date.parse(b.window_start_iso), Date.parse(b.window_end_iso), b.leave_now]];
 }
 
 function leaveText(f, nowMs) {
     const d = f.decision;
-    if (!d) {
-        const b = f.best, ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
-        if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
-        return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
+    if (d) {
+        const ws = Date.parse(d.window_start_iso), we = Date.parse(d.window_end_iso);
+        return ws <= nowMs ? `Leave now, by ${fmt12(we)}` : `Leave ${fmtRange(ws, we)}`;
     }
-    const ws = Date.parse(d.window_start_iso), we = Date.parse(d.window_end_iso);
-    const nowOnly = we - ws < 60000 || we <= nowMs;
-    switch (d.scenario) {
-        case 'wait': return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
-        case 'steady': return 'Leave any time';
-        case 'leave_now_or_later': return nowOnly ? `Leave now, or after ${fmt12(Date.parse(d.reopen_iso))}`
-            : `Leave by ${fmt12(we)}, or after ${fmt12(Date.parse(d.reopen_iso))}`;
-        default: return nowOnly ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
-    }
+    const b = f.best, ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
+    if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
+    return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
 }
 
 function leaveReason(f) {
     const d = f.decision;
     if (!d) return '';
-    const m = v => Math.round(v);
-    switch (d.scenario) {
-        case 'wait': return `Saves about ${m(d.saving_min)} min vs leaving now`;
-        case 'steady': return `About ${m(d.range_min[0])}–${m(d.range_min[1])} min for the next 5 h`;
-        case 'leave_now_or_later': {
-            const a = Date.parse(d.worse_from_iso), b = Date.parse(d.reopen_iso) - 30 * 60000; // last slot before it eases
-            return `Avoid leaving ${b > a ? fmtRange(a, b) : fmt12(a)} · up to ${m(d.peak.crossing_min)} min`;
-        }
-        default: return `After that it climbs to ${m(d.peak.crossing_min)} min`;
-    }
+    const [lo, hi] = d.range_min.map(Math.round);
+    const trip = lo === hi ? `About ${lo} min` : `${lo}–${hi} min`;
+    return d.basis === 'fastest_quarter' ? `${trip} · among the fastest times in the next 5 h`
+        : `${trip} · the quickest hour in the next 5 h`;
 }
 
 function vsChip(vs) {
