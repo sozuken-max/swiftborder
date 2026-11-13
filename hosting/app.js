@@ -650,6 +650,7 @@ async function fetchForecast() {
 // asks an LLM for a one-line insight and tips. Times and minutes on the card come from `facts`; only the sentences
 // come from the LLM. If the service is missing or fails, the card stays hidden and nothing else changes.
 const ADVISOR_TIMEOUT_MS = 90000;
+const ADVICE_COUNTDOWN_MS = 30000;      // the forecast is already warm; the wait is the OpenAI call
 let adviceSeq = 0;
 
 function esc(text) {
@@ -848,6 +849,35 @@ function renderAdvice(data) {
     if (!clockTimer) clockTimer = setInterval(tickClocks, 1000);
 }
 
+// Same notice and countdown as the forecast charts, for the Commute Buddy's own wait. It starts
+// only after the forecast has loaded, because fetchAdvice runs after the curve.
+let advicePendingTimer = null;
+
+function startAdvicePending() {
+    stopAdvicePending();
+    const el = $('cb-pending');
+    if (!el) return;
+    const started = Date.now();
+    const tick = () => {
+        const left = ADVICE_COUNTDOWN_MS - (Date.now() - started);
+        el.innerHTML = left > 0
+            ? '<span class="fc-spinner" aria-hidden="true"></span><div><strong>Your Commute Buddy is reading the forecast and writing your advice. Processing, please wait…</strong>'
+              + `<br>This may take up to 30 seconds. If it does not load, hit Retry.</div><span class="fc-countdown" aria-label="time left">${mmss(left)}</span>`
+            : '<span class="fc-spinner" aria-hidden="true"></span><div><strong>Still processing, taking longer than usual…</strong>'
+              + '<br>If it does not load soon, refresh the page.</div>';
+        el.hidden = false;
+    };
+    tick();
+    advicePendingTimer = setInterval(tick, 1000);
+}
+
+function stopAdvicePending() {
+    clearInterval(advicePendingTimer);
+    advicePendingTimer = null;
+    const el = $('cb-pending');
+    if (el) el.hidden = true;
+}
+
 function setAdviceStatus(text, isError) {
     $('advice-status').textContent = text;
     $('cb-status-row').hidden = !text;
@@ -862,16 +892,19 @@ async function fetchAdvice() {
     const card = $('advice-card');
     if (!card) return;
     card.hidden = false;
-    if (!adviceData) setAdviceStatus('Asking your Commute Buddy…', false);
+    setAdviceStatus('', false);
+    if (!adviceData) startAdvicePending();
     $('cb-retry').disabled = true;
     try {
         const data = await fetchJson(ADVISOR_API, ADVISOR_TIMEOUT_MS);
         if (seq !== adviceSeq) return;
         if (!Object.keys(data.facts?.directions || {}).length) throw new Error('no advice in the response');
+        stopAdvicePending();
         setAdviceStatus('', false);
         renderAdvice(data);
     } catch (err) {
         if (seq !== adviceSeq) return;
+        stopAdvicePending();
         console.error('Commute advice error:', err);
         setAdviceStatus(adviceData
             ? 'Couldn\u2019t refresh your Commute Buddy; showing the last advice. Retry, or refresh the page later.'

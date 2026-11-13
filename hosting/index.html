@@ -140,8 +140,9 @@
                     </div>
                     <p class="cb-intro">Your AI buddy sums up the forecast to find the best time to leave home or the office, allowing about 30 minutes to reach the checkpoint. The times come from the forecast above, built on past and today's traffic; the insight and tips are AI-written estimates, so real times may differ.</p>
                     <p class="cb-headline" id="cb-headline" hidden><span class="cb-insight-icon" aria-hidden="true">💡</span><span id="cb-insight-text"></span></p>
-                    <div class="cb-status" id="cb-status-row">
-                        <p class="fc-note" id="advice-status">Asking your Commute Buddy&hellip;</p>
+                    <div class="fc-pending" id="cb-pending" role="status" aria-live="polite" hidden></div>
+                    <div class="cb-status" id="cb-status-row" hidden>
+                        <p class="fc-note" id="advice-status"></p>
                         <button type="button" class="refresh-btn" id="cb-retry" hidden><svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>Retry</button>
                     </div>
                     <div id="cb-content" hidden>
