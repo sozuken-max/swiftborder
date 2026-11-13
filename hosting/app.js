@@ -779,7 +779,7 @@ function leaveText(f, nowMs) {
     const d = f.decision;
     if (d) {
         const ws = Date.parse(d.window_start_iso), we = Date.parse(d.window_end_iso);
-        return ws <= nowMs ? `Leave now, by ${fmt12(we)}` : `Leave ${fmtRange(ws, we)}`;
+        return ws <= nowMs ? `Now – ${fmt12(we)}` : fmtRange(ws, we); // under "AI recommended time to leave home"
     }
     const b = f.best, ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
     if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
@@ -806,7 +806,7 @@ function renderClocks() {
             <div class="cb-body">
                 <div class="cb-clock-wrap">${clockSvg(f, d.key, nowMs)}<div class="cb-clock-cap">Now <b>${nowText}</b></div></div>
                 <div class="cb-side">
-                    <div class="cb-label">AI recommended time</div>
+                    <div class="cb-label">${f.decision ? 'AI recommended time to leave home' : 'Best time to leave'}</div>
                     <div class="cb-verb">${esc(leaveText(f, nowMs))}</div>
                     <div class="cb-chips"><span class="cb-trip"><b>${Math.round((f.decision || f.best).crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
                 </div>
