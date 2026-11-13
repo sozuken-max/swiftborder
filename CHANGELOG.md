@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13
+
+- `hosting/`: cold-start forecast fix. The page asked for the 5-hour curve with a 60 s timeout; on a cold `forecast-api` instance the curve retrains a model per horizon and takes longer, so the browser aborted it and fell back to the single 30-minute point until a manual refresh. Cloud Run logs for 2026-11-13 12:40 SGT: the curve request finished with 200 after 91.5 s (30 s after the browser gave up), and the fallback `GET /` started at exactly +60 s and took 21.4 s. The page now asks only for the 5-hour curve, waits up to 240 s, and has no 30-minute fallback. If the request runs past 2 s, both the Travel Time Trend and Forecast vs Typical Day cards show "Model is retraining on the latest data. Processing, please wait…" with a 2-minute countdown and a prompt to hit Refresh Forecast; after 2 minutes it says it is taking longer than usual. The curve replaces the notice as soon as it arrives. A failed curve shows the error and asks for Refresh Forecast. A newer refresh supersedes an older one still in flight. No `forecast-api` change.
+
 ## 2026-11-05
 
 - `hosting/app.js`: AI detection errors now say which side failed instead of a bare `HTTP 404`. 404 (LTA's data.gov.sg feed has no frame for that camera, e.g. when LTA is down or returns only some cameras) and LTA-side 502s name LTA; model-side 502/503 name the model. Uses the backend's JSON `error` field.

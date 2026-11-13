@@ -173,6 +173,7 @@ Why not model points every 30 minutes to 24 h: from 6 h on, the model points wou
 
 A local run against live BigQuery on 2026-10-03 took:
 - **Cold start:** about 13 s for the first `served` request (training read plus fits). On 2026-10-04, after the exploratory horizons and the profile were added, it was about 22 s.
+- **Cold curve (Cloud Run, 2026-11-13, revision `forecast-api-00024-ruq`):** the first `?curve=forecast&hours=5` on a fresh instance took 91.5 s (HTTP 200): about 12 s from instance start to the startup probe, BigQuery reads at +15 s to +24 s (REST, no Storage API), then the per-horizon fits. The browser's 60 s timeout had already aborted it; the plain `served` request it fell back to took 21.4 s, mostly waiting on those fits. The page now waits up to 240 s for the curve and shows a retraining notice with a countdown (CHANGELOG 2026-11-13).
 - **Each later request:** about 3 s, mostly the latest-row read; a repeat inside 5 minutes is served from the cache. The first request at a new exploratory horizon took 4–6 s (one more fit).
 
 The fitted daily models are reused until 00:00 SGT. Memory is 1 GiB.

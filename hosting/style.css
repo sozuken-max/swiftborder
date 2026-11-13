@@ -593,6 +593,60 @@ h4 {
     color: var(--text-muted);
 }
 
+/* "Model is retraining" notice with countdown, on both forecast charts */
+.fc-pending {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin: 0.25rem 0 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background: rgba(0, 242, 254, 0.06);
+    border: 1px solid rgba(0, 242, 254, 0.3);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.fc-pending[hidden] {
+    display: none;
+}
+
+.fc-pending strong {
+    color: var(--text-main);
+}
+
+.fc-pending > div {
+    flex: 1;
+    min-width: 0;
+}
+
+.fc-countdown {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.fc-spinner {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(0, 242, 254, 0.25);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: fc-spin 0.9s linear infinite;
+}
+
+@keyframes fc-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fc-spinner { animation: none; }
+}
+
 .fc-now strong {
     color: var(--text-main);
 }
