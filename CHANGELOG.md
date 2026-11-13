@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13 (commute buddy loading)
+
+- `hosting/`: while the Commute Buddy waits for the AI, the card shows the same notice as the forecast charts (spinner, explicit "reading the forecast and writing your advice" text, countdown from 0:30, then "Still processing"). It starts only after the forecast has loaded. The "N min expected" and "slower than usual" pills are vertically centred (`align-items: center`, was `baseline`).
+
 ## 2026-11-13 (commute buddy prompt)
 
 - `forecast-api` `?advice=commute`: new `SYSTEM_PROMPT`, tried in Colab against live facts. It asks for a radio-DJ-style summary in Singaporean English: `insight` is up to 3 short sentences (the day's vibe on a Causeway minutes scale from 15–20 min "extremely smooth" to 80+ "holiday-eve chaos", a hedged guess at why beyond the weekday, one line per direction); at most 2 tips of up to 18 words that agree with the recommended times. The model now gets `for_llm(facts)` with the recommended window as SGT text (`recommended_leave_sgt`) instead of UTC ISO times and internals. Temperature 0.6, `max_tokens` 600; the insight cap is 400 characters, kept on one line.

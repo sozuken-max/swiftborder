@@ -757,8 +757,9 @@ h4 {
 .cb-trip,
 .cb-vs {
     display: inline-flex;
-    align-items: baseline;
+    align-items: center;
     gap: 0.3rem;
+    line-height: 1.2;
     padding: 0.3rem 0.7rem;
     border-radius: 10px;
     font-size: 0.76rem;
