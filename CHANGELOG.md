@@ -2,9 +2,9 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
-## 2026-11-13 (commute buddy prompt lab)
+## 2026-11-13 (commute buddy prompt)
 
-- `scripts/commute_prompt_lab.py`: try Commute Buddy prompts locally. `--export prompt.txt` writes the deployed `SYSTEM_PROMPT`; `--prompt prompt.txt` sends today's live `?advice=commute` facts (or `--facts` saved with `--save-facts`) to OpenAI with your own key and prints the insight and tips; `--runs` and `--model` compare variants. No deploy and no production change.
+- `forecast-api` `?advice=commute`: new `SYSTEM_PROMPT`, tried in Colab against live facts. It asks for a radio-DJ-style summary in Singaporean English: `insight` is up to 3 short sentences (the day's vibe on a Causeway minutes scale from 15–20 min "extremely smooth" to 80+ "holiday-eve chaos", a hedged guess at why beyond the weekday, one line per direction); at most 2 tips of up to 18 words that agree with the recommended times. The model now gets `for_llm(facts)` with the recommended window as SGT text (`recommended_leave_sgt`) instead of UTC ISO times and internals. Temperature 0.6, `max_tokens` 600; the insight cap is 400 characters, kept on one line.
 
 ## 2026-11-13 (commute buddy recommendation)
 

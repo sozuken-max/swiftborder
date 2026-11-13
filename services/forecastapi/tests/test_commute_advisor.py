@@ -144,10 +144,12 @@ def test_advice_is_cached_per_origin(monkeypatch):
     second = main.advise(curve, NOW)
     assert first is second and len(calls) == 1
     assert first["advice"]["insight"].startswith("To Johor runs 8 min slower")
-    sent = json.loads(calls[0]["messages"][1]["content"])
-    assert sent["directions"]["SG_TO_MY"]["best"]["leave_at"] == "13:40"  # route 14:10 minus the drive
-    assert "leave home" in sent["directions"]["SG_TO_MY"]["times_are"]
+    sent = json.loads(calls[0]["messages"][1]["content"])  # the for_llm payload, not the raw facts
+    assert set(sent["directions"]["SG_TO_MY"]) == {
+        "recommended_leave_sgt", "recommended_trip_min", "vs_typical_avg_min", "now", "forecast"}
+    assert sent["directions"]["SG_TO_MY"]["forecast"][0]["leave_at"] == "12:40"  # route 13:10 minus the drive
     assert sent["calendar"]["sg_school_holidays"].startswith("start 2026-11-21")
+    assert calls[0]["temperature"] == 0.6 and "Causeway rule of thumb" in calls[0]["messages"][0]["content"]
     assert calls[0]["response_format"] == {"type": "json_object"}
     newer = _curve([40, 35, 30], [30, 30, 30])
     newer["directions"]["SG_TO_MY"]["origin_ts"] = "2026-11-13T04:50:00+00:00"
@@ -276,3 +278,20 @@ def test_window_is_at_least_an_hour():
 def test_decision_is_in_the_facts():
     facts = main.direction_facts(_curve([40, 35, 30], [30, 30, 30])["directions"]["SG_TO_MY"], NOW_POINT, NOW)
     assert facts["decision"]["basis"] in ("fastest_quarter", "quickest_hour")
+
+
+def test_for_llm_gives_sgt_windows_and_card_rounding():
+    t0 = datetime.datetime(2026, 11, 13, 6, 40, tzinfo=UTC)
+    curve = {"origin_ts": t0.isoformat(), "points": [
+        {"forecast_for": (t0 + datetime.timedelta(minutes=30 * (i + 1))).isoformat(), "forecast_min": v,
+         "baseline_min": v, "model": "xgb"} for i, v in enumerate([36.5, 38.7, 35.3, 39.3, 45.7, 47.1, 48.6, 47.6, 46.8, 46.2])]}
+    f = main.direction_facts(curve, None, t0 + datetime.timedelta(minutes=17))
+    payload = main.for_llm({"calendar": {"weekday": "Friday"}, "directions": {"SG_TO_MY": f}})
+    d = payload["directions"]["SG_TO_MY"]
+    assert d["recommended_leave_sgt"] == "3:10–4:40 PM" and d["recommended_trip_min"] == 38  # mean 37.77
+
+
+def test_long_insight_stays_on_one_line():
+    text = json.dumps({"insight": "Busy Friday.\nTo Johor is slow.\nTo Singapore is fine.", "tips": ["a  b", "c", "d"]})
+    advice = main.parse_advice(text)
+    assert advice["insight"] == "Busy Friday. To Johor is slow. To Singapore is fine." and advice["tips"] == ["a b", "c"]

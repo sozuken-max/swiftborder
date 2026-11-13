@@ -45,7 +45,7 @@ Feeds the Commute Buddy card on the Hosting forecast page. Code: [`commute_advis
   | 4. Fallback | No good run is an hour long: the 1-hour stretch with the lowest mean trip time. `basis: "quickest_hour"`. |
   | Card | Labelled "Best time to leave": "3:10–4:40 PM" (or "Now – 4:40 PM" if the span has started), "N min expected" = the span's mean, and one cyan arc on the span. A two-sentence intro under the card title says the times are for leaving home or the office (about 30 min to the checkpoint), come from the forecast, and that the insight and tips are AI estimates. |
 
-- **LLM:** OpenAI Chat Completions (`OPENAI_MODEL`, default `gpt-4o-mini`) returns JSON with one `insight` line (at most 22 words) and at most 2 `tips`. The insight names the direction furthest from usual, by how much and when, and the likely cause from the calendar and a few well-known Causeway patterns in the prompt (Friday evenings and holiday eves heavy towards Johor, Sunday evenings and holiday ends heavy towards Singapore, weekday commuter peaks). It must hedge ("likely") and may not invent events, accidents, weather or checkpoint conditions. No events or incident APIs are read.
+- **LLM:** OpenAI Chat Completions (`OPENAI_MODEL`, default `gpt-4o-mini`, temperature 0.6) gets `for_llm(facts)`: per direction the recommended leave-home window as SGT text (`recommended_leave_sgt`, e.g. "4:00–5:00 PM"), its trip time, the comparison with usual, the latest reading and the leave-home forecast, plus the calendar. `SYSTEM_PROMPT` asks for a radio-DJ-style summary in Singaporean English: `insight` (up to 3 short sentences, about 45 words: the day's vibe on a Causeway minutes scale, a hedged guess at why beyond the day of the week, one line per direction) and at most 2 `tips` (up to 18 words) consistent with the recommended times. Causes may come from the model's general knowledge of the Causeway and SG/MY holidays, worded as guesses; it may not invent events, accidents, weather or checkpoint conditions. No events or incident APIs are read.
 - **Cost:** one cached answer per forecast origin (10 min) per instance. A failed OpenAI call is retried after 60 s, not per visit.
 - **Key:** `OPENAI_API_KEY` if set (local runs), else Secret Manager secret `openai-api-key` in `BQ_PROJECT`, read at run time with the instance's metadata token and cached for an hour. The key is **not** mounted at deploy, so a missing secret or permission cannot fail a deploy. The response then has `facts`, `advice: null` and `advice_error`, and the card shows the clocks without AI text.
 - **Errors:** `400` for another `advice` value, `503` when there is no servable curve, `502` on an unexpected failure. The other endpoints are unchanged.
@@ -63,8 +63,6 @@ Feeds the Commute Buddy card on the Hosting forecast page. Code: [`commute_advis
  "advice": {"insight": "To Johor runs about 8 min slower than usual, peaking at 5:40 PM, likely the Friday evening rush.",
             "tips": ["...", "..."]}}
 ```
-
-**Trying prompt changes without a deploy:** [`scripts/commute_prompt_lab.py`](../../scripts/commute_prompt_lab.py) exports the deployed `SYSTEM_PROMPT` to a text file, then runs your edited copy against today's live facts with your own OpenAI key and prints the insight and tips. Production is untouched. When a prompt is better, put it into `SYSTEM_PROMPT` (a PR, which redeploys `forecast-api`).
 
 **One-time setup (project owner).** Nothing here changes the deploy; until it is done the card shows the clocks without AI text.
 
