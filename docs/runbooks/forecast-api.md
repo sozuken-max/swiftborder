@@ -169,6 +169,10 @@ Why not model points every 30 minutes to 24 h: from 6 h on, the model points wou
 - Past about 5.5 h, the study found the forecast no better than the baseline. The claims register still says so. The checked-in page does not: a product decision on the Hosting commits left one sourcing line ("Based on Google Maps travel-time estimates") and labels the baseline "Typical for this day and time". See [findings.md](../findings.md#claims-register).
 - Each new horizon costs one daily fit per instance on its first request (about 4–5 s locally).
 
+## Commute Buddy (`?advice=commute`)
+
+LLM commuter advice for the Hosting card. It reuses the cached `?curve=forecast&hours=5` curve, adds the holiday calendar, and asks OpenAI for one hedged `insight` line and two tips. The OpenAI key is read from Secret Manager (`openai-api-key`) at run time, never at deploy, so a missing key only removes the AI text. Details, response shape and the one-time setup: [services/forecastapi/README.md](../../services/forecastapi/README.md#commute-buddy-advicecommute).
+
 ## Performance
 
 A local run against live BigQuery on 2026-10-03 took:

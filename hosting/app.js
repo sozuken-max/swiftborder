@@ -8,12 +8,14 @@
 // Data sources (all public, read from the browser):
 //   traffic-24h.json  Google Maps Distance Matrix travel times, written every 5 min
 //   forecast-api      forecast curve and typical-day profile (docs/runbooks/forecast-api.md)
+//                     and ?advice=commute: the Commute Buddy card (services/forecastapi/README.md)
 //   data.gov.sg       LTA traffic camera images
 //   swiftbackend      annotated camera frame + per-direction vehicle counts
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
 const TRAFFIC_API = 'https://storage.googleapis.com/swiftborder-public/traffic-24h.json';
 const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app/';
+const ADVISOR_API = `${FORECAST_API}?advice=commute`; // same forecast-api service, separate request
 const LTA_API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
 const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
 
@@ -626,6 +628,7 @@ async function fetchForecast() {
         try { await loadTrafficData(); } catch (_) { /* "Now" on the cards is optional */ }
         setForecastStatus('');
         renderForecastCards();
+        fetchAdvice(); // after the curve, so forecast-api is warm when the advisor reads it
         return;
     }
 
@@ -640,6 +643,217 @@ async function fetchForecast() {
     $('fc-updated').textContent = 'Unavailable';
     $('fc-meta').textContent = '';
     setForecastStatus(`Forecast unavailable: ${msg} Hit Refresh Forecast to try again.`);
+}
+
+// ── Commute buddy (forecast-api ?advice=commute, forecast view) ───────────
+// forecast-api reads the same cached 5 h curve, works out the best time to leave in code, and
+// asks an LLM for a one-line insight and tips. Times and minutes on the card come from `facts`; only the sentences
+// come from the LLM. If the service is missing or fails, the card stays hidden and nothing else changes.
+const ADVISOR_TIMEOUT_MS = 90000;
+let adviceSeq = 0;
+
+function esc(text) {
+    return String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function shortDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// Calendar chips, from the service's facts (the holiday CSV), never from the LLM text.
+function adviceChips(cal) { // short calendar chips for the Commute Buddy card
+    const chips = [];
+    const t = cal?.today;
+    if (!t) return chips;
+    if (t.sg_public_holiday.length) chips.push(`SG public holiday: ${t.sg_public_holiday.join(', ')}`);
+    if (t.my_public_holiday.length) chips.push(`MY public holiday: ${t.my_public_holiday.join(', ')}`);
+    if (t.eve_of_sg_public_holiday) chips.push('Eve of a SG public holiday');
+    if (t.eve_of_my_public_holiday) chips.push('Eve of a MY public holiday');
+    if (t.last_day_of_sg_long_weekend) chips.push('Last day of a SG long weekend');
+    else if (t.sg_long_weekend) chips.push('SG long weekend');
+    [['sg', 'SG'], ['my', 'MY']].forEach(([k, label]) => {
+        const v = cal[`${k}_school_holidays`] || '';
+        let m;
+        if ((m = /^on now, \S+ to (\S+)/.exec(v))) chips.push(`${label} school holidays until ${shortDate(m[1])}`);
+        else if ((m = /^start (\S+) \(in (\d+) days\)/.exec(v))) chips.push(`${label} school holidays start ${shortDate(m[1])} (in ${m[2]} days)`);
+    });
+    (cal.upcoming_public_holidays || []).slice(0, 2).forEach(h =>
+        chips.push(`${h.country === 'Singapore' ? 'SG' : 'MY'} ${h.names.join(', ') || 'public holiday'} on ${shortDate(h.date)}`));
+    return chips;
+}
+
+// ── Commute buddy clock ──
+// A 12-hour dial in Singapore time. The ring runs from now to the last forecast slot, each sector
+// coloured by the forecast trip time; the floating cyan arc is the best window to leave. The hands
+// tick every second in the browser; the ring is redrawn each minute so passed slots drop off.
+const CLOCK_C = 120, CLOCK_R_IN = 80, CLOCK_R_OUT = 102, CLOCK_R_ARC = 112, CLOCK_R_NUM = 64;
+const HEAT_STOPS = [[25, '#4dd9a3'], [38, '#f5c66a'], [50, '#f2608f']]; // clear -> busy -> jammed (minutes)
+const SGT_OFFSET_MIN = 480;
+let adviceData = null;
+let adviceTab = 'SG_TO_MY';
+let clockTimer = null;
+let clockMinute = null;
+
+const sgtParts = ms => { const d = new Date(ms + SGT_OFFSET_MIN * 60000); return { h: d.getUTCHours(), m: d.getUTCMinutes(), s: d.getUTCSeconds() }; };
+function clock12(ms) {
+    const { h, m } = sgtParts(ms);
+    return { text: `${(h + 11) % 12 + 1}:${String(m).padStart(2, '0')}`, ampm: h < 12 ? 'AM' : 'PM' };
+}
+const fmt12 = ms => { const c = clock12(ms); return `${c.text} ${c.ampm}`; };
+function fmtRange(a, b) {
+    const x = clock12(a), y = clock12(b);
+    return x.ampm === y.ampm ? `${x.text}–${y.text} ${y.ampm}` : `${x.text} ${x.ampm}–${y.text} ${y.ampm}`;
+}
+
+function heatColour(v) {
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    if (v <= HEAT_STOPS[0][0]) return HEAT_STOPS[0][1];
+    for (let i = 1; i < HEAT_STOPS.length; i++) if (v <= HEAT_STOPS[i][0]) {
+        const [a, ca] = HEAT_STOPS[i - 1], [b, cb] = HEAT_STOPS[i], t = (v - a) / (b - a), A = hex(ca), B = hex(cb);
+        return `rgb(${A.map((c, k) => Math.round(c + (B[k] - c) * t)).join(',')})`;
+    }
+    return HEAT_STOPS[HEAT_STOPS.length - 1][1];
+}
+
+function clockSvg(f, key, nowMs) {
+    const C = CLOCK_C;
+    const nowDial = (() => { const { h, m, s } = sgtParts(nowMs); return (h % 12) * 60 + m + s / 60; })();
+    const dial = ms => nowDial + (ms - nowMs) / 60000; // dial minutes, continuous past 12
+    const ang = min => (min / 720) * 2 * Math.PI - Math.PI / 2;
+    const pt = (r, a) => `${(C + r * Math.cos(a)).toFixed(2)},${(C + r * Math.sin(a)).toFixed(2)}`;
+    const wedge = (m0, m1, r0, r1) => {
+        const big = m1 - m0 > 360 ? 1 : 0;
+        return `M${pt(r1, ang(m0))} A${r1},${r1} 0 ${big} 1 ${pt(r1, ang(m1))} L${pt(r0, ang(m1))} A${r0},${r0} 0 ${big} 0 ${pt(r0, ang(m0))} Z`;
+    };
+    const arc = (m0, m1, r) => `M${pt(r, ang(m0))} A${r},${r} 0 ${m1 - m0 > 360 ? 1 : 0} 1 ${pt(r, ang(m1))}`;
+
+    const samples = [];
+    if (f.now) samples.push({ t: nowMs, v: f.now.minutes });
+    f.forecast.forEach(p => { const t = Date.parse(p.at_iso); if (t > nowMs) samples.push({ t, v: p.crossing_min }); });
+    let svg = `<svg viewBox="0 0 240 240" class="cb-clock" aria-hidden="true">
+        <defs><filter id="cb-glow-${key}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6" result="b"/>
+        <feComponentTransfer in="b" result="g"><feFuncA type="linear" slope="0.6"/></feComponentTransfer>
+        <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <radialGradient id="cb-face-${key}"><stop offset="0" stop-color="#1b2740"/><stop offset="1" stop-color="#111a2b"/></radialGradient></defs>
+        <circle cx="${C}" cy="${C}" r="${CLOCK_R_OUT + 16}" fill="url(#cb-face-${key})" stroke="rgba(0,242,254,0.18)"/>
+        <path d="${wedge(0, 719.9, CLOCK_R_IN, CLOCK_R_OUT)}" fill="rgba(255,255,255,0.06)"/><g filter="url(#cb-glow-${key})">`;
+    samples.forEach((p, i) => {
+        const m0 = i === 0 ? dial(nowMs) : dial((samples[i - 1].t + p.t) / 2);
+        const m1 = i === samples.length - 1 ? dial(p.t) + 15 : dial((p.t + samples[i + 1].t) / 2);
+        if (m1 - m0 > 1.6) svg += `<path d="${wedge(m0 + 0.8, m1 - 0.8, CLOCK_R_IN, CLOCK_R_OUT)}" fill="${heatColour(p.v)}" opacity="0.9"/>`;
+    });
+    svg += '</g>';
+    for (let h = 1; h <= 12; h++) {
+        const a = ang(h * 60), major = h % 3 === 0;
+        const x = C + CLOCK_R_NUM * Math.cos(a), y = C + CLOCK_R_NUM * Math.sin(a);
+        svg += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" class="cb-num${major ? ' major' : ''}">${h}</text>`;
+    }
+    for (let k = 0; k < 60; k++) if (k % 5) {
+        const a = (k / 60) * 2 * Math.PI - Math.PI / 2;
+        svg += `<line x1="${pt(CLOCK_R_IN - 4, a).replace(',', '" y1="')}" x2="${pt(CLOCK_R_IN - 6.5, a).replace(',', '" y2="')}" class="cb-tick"/>`;
+    }
+    const b = f.best;
+    const ws = b.leave_now ? nowMs : Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
+    const a0 = b.leave_now ? dial(nowMs) : dial(ws) - 6, a1 = Math.max(dial(we) + 6, a0 + 12);
+    svg += `<path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc-halo"/><path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc"/>`;
+    const n = ang(dial(nowMs));
+    svg += `<line x1="${pt(CLOCK_R_IN - 2, n).replace(',', '" y1="')}" x2="${pt(CLOCK_R_OUT + 2, n).replace(',', '" y2="')}" class="cb-now"/>`;
+    svg += `<g class="cb-hand-h"><line x1="${C}" y1="${C + 8}" x2="${C}" y2="${C - 44}"/></g>
+        <g class="cb-hand-m"><line x1="${C}" y1="${C + 10}" x2="${C}" y2="${C - 68}"/></g>
+        <g class="cb-hand-s"><line x1="${C}" y1="${C + 14}" x2="${C}" y2="${C - 72}"/></g>
+        <circle cx="${C}" cy="${C}" r="5.5" fill="#ffffff"/><circle cx="${C}" cy="${C}" r="2.4" fill="#00f2fe"/></svg>`;
+    return svg;
+}
+
+function leaveText(b, nowMs) {
+    const ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
+    if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
+    return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
+}
+
+function vsChip(vs) {
+    if (vs == null) return '';
+    if (Math.abs(vs) < 1) return '<span class="cb-vs ok">● About usual</span>';
+    const n = Math.round(Math.abs(vs));
+    return vs > 0 ? `<span class="cb-vs up">▲ ${n} min slower than usual</span>` : `<span class="cb-vs ok">▼ ${n} min faster than usual</span>`;
+}
+
+function renderClocks() {
+    if (!adviceData) return;
+    const nowMs = Date.now();
+    const dirs = adviceData.facts?.directions || {};
+    const nowText = fmt12(nowMs);
+    $('cb-tiles').innerHTML = DIRECTIONS.map(d => {
+        const f = dirs[d.apiKey];
+        if (!f) return '';
+        return `<div class="cb-tile${d.apiKey === adviceTab ? ' active' : ''}" data-dir="${d.apiKey}">
+            <div class="cb-dir"><span class="lc-dot ${d.key}"></span>${d.label}</div>
+            <div class="cb-body">
+                <div class="cb-clock-wrap">${clockSvg(f, d.key, nowMs)}<div class="cb-clock-cap">Now <b>${nowText}</b></div></div>
+                <div class="cb-side">
+                    <div class="cb-verb">${esc(leaveText(f.best, nowMs))}</div>
+                    <div class="cb-chips"><span class="cb-trip"><b>${Math.round(f.best.crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+    tickClocks();
+}
+
+function tickClocks() {
+    const nowMs = Date.now();
+    const { h, m, s } = sgtParts(nowMs);
+    if (clockMinute !== null && clockMinute !== m) { clockMinute = m; renderClocks(); return; } // ring and caption move on
+    clockMinute = m;
+    const rot = deg => `rotate(${deg.toFixed(2)} ${CLOCK_C} ${CLOCK_C})`;
+    document.querySelectorAll('#advice-card .cb-hand-h').forEach(g => g.setAttribute('transform', rot(((h % 12) + m / 60) * 30)));
+    document.querySelectorAll('#advice-card .cb-hand-m').forEach(g => g.setAttribute('transform', rot((m + s / 60) * 6)));
+    document.querySelectorAll('#advice-card .cb-hand-s').forEach(g => g.setAttribute('transform', rot(s * 6)));
+}
+
+function setAdviceTab(dir) {
+    adviceTab = dir;
+    document.querySelectorAll('#cb-tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.dir === dir)));
+    document.querySelectorAll('#cb-tiles .cb-tile').forEach(t => t.classList.toggle('active', t.dataset.dir === dir));
+}
+
+function renderAdvice(data) {
+    adviceData = data;
+    const a = data.advice;
+    $('cb-insight-text').textContent = a?.insight || ''; // one line: which direction differs from usual, and the likely why
+    $('cb-headline').hidden = !a?.insight;
+    renderClocks();
+    const chips = adviceChips(data.facts?.calendar).map(c => `<span class="cb-cal">${esc(c)}</span>`).join('');
+    $('cb-cal').innerHTML = chips;
+    $('cb-tips').innerHTML = (a?.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
+    $('cb-tips').hidden = !a?.tips?.length;
+    $('advice-status').hidden = true;
+    $('advice-note').textContent = a
+        ? 'Times and colours come from the SwiftBorder forecast. The insight and tips are AI-written; causes are educated guesses. Estimates only.'
+        : 'From the SwiftBorder forecast. Estimates only.';
+    $('advice-card').hidden = false;
+    if (!clockTimer) clockTimer = setInterval(tickClocks, 1000);
+}
+
+async function fetchAdvice() {
+    const seq = ++adviceSeq;
+    const card = $('advice-card');
+    if (!card) return;
+    if (card.hidden) {
+        $('advice-status').textContent = 'Asking your commute buddy…';
+        $('advice-status').hidden = false;
+    }
+    try {
+        const data = await fetchJson(ADVISOR_API, ADVISOR_TIMEOUT_MS);
+        if (seq !== adviceSeq) return;
+        if (!Object.keys(data.facts?.directions || {}).length) throw new Error('no advice');
+        renderAdvice(data);
+    } catch (err) {
+        if (seq !== adviceSeq) return;
+        console.error('Commute advice error:', err);
+        card.hidden = true; // optional: the forecast above is unaffected
+    }
 }
 
 // ── LTA cameras (forecast view) ─────────────────────────────────────────────
@@ -1144,6 +1358,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderForecastCards(); // "Now" on the forecast cards follows the fresh sample
     });
     bindRefresh('refresh-forecast', fetchForecast);
+    document.querySelectorAll('#cb-tabs button').forEach(b => b.addEventListener('click', () => setAdviceTab(b.dataset.dir)));
     bindRefresh('refresh-cameras', fetchLiveCameras);
     bindRefresh('refresh-ai-detection', fetchDetections);
 });
