@@ -55,8 +55,11 @@ const STALE_AFTER_MIN = 20;      // newest sample older than this => "(n min old
 const FORECAST_HOURS = 5;
 const COMPARE_HOURS = 24;
 const FORECAST_MAX_SLOTS = 66;           // 5.5 h of 5-min slots on the trend chart
-const FORECAST_TIMEOUT_MS = 60000;       // the plain 30-min forecast: ~20 s on a cold instance
-const CURVE_TIMEOUT_MS = 240000;         // a cold curve fits a model per horizon and can take over a minute
+// A cold forecast-api instance retrains every horizon's model before it answers: 91.5 s on
+// 2026-11-13. The page tells the user, counts down two minutes, and keeps waiting after that.
+const CURVE_TIMEOUT_MS = 240000;
+const RETRAIN_COUNTDOWN_MS = 120000;
+const PENDING_NOTICE_DELAY_MS = 2000;    // a warm curve answers in ~3 s: no notice for those
 const BASELINE_REFRESH_MS = 3600000;     // the typical-day profile is refitted once per day
 
 const REFRESH_MS = 300000;               // travel times and forecast
@@ -440,15 +443,15 @@ async function renderTrendChart() {
 
 // ── Forecast vs typical day (forecast view, Causeway) ───────────────────────
 // `?curve=forecast` gives a forecast every 30 min from one origin; `?baseline=profile`
-// is the calendar-profile "typical day", not a forecast. The plain endpoint's single
-// 30-min forecast is shown while a cold curve loads, and instead of the curve if it fails.
+// is the calendar-profile "typical day", not a forecast. Only the curve is shown: no
+// single 30-min point in its place.
 const FORECAST_ERRORS = {
     400: 'Forecast request was rejected.',
     502: 'Forecast query failed on the server.',
     503: 'Forecast paused: no recent data for this direction.'
 };
 
-// Both response shapes become { curve, dirs: { sg|jb: { originAt, points } } }.
+// The curve becomes { curve, dirs: { sg|jb: { originAt, points } } }.
 function normalizeCurve(data) {
     const dirs = {};
     DIRECTIONS.forEach(d => {
@@ -462,20 +465,6 @@ function normalizeCurve(data) {
         };
     });
     return { curve: true, dirs };
-}
-
-function normalizeServed(data) {
-    const dirs = {};
-    DIRECTIONS.forEach(d => {
-        const f = data.directions?.[d.apiKey];
-        const at = Date.parse(f?.forecast_for);
-        dirs[d.key] = {
-            originAt: Date.parse(f?.origin_ts),
-            points: f?.forecast_min != null && Number.isFinite(at)
-                ? [{ at, mins: f.forecast_min, base: null, model: f.model, lead: f.lead_min }] : []
-        };
-    });
-    return { curve: false, dirs };
 }
 
 async function loadBaselineDay() {
@@ -579,61 +568,64 @@ function setForecastStatus(text) {
 }
 
 let forecastSeq = 0; // a newer fetchForecast (refresh button, timer) supersedes an older one
+let pendingTimers = [];
 
-const hasPoints = view => view != null && DIRECTIONS.some(d => view.dirs[d.key].points.length);
+const PENDING_IDS = ['lc-pending', 'fc-pending']; // one notice on each forecast chart
 
-async function showForecast(view, status) {
-    forecastView = view;
-    if (view.curve) await loadBaselineDay();
-    renderTrendChart(); // redraw with the dashed forecast extension
-    try { await loadTrafficData(); } catch (_) { /* "Now" on the cards is optional */ }
-    setForecastStatus(status);
-    renderForecastCards();
+function mmss(ms) {
+    const sec = Math.ceil(ms / 1000);
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 }
 
-// On a cold instance the curve fits a model per horizon and can take well over a minute,
-// while the plain 30-min forecast is ready in ~20 s. Until a curve has been shown, show the
-// 30-min forecast first, then replace it with the curve when that arrives.
+// "Model is retraining" notice with a two-minute countdown, on both charts. It appears only
+// once the request has run PENDING_NOTICE_DELAY_MS, so a warm answer does not flash it.
+function startPendingNotice() {
+    stopPendingNotice();
+    const started = Date.now();
+    const tick = () => {
+        const left = RETRAIN_COUNTDOWN_MS - (Date.now() - started);
+        const html = left > 0
+            ? '<span class="fc-spinner" aria-hidden="true"></span><div><strong>Model is retraining on the latest data. Processing, please wait…</strong>'
+              + `<br>This may take up to 2 minutes. If it does not load, hit Refresh Forecast.</div><span class="fc-countdown" aria-label="time left">${mmss(left)}</span>`
+            : '<span class="fc-spinner" aria-hidden="true"></span><div><strong>Still processing, taking longer than usual…</strong>'
+              + '<br>If it does not load soon, hit Refresh Forecast.</div>';
+        PENDING_IDS.forEach(id => { const el = $(id); if (el) { el.innerHTML = html; el.hidden = false; } });
+        setForecastStatus('');
+    };
+    pendingTimers.push(setTimeout(() => {
+        tick();
+        pendingTimers.push(setInterval(tick, 1000));
+    }, PENDING_NOTICE_DELAY_MS));
+}
+
+function stopPendingNotice() {
+    pendingTimers.forEach(t => { clearTimeout(t); clearInterval(t); });
+    pendingTimers = [];
+    PENDING_IDS.forEach(id => { const el = $(id); if (el) el.hidden = true; });
+}
+
 async function fetchForecast() {
     const seq = ++forecastSeq;
     const superseded = () => seq !== forecastSeq;
-    let served = null, failure = null;
-    const loadServed = async () => {
-        try {
-            served = normalizeServed(await fetchJson(FORECAST_API, FORECAST_TIMEOUT_MS, FORECAST_ERRORS));
-        } catch (err) {
-            failure = err;
-        }
-    };
+    if (!forecastView) setForecastStatus('Fetching forecast…');
+    startPendingNotice();
 
-    if (!forecastView?.curve) {
-        setForecastStatus('Fetching forecast…');
-        await loadServed();
-        if (superseded()) return;
-        if (hasPoints(served)) {
-            await showForecast(served, `Showing the 30-minute forecast; the ${FORECAST_HOURS}-hour forecast is still loading…`);
-            if (superseded()) return;
-        }
-    }
-
-    let curve = null;
+    let view = null, failure = null;
     try {
-        curve = normalizeCurve(await fetchJson(`${FORECAST_API}?curve=forecast&hours=${FORECAST_HOURS}`, CURVE_TIMEOUT_MS, FORECAST_ERRORS));
+        view = normalizeCurve(await fetchJson(`${FORECAST_API}?curve=forecast&hours=${FORECAST_HOURS}`, CURVE_TIMEOUT_MS, FORECAST_ERRORS));
     } catch (err) {
         failure = err;
     }
     if (superseded()) return;
-    if (hasPoints(curve)) {
-        await showForecast(curve, '');
-        return;
-    }
+    stopPendingNotice();
 
-    if (!served) {
-        await loadServed();
-        if (superseded()) return;
-    }
-    if (hasPoints(served)) {
-        await showForecast(served, 'Showing the 30-minute forecast only; the longer forecast did not load.');
+    if (view && DIRECTIONS.some(d => view.dirs[d.key].points.length)) {
+        forecastView = view;
+        await loadBaselineDay();
+        renderTrendChart(); // redraw with the dashed forecast extension
+        try { await loadTrafficData(); } catch (_) { /* "Now" on the cards is optional */ }
+        setForecastStatus('');
+        renderForecastCards();
         return;
     }
 
@@ -647,7 +639,7 @@ async function fetchForecast() {
     $('fc-cards').innerHTML = '';
     $('fc-updated').textContent = 'Unavailable';
     $('fc-meta').textContent = '';
-    setForecastStatus(`Forecast unavailable: ${msg}`);
+    setForecastStatus(`Forecast unavailable: ${msg} Hit Refresh Forecast to try again.`);
 }
 
 // ── LTA cameras (forecast view) ─────────────────────────────────────────────
