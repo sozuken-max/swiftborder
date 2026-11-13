@@ -739,6 +739,12 @@ h4 {
     color: var(--primary);
 }
 
+.cb-reason {
+    margin-top: -0.4rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
 .cb-chips {
     display: flex;
     flex-wrap: wrap;

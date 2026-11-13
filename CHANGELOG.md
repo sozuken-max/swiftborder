@@ -2,6 +2,11 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13 (commute buddy decision tree)
+
+- `forecast-api` `?advice=commute`: each direction gets a `decision` from a small decision tree (`commute_advisor.decide`) instead of "the single fastest slot". Waiting must save at least 5 min against leaving now; traffic "gets worse" once a slot is 5 min slower than now. Scenarios: `wait`, `steady` (leave any time), `leave_now` (by the last slot before it gets worse), `leave_now_or_later` (and after the peak once it is back within 2 min of now). On 13 Nov 14:40 SGT the old rule said "Leave at 4:10 PM" To Johor (35.3 min vs 37.2 now) and "Leave at 7:40 PM" To Singapore (28.5 vs 28.6 now). Every time is a leave-home time: route slot minus `APPROACH_MIN` (30 min, the drive to the Causeway), so the first slot is "leave now" and the route's latest reading is context only. With that, the same data gives To Johor "Leave now, by 4:10 PM" (after that it climbs to 49 min) and To Singapore "Leave by 3:10 PM, or after 6:40 PM" (avoid 3:40–6:10 PM). The LLM is told not to contradict the decision. The card's footnote says leave times allow about 30 min to reach the Causeway.
+- `hosting/`: the card shows the decision ("Leave …" plus a one-line reason) with one or two cyan arcs, and falls back to the plain best window for a response without `decision`. "About usual" now covers ±2 min, as the insight does.
+
 ## 2026-11-13 (commute buddy fixes)
 
 - `hosting/`: Commute Buddy states. While it waits the card shows "Asking your Commute Buddy…". If `?advice=commute` fails or answers without advice (for example the old `forecast-api` during a deploy), it shows "Couldn't reach your Commute Buddy right now. Retry, or refresh the page later." with a Retry button. The tabs, clocks, key and tips appear only with advice. The hide rule is `!important`: the general card styling overrode it on the live page, so the empty card and colour key showed.

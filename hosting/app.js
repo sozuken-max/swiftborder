@@ -728,9 +728,8 @@ function clockSvg(f, key, nowMs) {
     };
     const arc = (m0, m1, r) => `M${pt(r, ang(m0))} A${r},${r} 0 ${m1 - m0 > 360 ? 1 : 0} 1 ${pt(r, ang(m1))}`;
 
-    const samples = [];
-    if (f.now) samples.push({ t: nowMs, v: f.now.minutes });
-    f.forecast.forEach(p => { const t = Date.parse(p.at_iso); if (t > nowMs) samples.push({ t, v: p.crossing_min }); });
+    // leave-home times (the service subtracts the drive to the Causeway); a slot owns +/-15 min
+    const samples = f.forecast.map(p => ({ t: Date.parse(p.at_iso), v: p.crossing_min })).filter(p => p.t + 15 * 60000 > nowMs);
     let svg = `<svg viewBox="0 0 240 240" class="cb-clock" aria-hidden="true">
         <defs><filter id="cb-glow-${key}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6" result="b"/>
         <feComponentTransfer in="b" result="g"><feFuncA type="linear" slope="0.6"/></feComponentTransfer>
@@ -739,7 +738,7 @@ function clockSvg(f, key, nowMs) {
         <circle cx="${C}" cy="${C}" r="${CLOCK_R_OUT + 16}" fill="url(#cb-face-${key})" stroke="rgba(0,242,254,0.18)"/>
         <path d="${wedge(0, 719.9, CLOCK_R_IN, CLOCK_R_OUT)}" fill="rgba(255,255,255,0.06)"/><g filter="url(#cb-glow-${key})">`;
     samples.forEach((p, i) => {
-        const m0 = i === 0 ? dial(nowMs) : dial((samples[i - 1].t + p.t) / 2);
+        const m0 = Math.max(dial(nowMs), i === 0 ? dial(p.t) - 15 : dial((samples[i - 1].t + p.t) / 2));
         const m1 = i === samples.length - 1 ? dial(p.t) + 15 : dial((p.t + samples[i + 1].t) / 2);
         if (m1 - m0 > 1.6) svg += `<path d="${wedge(m0 + 0.8, m1 - 0.8, CLOCK_R_IN, CLOCK_R_OUT)}" fill="${heatColour(p.v)}" opacity="0.9"/>`;
     });
@@ -753,10 +752,10 @@ function clockSvg(f, key, nowMs) {
         const a = (k / 60) * 2 * Math.PI - Math.PI / 2;
         svg += `<line x1="${pt(CLOCK_R_IN - 4, a).replace(',', '" y1="')}" x2="${pt(CLOCK_R_IN - 6.5, a).replace(',', '" y2="')}" class="cb-tick"/>`;
     }
-    const b = f.best;
-    const ws = b.leave_now ? nowMs : Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
-    const a0 = b.leave_now ? dial(nowMs) : dial(ws) - 6, a1 = Math.max(dial(we) + 6, a0 + 12);
-    svg += `<path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc-halo"/><path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc"/>`;
+    leaveArcs(f, nowMs).forEach(([s0, s1, fromNow]) => {
+        const a0 = fromNow ? dial(nowMs) : dial(s0) - 6, a1 = Math.max(dial(s1) + 6, a0 + 12);
+        svg += `<path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc-halo"/><path d="${arc(a0, a1, CLOCK_R_ARC)}" class="cb-arc"/>`;
+    });
     const n = ang(dial(nowMs));
     svg += `<line x1="${pt(CLOCK_R_IN - 2, n).replace(',', '" y1="')}" x2="${pt(CLOCK_R_OUT + 2, n).replace(',', '" y2="')}" class="cb-now"/>`;
     svg += `<g class="cb-hand-h"><line x1="${C}" y1="${C + 8}" x2="${C}" y2="${C - 44}"/></g>
@@ -766,15 +765,59 @@ function clockSvg(f, key, nowMs) {
     return svg;
 }
 
-function leaveText(b, nowMs) {
-    const ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
-    if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
-    return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
+// The service's decision tree (forecast-api commute_advisor.decide): wait, steady, leave_now or
+// leave_now_or_later. An older response without `decision` falls back to the plain best window.
+const lastSlotMs = f => Math.max(...f.forecast.map(p => Date.parse(p.at_iso)));
+
+function leaveArcs(f, nowMs) { // [[startMs, endMs, startsNow]]
+    const d = f.decision;
+    if (!d) {
+        const b = f.best;
+        return [[b.leave_now ? nowMs : Date.parse(b.window_start_iso), Date.parse(b.window_end_iso), b.leave_now]];
+    }
+    if (d.scenario === 'wait') return [[Date.parse(d.window_start_iso), Date.parse(d.window_end_iso), false]];
+    if (d.scenario === 'steady') return [[nowMs, lastSlotMs(f), true]];
+    const arcs = [[nowMs, Math.max(Date.parse(d.window_end_iso), nowMs), true]];
+    if (d.scenario === 'leave_now_or_later') arcs.push([Date.parse(d.reopen_iso), lastSlotMs(f), false]);
+    return arcs;
+}
+
+function leaveText(f, nowMs) {
+    const d = f.decision;
+    if (!d) {
+        const b = f.best, ws = Date.parse(b.window_start_iso), we = Date.parse(b.window_end_iso);
+        if (b.leave_now) return we - ws < 60000 || we <= nowMs ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
+        return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
+    }
+    const ws = Date.parse(d.window_start_iso), we = Date.parse(d.window_end_iso);
+    const nowOnly = we - ws < 60000 || we <= nowMs;
+    switch (d.scenario) {
+        case 'wait': return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
+        case 'steady': return 'Leave any time';
+        case 'leave_now_or_later': return nowOnly ? `Leave now, or after ${fmt12(Date.parse(d.reopen_iso))}`
+            : `Leave by ${fmt12(we)}, or after ${fmt12(Date.parse(d.reopen_iso))}`;
+        default: return nowOnly ? 'Leave now' : `Leave now, by ${fmt12(we)}`;
+    }
+}
+
+function leaveReason(f) {
+    const d = f.decision;
+    if (!d) return '';
+    const m = v => Math.round(v);
+    switch (d.scenario) {
+        case 'wait': return `Saves about ${m(d.saving_min)} min vs leaving now`;
+        case 'steady': return `About ${m(d.range_min[0])}–${m(d.range_min[1])} min for the next 5 h`;
+        case 'leave_now_or_later': {
+            const a = Date.parse(d.worse_from_iso), b = Date.parse(d.reopen_iso) - 30 * 60000; // last slot before it eases
+            return `Avoid leaving ${b > a ? fmtRange(a, b) : fmt12(a)} · up to ${m(d.peak.crossing_min)} min`;
+        }
+        default: return `After that it climbs to ${m(d.peak.crossing_min)} min`;
+    }
 }
 
 function vsChip(vs) {
     if (vs == null) return '';
-    if (Math.abs(vs) < 1) return '<span class="cb-vs ok">● About usual</span>';
+    if (Math.abs(vs) < 2) return '<span class="cb-vs ok">● About usual</span>'; // same 2-min band as the insight
     const n = Math.round(Math.abs(vs));
     return vs > 0 ? `<span class="cb-vs up">▲ ${n} min slower than usual</span>` : `<span class="cb-vs ok">▼ ${n} min faster than usual</span>`;
 }
@@ -792,8 +835,9 @@ function renderClocks() {
             <div class="cb-body">
                 <div class="cb-clock-wrap">${clockSvg(f, d.key, nowMs)}<div class="cb-clock-cap">Now <b>${nowText}</b></div></div>
                 <div class="cb-side">
-                    <div class="cb-verb">${esc(leaveText(f.best, nowMs))}</div>
-                    <div class="cb-chips"><span class="cb-trip"><b>${Math.round(f.best.crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
+                    <div class="cb-verb">${esc(leaveText(f, nowMs))}</div>
+                    ${leaveReason(f) ? `<div class="cb-reason">${esc(leaveReason(f))}</div>` : ''}
+                    <div class="cb-chips"><span class="cb-trip"><b>${Math.round((f.decision || f.best).crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
                 </div>
             </div>
         </div>`;
@@ -829,9 +873,11 @@ function renderAdvice(data) {
     $('cb-tips').innerHTML = (a?.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
     $('cb-tips').hidden = !a?.tips?.length;
     $('cb-content').hidden = false;
-    $('advice-note').textContent = a
+    const drive = Object.values(data.facts?.directions || {}).some(f => f.times_are)
+        ? 'Leave times allow about 30 min to reach the Causeway. ' : '';
+    $('advice-note').textContent = drive + (a
         ? 'Times and colours come from the SwiftBorder forecast. The insight and tips are AI-written; causes are educated guesses. Estimates only.'
-        : 'From the SwiftBorder forecast. Estimates only.';
+        : 'From the SwiftBorder forecast. Estimates only.');
     $('advice-card').hidden = false;
     if (!clockTimer) clockTimer = setInterval(tickClocks, 1000);
 }
