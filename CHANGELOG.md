@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13
+
+- `hosting/app.js`: cold-start forecast fix. The page asked for the 5-hour curve first with a 60 s timeout; on a cold `forecast-api` instance the curve fits a model per horizon and takes longer, so the browser aborted it and fell back to the single 30-minute point until a manual refresh. The page now shows the 30-minute forecast first (about 20 s cold) with a "still loading" note, then asks for the curve with a 240 s timeout and replaces the point when it arrives. Once a curve is on screen, refreshes ask for the curve directly. A newer refresh supersedes an older one still in flight. No `forecast-api` change.
+
 ## 2026-11-05
 
 - `hosting/app.js`: AI detection errors now say which side failed instead of a bare `HTTP 404`. 404 (LTA's data.gov.sg feed has no frame for that camera, e.g. when LTA is down or returns only some cameras) and LTA-side 502s name LTA; model-side 502/503 name the model. Uses the backend's JSON `error` field.

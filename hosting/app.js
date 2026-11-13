@@ -55,7 +55,8 @@ const STALE_AFTER_MIN = 20;      // newest sample older than this => "(n min old
 const FORECAST_HOURS = 5;
 const COMPARE_HOURS = 24;
 const FORECAST_MAX_SLOTS = 66;           // 5.5 h of 5-min slots on the trend chart
-const FORECAST_TIMEOUT_MS = 60000;       // the first curve call can take ~20 s while models fit
+const FORECAST_TIMEOUT_MS = 60000;       // the plain 30-min forecast: ~20 s on a cold instance
+const CURVE_TIMEOUT_MS = 240000;         // a cold curve fits a model per horizon and can take over a minute
 const BASELINE_REFRESH_MS = 3600000;     // the typical-day profile is refitted once per day
 
 const REFRESH_MS = 300000;               // travel times and forecast
@@ -439,8 +440,8 @@ async function renderTrendChart() {
 
 // ── Forecast vs typical day (forecast view, Causeway) ───────────────────────
 // `?curve=forecast` gives a forecast every 30 min from one origin; `?baseline=profile`
-// is the calendar-profile "typical day", not a forecast. If the curve fails, the
-// plain endpoint's single 30-min forecast is shown instead.
+// is the calendar-profile "typical day", not a forecast. The plain endpoint's single
+// 30-min forecast is shown while a cold curve loads, and instead of the curve if it fails.
 const FORECAST_ERRORS = {
     400: 'Forecast request was rejected.',
     502: 'Forecast query failed on the server.',
@@ -577,42 +578,76 @@ function setForecastStatus(text) {
     el.hidden = !text;
 }
 
-async function fetchForecast() {
-    setForecastStatus('Fetching forecast…');
+let forecastSeq = 0; // a newer fetchForecast (refresh button, timer) supersedes an older one
 
-    let view = null, failure = null;
-    try {
-        view = normalizeCurve(await fetchJson(`${FORECAST_API}?curve=forecast&hours=${FORECAST_HOURS}`, FORECAST_TIMEOUT_MS, FORECAST_ERRORS));
-    } catch (err) {
-        failure = err; // the curve fits several models and can be slow; try the cheap 30-min forecast
-        try {
-            view = normalizeServed(await fetchJson(FORECAST_API, FORECAST_TIMEOUT_MS, FORECAST_ERRORS));
-        } catch (err2) {
-            failure = err2;
-        }
-    }
+const hasPoints = view => view != null && DIRECTIONS.some(d => view.dirs[d.key].points.length);
 
-    if (!view || !DIRECTIONS.some(d => view.dirs[d.key].points.length)) {
-        const err = failure || new Error(FORECAST_ERRORS[503]);
-        const msg = err.name === 'AbortError' ? 'Forecast service timed out.'
-            : err instanceof TypeError ? 'Forecast service unreachable.' : err.message;
-        console.error('Forecast fetch error:', err);
-        const hadForecast = forecastView != null;
-        forecastView = null;
-        if (hadForecast) renderTrendChart(); // drop the stale dashed extension
-        $('fc-cards').innerHTML = '';
-        $('fc-updated').textContent = 'Unavailable';
-        $('fc-meta').textContent = '';
-        setForecastStatus(`Forecast unavailable: ${msg}`);
-        return;
-    }
-
+async function showForecast(view, status) {
     forecastView = view;
     if (view.curve) await loadBaselineDay();
     renderTrendChart(); // redraw with the dashed forecast extension
     try { await loadTrafficData(); } catch (_) { /* "Now" on the cards is optional */ }
-    setForecastStatus(view.curve ? '' : 'Showing the 30-minute forecast only; the longer forecast did not load.');
+    setForecastStatus(status);
     renderForecastCards();
+}
+
+// On a cold instance the curve fits a model per horizon and can take well over a minute,
+// while the plain 30-min forecast is ready in ~20 s. Until a curve has been shown, show the
+// 30-min forecast first, then replace it with the curve when that arrives.
+async function fetchForecast() {
+    const seq = ++forecastSeq;
+    const superseded = () => seq !== forecastSeq;
+    let served = null, failure = null;
+    const loadServed = async () => {
+        try {
+            served = normalizeServed(await fetchJson(FORECAST_API, FORECAST_TIMEOUT_MS, FORECAST_ERRORS));
+        } catch (err) {
+            failure = err;
+        }
+    };
+
+    if (!forecastView?.curve) {
+        setForecastStatus('Fetching forecast…');
+        await loadServed();
+        if (superseded()) return;
+        if (hasPoints(served)) {
+            await showForecast(served, `Showing the 30-minute forecast; the ${FORECAST_HOURS}-hour forecast is still loading…`);
+            if (superseded()) return;
+        }
+    }
+
+    let curve = null;
+    try {
+        curve = normalizeCurve(await fetchJson(`${FORECAST_API}?curve=forecast&hours=${FORECAST_HOURS}`, CURVE_TIMEOUT_MS, FORECAST_ERRORS));
+    } catch (err) {
+        failure = err;
+    }
+    if (superseded()) return;
+    if (hasPoints(curve)) {
+        await showForecast(curve, '');
+        return;
+    }
+
+    if (!served) {
+        await loadServed();
+        if (superseded()) return;
+    }
+    if (hasPoints(served)) {
+        await showForecast(served, 'Showing the 30-minute forecast only; the longer forecast did not load.');
+        return;
+    }
+
+    const err = failure || new Error(FORECAST_ERRORS[503]);
+    const msg = err.name === 'AbortError' ? 'Forecast service timed out.'
+        : err instanceof TypeError ? 'Forecast service unreachable.' : err.message;
+    console.error('Forecast fetch error:', err);
+    const hadForecast = forecastView != null;
+    forecastView = null;
+    if (hadForecast) renderTrendChart(); // drop the stale dashed extension
+    $('fc-cards').innerHTML = '';
+    $('fc-updated').textContent = 'Unavailable';
+    $('fc-meta').textContent = '';
+    setForecastStatus(`Forecast unavailable: ${msg}`);
 }
 
 // ── LTA cameras (forecast view) ─────────────────────────────────────────────
