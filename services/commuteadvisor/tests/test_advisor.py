@@ -28,8 +28,7 @@ TRAFFIC = {"series": {
     "jb_to_woodlands": {"points": [["2026-11-13T12:55:00", 1800, 40]]},
 }}
 
-LLM_REPLY = {"headline": "Busier than usual towards Johor.", "to_johor": "Leave at 14:40.",
-             "to_singapore": "Any time is fine.", "tips": ["a", "b", "c", "d"]}
+LLM_REPLY = {"headline": "Busier than usual towards Johor.", "tips": ["a", "b", "c"]}
 
 
 @pytest.fixture(autouse=True)
@@ -87,13 +86,30 @@ def test_date_outside_the_calendar():
     assert main.calendar_facts(datetime.date(2030, 1, 1))["in_calendar"] is False
 
 
+NOW_POINT = {"at": "12:55", "at_iso": "2026-11-13T12:55:00+08:00", "minutes": 37.0}
+
+
 def test_best_window_worst_and_typical():
     values = [40, 38, 33, 32, 34, 45, 50, 41, 37, 36]
-    facts = main.direction_facts(_curve(values, values)["directions"]["SG_TO_MY"], {"at": "12:55", "minutes": 37.0})
-    assert facts["best"] == {"leave_at": "14:40", "crossing_min": 32.0, "window": "14:10-15:10"}
+    facts = main.direction_facts(_curve(values, values)["directions"]["SG_TO_MY"], NOW_POINT)
+    best = facts["best"]
+    assert (best["leave_at"], best["crossing_min"], best["window"], best["leave_now"]) == ("14:40", 32.0, "14:10-15:10", False)
+    assert best["window_start_iso"].startswith("2026-11-13T06:10")
     assert facts["worst"] == {"leave_at": "16:10", "crossing_min": 50.0}
     assert facts["vs_typical_avg_min"] == pytest.approx(8.6)
     assert facts["saving_vs_now_min"] == 5.0
+
+
+def test_leaving_now_can_be_the_best_window():
+    facts = main.direction_facts(_curve([26, 30, 40], [26, 30, 40])["directions"]["SG_TO_MY"],
+                                 dict(NOW_POINT, minutes=25.0))
+    assert facts["best"]["leave_now"] is True
+    assert facts["best"]["window"] == "12:55-13:10"
+
+
+def test_stale_now_reading_is_ignored():
+    stale = {"series": {"mandai_to_shell_jb": {"points": [["2026-11-13T12:00:00", 1500, 30]]}}}
+    assert main.latest_now(stale, "mandai_to_shell_jb", NOW) is None
 
 
 def test_profile_points_are_not_forecasts():
@@ -103,14 +119,14 @@ def test_profile_points_are_not_forecasts():
 
 
 def test_latest_now_reads_the_newest_point():
-    assert main.latest_now(TRAFFIC, "mandai_to_shell_jb") == {"at": "12:55", "minutes": 37.0}
+    assert main.latest_now(TRAFFIC, "mandai_to_shell_jb", NOW) == NOW_POINT
     assert main.latest_now({}, "mandai_to_shell_jb") is None
 
 
 def test_parse_advice_trims_tips_and_rejects_missing_fields():
-    assert main.parse_advice(json.dumps(LLM_REPLY))["tips"] == ["a", "b", "c"]
+    assert main.parse_advice(json.dumps(LLM_REPLY))["tips"] == ["a", "b"]
     with pytest.raises(ValueError):
-        main.parse_advice(json.dumps({"headline": "x"}))
+        main.parse_advice(json.dumps({"tips": ["x"]}))
 
 
 def test_advice_is_cached_per_origin(monkeypatch):
@@ -153,7 +169,7 @@ def test_http_ok_and_cors(monkeypatch):
     monkeypatch.setattr(main.requests, "post", _openai_ok([]))
     body, status, headers = main.commute_advice(_Req())
     assert status == 200 and headers["Access-Control-Allow-Origin"] == "*"
-    assert json.loads(body)["advice"]["to_johor"] == "Leave at 14:40."
+    assert json.loads(body)["advice"]["headline"] == LLM_REPLY["headline"]
 
 
 def test_http_upstream_failure_is_503(monkeypatch):

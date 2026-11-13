@@ -593,73 +593,264 @@ h4 {
     color: var(--text-muted);
 }
 
-/* Commute buddy card (commute-advisor) */
-.advice-card[hidden] {
+/* Commute buddy card (commute-advisor): clock per direction */
+.advice-card[hidden],
+.cb-headline[hidden],
+.cb-tips[hidden] {
     display: none;
 }
 
-.advice-headline {
+.cb-headline {
     font-family: var(--font-heading);
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 600;
     color: var(--text-main);
-    margin-bottom: 0.85rem;
-}
-
-.advice-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
     margin-bottom: 1rem;
 }
 
-.advice-chip {
-    padding: 0.25rem 0.7rem;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.04);
+.cb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 1rem;
+}
+
+.cb-tile {
+    padding: 1.1rem 1.25rem;
     border: 1px solid var(--border-color);
-    color: var(--text-main);
-    font-size: 0.78rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.02);
 }
 
-.advice-best {
+.cb-dir {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 0.6rem;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-family: var(--font-heading);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-main);
 }
 
-.advice-label {
-    width: 100%;
-    font-size: 0.75rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+.cb-body {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+}
+
+.cb-clock-wrap {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.cb-clock {
+    width: 230px;
+    height: auto;
+}
+
+.cb-clock-cap {
+    margin-top: -0.2rem;
+    font-size: 0.8rem;
     color: var(--text-muted);
 }
 
-.advice-best strong {
+.cb-clock-cap b {
+    color: var(--text-white);
     font-family: var(--font-heading);
-    font-size: 1.6rem;
+}
+
+.cb-num {
+    font-family: var(--font-heading);
+    font-size: 12px;
+    font-weight: 600;
+    fill: #cbd5e1;
+}
+
+.cb-num.major {
+    font-size: 14px;
+    fill: #ffffff;
+}
+
+.cb-tick {
+    stroke: rgba(203, 213, 225, 0.35);
+    stroke-width: 1;
+}
+
+.cb-arc,
+.cb-arc-halo {
+    fill: none;
+    stroke: var(--primary);
+    stroke-linecap: round;
+}
+
+.cb-arc { stroke-width: 5; }
+.cb-arc-halo { stroke-width: 12; opacity: 0.2; }
+
+.cb-now {
+    stroke: #ffffff;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.cb-hand-h line { stroke: #ffffff; stroke-width: 5; stroke-linecap: round; }
+.cb-hand-m line { stroke: #e2e8f0; stroke-width: 3; stroke-linecap: round; }
+.cb-hand-s line { stroke: var(--primary); stroke-width: 1.4; stroke-linecap: round; }
+
+.cb-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.cb-verb {
+    font-family: var(--font-heading);
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.15;
     color: var(--primary);
-    font-variant-numeric: tabular-nums;
 }
 
-.advice-text {
-    font-size: 0.88rem;
-    line-height: 1.5;
-    color: var(--text-main);
+.cb-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
 }
 
-.advice-tips {
-    margin: 1rem 0 0.25rem 1.1rem;
+.cb-trip,
+.cb-vs {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 10px;
+    font-size: 0.76rem;
+    white-space: nowrap;
+}
+
+.cb-trip {
+    background: rgba(0, 242, 254, 0.08);
+    border: 1px solid rgba(0, 242, 254, 0.32);
+    color: var(--text-muted);
+}
+
+.cb-trip b {
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
+    color: var(--text-white);
+}
+
+.cb-vs { border: 1px solid var(--border-color); }
+.cb-vs.up { border-color: rgba(242, 96, 143, 0.4); color: #f7a3c0; background: rgba(242, 96, 143, 0.06); }
+.cb-vs.ok { border-color: rgba(77, 217, 163, 0.4); color: #94e6c6; background: rgba(77, 217, 163, 0.06); }
+
+.cb-foot-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.9rem;
+    margin-top: 1rem;
+}
+
+.cb-key {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.cb-key-grad {
+    width: 90px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #4dd9a3, #f5c66a, #f2608f);
+}
+
+.cb-key-arc {
+    width: 22px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--primary);
+    box-shadow: 0 0 6px var(--primary);
+}
+
+.cb-cal-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.cb-cal {
+    padding: 0.2rem 0.65rem;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
     color: var(--text-main);
-    font-size: 0.88rem;
+    font-size: 0.74rem;
+}
+
+.cb-tips {
+    margin: 0.9rem 0 0 1.1rem;
+    font-size: 0.86rem;
     line-height: 1.6;
+    color: var(--text-main);
 }
 
 .advice-note {
     margin-top: 0.85rem;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
+}
+
+/* Direction switch: phones only (both clocks side by side on wider screens) */
+.cb-tabs {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .cb-grid { grid-template-columns: 1fr; }
+    .cb-tile { display: none; }
+    .cb-tile.active { display: block; }
+    .cb-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        margin-bottom: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .cb-tabs button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.5rem;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-muted);
+        font: 600 0.88rem var(--font-heading);
+        cursor: pointer;
+    }
+    .cb-tabs button[aria-selected="true"] {
+        background: rgba(0, 242, 254, 0.1);
+        color: var(--text-white);
+        box-shadow: inset 0 0 0 1px rgba(0, 242, 254, 0.35);
+    }
+    .cb-tile .cb-dir { display: none; } /* the switch already names the direction */
+    .cb-body { flex-direction: column; align-items: stretch; }
+    .cb-clock-wrap { align-self: center; }
+    .cb-clock { width: 250px; }
+    .cb-side { align-items: center; text-align: center; }
+    .cb-chips { flex-wrap: nowrap; justify-content: center; } /* trip and vs-usual stay on one line */
+    .cb-trip, .cb-vs { font-size: 0.7rem; padding: 0.28rem 0.55rem; }
+    .cb-trip b { font-size: 0.95rem; }
+    .cb-cal-row { margin-left: 0; }
 }
 
 /* "Model is retraining" notice with countdown, on both forecast charts */

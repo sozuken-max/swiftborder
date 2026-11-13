@@ -44,6 +44,7 @@ RECHECK_S = 60  # how long an answer is reused without asking forecast-api for a
 CALENDAR_PATH = Path(os.environ.get("CALENDAR_PATH", Path(__file__).parent / "data" / "holidays_sg_my.csv"))
 LOOKAHEAD_DAYS = 21
 GOOD_WINDOW_MIN = 2.0  # a slot within this many minutes of the best counts as "about as good"
+NOW_STALE_MIN = 20  # an older Maps reading is not offered as "leave now"
 
 DIRECTIONS = (
     # key in forecast-api, key in traffic-24h.json, words
@@ -110,8 +111,8 @@ def _clock(dt):
     return dt.astimezone(SGT).strftime("%H:%M")
 
 
-def latest_now(traffic, series):
-    """Newest (SGT time, minutes) on the travel-time feed, or None."""
+def latest_now(traffic, series, now=None):
+    """Newest Maps travel time on the feed, or None when there is none or it is over NOW_STALE_MIN old."""
     points = [p for p in (traffic.get("series", {}).get(series, {}).get("points") or []) if p and p[1] is not None]
     if not points:
         return None
@@ -119,34 +120,45 @@ def latest_now(traffic, series):
     at = _parse(ts)
     if at.tzinfo is None:
         at = at.replace(tzinfo=SGT)
-    return {"at": _clock(at), "minutes": round(sec / 60.0, 1)}
+    if now is not None and (now - at).total_seconds() > NOW_STALE_MIN * 60:
+        return None
+    return {"at": _clock(at), "at_iso": at.isoformat(), "minutes": round(sec / 60.0, 1)}
 
 
 def direction_facts(curve_dir, now_point):
-    """Best and worst departure slots and the comparison with the typical day, for one direction."""
+    """Best and worst time to leave, from now to 5 hours ahead, and the comparison with the typical day.
+
+    Leaving now (the latest Maps reading) is a candidate alongside the forecast slots, so the advice
+    can be "leave now". The best window is the contiguous run of candidates within GOOD_WINDOW_MIN
+    of the best one.
+    """
     pts = [
         {"at": _parse(p["forecast_for"]), "min": float(p["forecast_min"]),
-         "typical": None if p.get("baseline_min") is None else float(p["baseline_min"])}
+         "typical": None if p.get("baseline_min") is None else float(p["baseline_min"]), "now": False}
         for p in (curve_dir or {}).get("points", [])
         if p.get("forecast_min") is not None and p.get("model") != "profile"
     ]
     if not pts:
         return None
-    best_i = min(range(len(pts)), key=lambda i: pts[i]["min"])
-    worst_i = max(range(len(pts)), key=lambda i: pts[i]["min"])
-    best = pts[best_i]["min"]
-    lo = hi = best_i  # the contiguous run of slots about as good as the best one
-    while lo > 0 and pts[lo - 1]["min"] <= best + GOOD_WINDOW_MIN:
+    slots = ([{"at": _parse(now_point["at_iso"]), "min": now_point["minutes"], "typical": None, "now": True}]
+             if now_point else []) + pts
+    best_i = min(range(len(slots)), key=lambda i: slots[i]["min"])
+    worst_i = max(range(len(slots)), key=lambda i: slots[i]["min"])
+    best = slots[best_i]["min"]
+    lo = hi = best_i
+    while lo > 0 and slots[lo - 1]["min"] <= best + GOOD_WINDOW_MIN:
         lo -= 1
-    while hi < len(pts) - 1 and pts[hi + 1]["min"] <= best + GOOD_WINDOW_MIN:
+    while hi < len(slots) - 1 and slots[hi + 1]["min"] <= best + GOOD_WINDOW_MIN:
         hi += 1
     diffs = [p["min"] - p["typical"] for p in pts if p["typical"] is not None]
     facts = {
-        "forecast": [{"leave_at": _clock(p["at"]), "crossing_min": round(p["min"], 1),
+        "forecast": [{"leave_at": _clock(p["at"]), "at_iso": p["at"].isoformat(), "crossing_min": round(p["min"], 1),
                       "typical_min": None if p["typical"] is None else round(p["typical"], 1)} for p in pts],
-        "best": {"leave_at": _clock(pts[best_i]["at"]), "crossing_min": round(best, 1),
-                 "window": f"{_clock(pts[lo]['at'])}-{_clock(pts[hi]['at'])}"},
-        "worst": {"leave_at": _clock(pts[worst_i]["at"]), "crossing_min": round(pts[worst_i]["min"], 1)},
+        "best": {"leave_at": _clock(slots[best_i]["at"]), "crossing_min": round(best, 1),
+                 "window": f"{_clock(slots[lo]['at'])}-{_clock(slots[hi]['at'])}",
+                 "window_start_iso": slots[lo]["at"].isoformat(), "window_end_iso": slots[hi]["at"].isoformat(),
+                 "leave_now": bool(slots[lo]["now"])},
+        "worst": {"leave_at": _clock(slots[worst_i]["at"]), "crossing_min": round(slots[worst_i]["min"], 1)},
         "vs_typical_avg_min": round(sum(diffs) / len(diffs), 1) if diffs else None,
         "now": now_point,
     }
@@ -214,7 +226,7 @@ def calendar_facts(today, cal=None):
 def build_facts(curve, traffic, now):
     dirs = {}
     for d in DIRECTIONS:
-        now_point = latest_now(traffic, d["series"]) if traffic else None
+        now_point = latest_now(traffic, d["series"], now) if traffic else None
         f = direction_facts((curve.get("directions") or {}).get(d["api"]), now_point)
         if f:
             dirs[d["api"]] = dict(f, label=d["label"])
@@ -228,23 +240,20 @@ def build_facts(curve, traffic, now):
 
 # --- LLM ---------------------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are a friendly, experienced daily commuter across the Woodlands Causeway between Singapore and Johor Bahru. You give short, practical advice like a seasoned friend would.
+SYSTEM_PROMPT = """You are a seasoned daily commuter across the Woodlands Causeway between Singapore and Johor Bahru. The app already shows, for each direction, when to leave and the expected trip time on a clock. You add a short human touch.
 
 Rules:
 - Use ONLY the facts in the user's JSON. Never invent times, minutes, holidays, events, weather, accidents or checkpoint conditions.
-- Every time and number you mention must appear in the facts. Times are SGT, 24-hour clock.
-- "crossing_min" is the forecast Google Maps driving time for that route if you leave at "leave_at". "typical_min" is the usual time for that day and hour. "vs_typical_avg_min" > 0 means busier than usual over the next 5 hours.
-- If school holidays are "unknown", say nothing about school holidays.
-- Mention holidays, eves or long weekends only when they are in the facts, and say how they usually affect Causeway traffic in general terms.
-- The forecast is a model estimate and can be wrong; do not promise.
+- Every time and number you mention must appear in the facts. Times are SGT; write them like 3:40 PM.
+- "crossing_min" is the forecast Google Maps driving time if you leave at "leave_at"; "typical_min" is the usual time then. "vs_typical_avg_min" > 0 means busier than usual over the next 5 hours.
+- If school holidays are "unknown", say nothing about school holidays. Mention holidays, eves or long weekends only when they are in the facts.
+- Plain, simple words. No hedging, no greetings, no emojis.
 
-Reply with JSON only, in this shape:
-{"headline": "one sentence, at most 120 characters",
- "to_johor": "1-2 sentences: when to leave for Johor in the next 5 hours and why",
- "to_singapore": "1-2 sentences: when to leave for Singapore in the next 5 hours and why",
- "tips": ["at most 3 short general tips grounded in the facts"]}"""
+Reply with JSON only:
+{"headline": "at most 10 words: the one thing to know right now",
+ "tips": ["at most 2 tips, each at most 12 words"]}"""
 
-ADVICE_KEYS = ("headline", "to_johor", "to_singapore", "tips")
+ADVICE_KEYS = ("headline", "tips")
 
 
 def ask_llm(facts):
@@ -257,7 +266,7 @@ def ask_llm(facts):
         json={
             "model": OPENAI_MODEL,
             "temperature": 0.4,
-            "max_tokens": 500,
+            "max_tokens": 200,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -274,12 +283,11 @@ def ask_llm(facts):
 def parse_advice(text):
     data = json.loads(text)
     advice = {k: data.get(k) for k in ADVICE_KEYS}
-    for k in ("headline", "to_johor", "to_singapore"):
-        if not isinstance(advice[k], str) or not advice[k].strip():
-            raise ValueError(f"advice field {k} missing")
-        advice[k] = advice[k].strip()[:400]
+    if not isinstance(advice["headline"], str) or not advice["headline"].strip():
+        raise ValueError("advice headline missing")
+    advice["headline"] = advice["headline"].strip()[:120]
     tips = advice["tips"] if isinstance(advice["tips"], list) else []
-    advice["tips"] = [str(t).strip()[:240] for t in tips if str(t).strip()][:3]
+    advice["tips"] = [str(t).strip()[:140] for t in tips if str(t).strip()][:2]
     return advice
 
 

@@ -9,11 +9,11 @@ It is separate from `forecast-api` and never changes it. It reads the same publi
 
 ## What it does
 
-1. **Facts, in code** (`build_facts`): for each direction, the best time to leave in the next 5 hours (and the run of 30-minute slots within 2 min of it), the worst time, the average difference from the typical day, and the saving against leaving now.
+1. **Facts, in code** (`build_facts`): for each direction, the best time to leave from now to 5 hours ahead. Leaving now (the latest Maps reading, if under 20 minutes old) counts as a slot, so the answer can be "leave now". The best window is the run of slots within 2 min of the best one. Also the worst time, the average difference from the typical day, and every slot's time and forecast for the page's clock.
 2. **Calendar, from [`data/holidays_sg_my.csv`](data/holidays_sg_my.csv)** (`calendar_facts`): today's Singapore and Malaysia public holidays, eves and Singapore long weekends; whether school holidays are on or start within 21 days; public holidays in the next 21 days.
-3. **Advice, from OpenAI** (`ask_llm`): the facts go to the Chat Completions API (`OPENAI_MODEL`, default `gpt-4o-mini`) with a "seasoned Causeway commuter" system prompt. It may only use the facts, and replies as JSON: `headline`, `to_johor`, `to_singapore`, up to 3 `tips`.
+3. **Advice, from OpenAI** (`ask_llm`): the facts go to the Chat Completions API (`OPENAI_MODEL`, default `gpt-4o-mini`) with a "seasoned Causeway commuter" system prompt. It may only use the facts, and replies as JSON: a `headline` of at most 10 words and at most 2 `tips` of at most 12 words.
 
-The card shows the times and minutes from `facts`; only the sentences come from the LLM. If OpenAI fails, the response still has `facts` and `advice: null`, and the card shows the times alone. If the service is down, the card stays hidden; the forecast is unaffected.
+The page draws a clock per direction from `facts`: a 12-hour dial in Singapore time with ticking hands, a ring from now to the last slot coloured by trip time, and a cyan arc on the best window. Beside it: "Leave …", the expected trip time and the comparison with usual. Only the headline and tips come from the LLM. If OpenAI fails, the response still has `facts` and `advice: null`, and the card shows the times alone. If the service is down, the card stays hidden; the forecast is unaffected.
 
 The advice is generated text, not a measured result. It is not part of the evaluated forecast.
 
@@ -30,10 +30,11 @@ The advice is generated text, not a measured result. It is not part of the evalu
 ```json
 {"kind": "commute advice", "llm_model": "gpt-4o-mini",
  "facts": {"generated_at_sgt": "...", "forecast_origin": {...},
-           "directions": {"SG_TO_MY": {"best": {"leave_at": "15:40", "crossing_min": 32.1, "window": "15:10-15:40"},
+           "directions": {"SG_TO_MY": {"best": {"leave_at": "15:40", "crossing_min": 32.1, "window": "15:10-15:40",
+                                                "window_start_iso": "...", "window_end_iso": "...", "leave_now": false},
                                        "worst": {...}, "vs_typical_avg_min": 8.2, "now": {...}, "forecast": [...]}, "MY_TO_SG": {...}},
            "calendar": {"weekday": "Friday", "sg_school_holidays": "start 2026-11-21 (in 8 days)", ...}},
- "advice": {"headline": "...", "to_johor": "...", "to_singapore": "...", "tips": ["..."]},
+ "advice": {"headline": "...", "tips": ["...", "..."]},
  "note": "..."}
 ```
 
