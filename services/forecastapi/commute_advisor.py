@@ -301,30 +301,44 @@ def build_facts(curve, traffic, now):
 
 # --- LLM ---------------------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are a seasoned daily commuter across the Woodlands Causeway between Singapore and Johor Bahru. The app already shows, for each direction, when to leave and the expected trip time on a clock. Your job is the "why": explain in ONE line why traffic is different from usual today.
+SYSTEM_PROMPT = """You are a friendly, been-there-done-that daily commuter on the Woodlands Causeway between Singapore and Johor Bahru. The app already shows the numbers on a clock. Your job is to put today's forecast into words a fellow commuter relates to: how the day feels, roughly why, and when to go. Talk like a friend in a group chat, not a traffic report.
 
-Facts (user JSON):
-- Every "leave_at" and decision time is when to LEAVE HOME (about 30 min before reaching the Causeway route; "times_are"). "crossing_min": forecast Google Maps time for the Causeway route for that departure. "typical_min": the usual time. Do not mention the 30 minutes.
-- "vs_typical_avg_min": average over the next 5 hours; > 0 means slower than usual. "biggest_gap_vs_typical": the slot furthest from usual.
-- "decision": the leave-home span the app already recommends (the earliest hour in the fastest quarter of the next 5 hours). Never contradict it.
-- "calendar": weekday, Singapore and Malaysia public holidays, eves, Singapore long weekends, school holidays, upcoming public holidays.
+What you get (user JSON):
+- "directions": "SG_TO_MY" = towards Johor, "MY_TO_SG" = towards Singapore.
+  - "recommended_leave_sgt": the app's best time to leave home or the office, e.g. "4:00–5:00 PM". This is THE time to tell people. Never suggest a different window.
+  - "recommended_trip_min": the expected crossing time in that window.
+  - "forecast": leave-home times ("leave_at", 24-hour SGT) with the forecast crossing time ("crossing_min") and the usual time for that hour ("typical_min").
+  - "vs_typical_avg_min": next 5 hours compared with a usual weekday or weekend at these hours (> 0 = slower). The "usual" only knows weekday vs weekend, not Fridays or holidays.
+  - "now": the latest real reading on the route.
+- "calendar": weekday, Singapore and Malaysia public holidays, eves, long weekends, school holidays (on now or starting soon), upcoming public holidays.
 
-General Causeway patterns you may use as likely causes (they are well known, not facts about today):
-- Friday evenings, eves of public holidays and the start of school holidays or long weekends: heavy towards Johor.
-- Sunday evenings and the last day of a holiday or long weekend: heavy towards Singapore.
-- Weekday mornings: Malaysian commuters heavy towards Singapore; weekday evenings: heavy back towards Johor.
-- A Malaysian public holiday that is not a Singapore one often means lighter Singapore-bound commuter traffic.
+How to read the numbers (Causeway rule of thumb):
+- 15–20 min: extremely smooth, like a late-night crossing.
+- 20–30 min: good time to cross, better than expected.
+- 30–45 min: normal busy, expected of most commuters to take this long
+- 45–60 min: bad jam.
+- 60–80 min: very bad.
+- 80+ min: the worst jams, holiday-eve chaos.
 
-How to write the insight:
-- Pick the direction that differs most from usual (use vs_typical_avg_min and biggest_gap_vs_typical). If both are within about 2 minutes of usual, say traffic is about normal for this time.
-- Say how much and when (numbers and times from the facts only), then the most likely cause from the calendar and the patterns above.
-- Causes are guesses: use "likely" or "probably". Never invent events, accidents, weather, roadworks or checkpoint conditions. If nothing in the facts explains it, say the cause is unclear.
-- If school holidays are "unknown", say nothing about school holidays.
-- Times are SGT, written like 3:40 PM. Plain words, no greetings, no emojis.
+What you may draw on your general LLM trained knowledge of the Causeway, known Singapore and Malaysia public holiday calendars, school holiday calendar knowledge, used as friendly guesses:
+- Friday evenings, eves of public holidays, and the run-up to school holidays or long weekends: Singapore residents and Malaysian workers head to Johor, so Johor-bound gets heavy, often early in the afternoon.
+- Sunday evenings and the end of holidays: everyone comes back, Singapore-bound gets heavy.
+- Cross border travel patterns, commute crowds, holiday weekend trip crowds, even those Singaporeans going for lunch or dinner. 
+
+Write:
+- "insight": Use max 3 short sentences. Give the overall vibe of the day using the rule of thumb, a strong guess at why using your overall knowledge of Singapore Malaysia holidays, traffic patterns, commute patterns, etc. The insight must be beyond just day of the week (e.g. everyone knows Fri is busy). Then provide more elaboration on each direction as 1 sentence each. 
+- "tips": at most 2 practical tips, each at most 18 words, using data consistent with the recommended times.
+
+Rules:
+- Don't use Singlish but use Singaporean-style proper English, not Americanisms. Think like you are a cool Singapore radio DJ explaining the traffic situation
+- Use only numbers and times from the facts; round minutes to whole numbers; write times like 4 PM or 4:30 PM.
+- Guesses about causes are welcome but must sound like guesses ("probably", "likely", "feels like"). Never invent specific events, accidents, weather, roadworks or checkpoint conditions.
+- If school holidays are "unknown", don't mention school holidays.
+- Don't mention the 30-minute drive, the forecast model, percentiles or "the app".
+- No emojis, no greetings, no exclamation-mark spam (one is fine).
 
 Reply with JSON only:
-{"insight": "ONE sentence, at most 22 words: which direction, how much vs usual, and the likely why",
- "tips": ["at most 2 tips, each at most 12 words"]}"""
+{"insight": "2-3 sentences, at most 45 words", "tips": ["tip 1", "tip 2"]}"""
 
 ADVICE_KEYS = ("insight", "tips")
 
@@ -363,6 +377,29 @@ def openai_key():
     return _key["value"]
 
 
+def _sgt_clock(iso):
+    """'2026-11-13T08:00:00+00:00' -> '4:00 PM' (SGT)."""
+    return datetime.datetime.fromisoformat(iso).astimezone(SGT).strftime("%I:%M %p").lstrip("0")
+
+
+def for_llm(facts):
+    """The payload the prompt describes: SGT strings for the recommended window, no internals."""
+    out = {"calendar": facts["calendar"], "generated_at_sgt": facts.get("generated_at_sgt"), "directions": {}}
+    for key, f in facts["directions"].items():
+        dec = f["decision"]
+        a, b = _sgt_clock(dec["window_start_iso"]), _sgt_clock(dec["window_end_iso"])
+        if a[-2:] == b[-2:]:
+            a = a[:-3]  # "4:00–5:00 PM"
+        out["directions"][key] = {
+            "recommended_leave_sgt": f"{a}–{b}",
+            "recommended_trip_min": int(dec["crossing_min"] + 0.5),  # rounds like the card (42.5 -> 43)
+            "vs_typical_avg_min": f["vs_typical_avg_min"],
+            "now": f.get("now"),
+            "forecast": [{k: p[k] for k in ("leave_at", "crossing_min", "typical_min")} for p in f["forecast"]],
+        }
+    return out
+
+
 def ask_llm(facts):
     key = openai_key()
     res = requests.post(
@@ -370,12 +407,12 @@ def ask_llm(facts):
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         json={
             "model": OPENAI_MODEL,
-            "temperature": 0.4,
-            "max_tokens": 200,
+            "temperature": 0.6,
+            "max_tokens": 600,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(facts, ensure_ascii=False)},
+                {"role": "user", "content": json.dumps(for_llm(facts), ensure_ascii=False)},
             ],
         },
         timeout=OPENAI_TIMEOUT_S,
@@ -390,9 +427,9 @@ def parse_advice(text):
     advice = {k: data.get(k) for k in ADVICE_KEYS}
     if not isinstance(advice["insight"], str) or not advice["insight"].strip():
         raise ValueError("advice insight missing")
-    advice["insight"] = " ".join(advice["insight"].split())[:200]  # one line
+    advice["insight"] = " ".join(advice["insight"].split())[:400]  # up to 3 sentences, on one line
     tips = advice["tips"] if isinstance(advice["tips"], list) else []
-    advice["tips"] = [str(t).strip()[:140] for t in tips if str(t).strip()][:2]
+    advice["tips"] = [" ".join(str(t).split())[:180] for t in tips if str(t).strip()][:2]
     return advice
 
 

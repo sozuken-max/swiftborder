@@ -2,6 +2,10 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13 (commute buddy prompt)
+
+- `forecast-api` `?advice=commute`: new `SYSTEM_PROMPT`, tried in Colab against live facts. It asks for a radio-DJ-style summary in Singaporean English: `insight` is up to 3 short sentences (the day's vibe on a Causeway minutes scale from 15–20 min "extremely smooth" to 80+ "holiday-eve chaos", a hedged guess at why beyond the weekday, one line per direction); at most 2 tips of up to 18 words that agree with the recommended times. The model now gets `for_llm(facts)` with the recommended window as SGT text (`recommended_leave_sgt`) instead of UTC ISO times and internals. Temperature 0.6, `max_tokens` 600; the insight cap is 400 characters, kept on one line.
+
 ## 2026-11-13 (commute buddy recommendation)
 
 - `forecast-api` `?advice=commute`: each direction's `decision` is the earliest leave-home span of at least 1 hour whose 30-min slots are all in the fastest quarter (at or below the 25th percentile) of the reachable slots in the next 5 hours. It falls back to the quickest hour when no such run exists (`basis`). Leave-home time is the route slot minus `APPROACH_MIN` (30 min, the drive to the Causeway), and only slots at least 30 min away count. It replaces "the single fastest slot". On 13 Nov 14:40 SGT that rule said "Leave at 4:10 PM" To Johor (35.3 min vs 37.2 now) and "Leave at 7:40 PM" To Singapore (28.5 vs 28.6). The new rule gives "Leave 3:10–4:40 PM" (35–39 min, 25th percentile 39.3) and "Leave 6:40–7:40 PM" (29–32 min; 3:10 PM alone was good but under an hour). The LLM is told not to contradict it.
