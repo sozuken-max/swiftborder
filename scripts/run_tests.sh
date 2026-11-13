@@ -2,11 +2,11 @@
 # Run the camdetect, weather, eval, and forecastapi test suites (and repo doc checks).
 #
 #   python3.11 -m venv .venv
-#   .venv/bin/pip install -r services/camdetect/requirements-dev.txt -r data/weather/requirements-dev.txt -r eval/requirements-dev.txt -r services/forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
+#   .venv/bin/pip install -r services/camdetect/requirements-dev.txt -r data/weather/requirements-dev.txt -r eval/requirements-dev.txt -r services/forecastapi/requirements-dev.txt -r services/commuteadvisor/requirements-dev.txt -r scripts/requirements-dev.txt
 #   .venv/bin/pip install -r eval/requirements-notebook.txt   # only for --slow
 #
 # Usage: scripts/run_tests.sh [--slow] [--coverage] [suite ...]
-#   suites: camdetect weather eval forecastapi repo (default: all)
+#   suites: camdetect weather eval forecastapi commuteadvisor repo (default: all)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,13 +27,14 @@ for arg in "$@"; do
     *) suites+=("$arg") ;;
   esac
 done
-if [[ ${#suites[@]} -eq 0 ]]; then suites=(camdetect weather eval forecastapi repo); fi
+if [[ ${#suites[@]} -eq 0 ]]; then suites=(camdetect weather eval forecastapi commuteadvisor repo); fi
 
 failed=()
 for name in "${suites[@]}"; do
   case "$name" in
     camdetect)   dir="$root/services/camdetect" ;;
     forecastapi) dir="$root/services/forecastapi" ;;
+    commuteadvisor) dir="$root/services/commuteadvisor" ;;
     weather)     dir="$root/data/weather" ;;
     eval)        dir="$root/eval" ;;
     repo)        dir="$root/scripts" ;;

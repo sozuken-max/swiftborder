@@ -8,12 +8,14 @@
 // Data sources (all public, read from the browser):
 //   traffic-24h.json  Google Maps Distance Matrix travel times, written every 5 min
 //   forecast-api      forecast curve and typical-day profile (docs/runbooks/forecast-api.md)
+//   commute-advisor   LLM commute advice on top of that curve (services/commuteadvisor/README.md)
 //   data.gov.sg       LTA traffic camera images
 //   swiftbackend      annotated camera frame + per-direction vehicle counts
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
 const TRAFFIC_API = 'https://storage.googleapis.com/swiftborder-public/traffic-24h.json';
 const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app/';
+const ADVISOR_API = 'https://commute-advisor-1095552466513.asia-southeast1.run.app/';
 const LTA_API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
 const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
 
@@ -626,6 +628,7 @@ async function fetchForecast() {
         try { await loadTrafficData(); } catch (_) { /* "Now" on the cards is optional */ }
         setForecastStatus('');
         renderForecastCards();
+        fetchAdvice(); // after the curve, so forecast-api is warm when the advisor reads it
         return;
     }
 
@@ -640,6 +643,98 @@ async function fetchForecast() {
     $('fc-updated').textContent = 'Unavailable';
     $('fc-meta').textContent = '';
     setForecastStatus(`Forecast unavailable: ${msg} Hit Refresh Forecast to try again.`);
+}
+
+// ── Commute buddy (commute-advisor, forecast view) ─────────────────────────
+// Separate service: it reads the same 5 h curve, works out the best time to leave in code, and
+// asks an LLM to phrase it. Times and minutes on the card come from `facts`; only the sentences
+// come from the LLM. If the service is missing or fails, the card stays hidden and nothing else changes.
+const ADVISOR_TIMEOUT_MS = 90000;
+let adviceSeq = 0;
+
+function esc(text) {
+    return String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function shortDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// Calendar chips, from the service's facts (the holiday CSV), never from the LLM text.
+function adviceChips(cal) {
+    const chips = [];
+    const t = cal?.today;
+    if (!t) return chips;
+    if (t.sg_public_holiday.length) chips.push(`SG public holiday: ${t.sg_public_holiday.join(', ')}`);
+    if (t.my_public_holiday.length) chips.push(`MY public holiday: ${t.my_public_holiday.join(', ')}`);
+    if (t.eve_of_sg_public_holiday) chips.push('Eve of a SG public holiday');
+    if (t.eve_of_my_public_holiday) chips.push('Eve of a MY public holiday');
+    if (t.last_day_of_sg_long_weekend) chips.push('Last day of a SG long weekend');
+    else if (t.sg_long_weekend) chips.push('SG long weekend');
+    [['sg', 'SG'], ['my', 'MY']].forEach(([k, label]) => {
+        const v = cal[`${k}_school_holidays`] || '';
+        let m;
+        if ((m = /^on now, \S+ to (\S+)/.exec(v))) chips.push(`${label} school holidays until ${shortDate(m[1])}`);
+        else if ((m = /^start (\S+) \(in (\d+) days\)/.exec(v))) chips.push(`${label} school holidays start ${shortDate(m[1])} (in ${m[2]} days)`);
+    });
+    (cal.upcoming_public_holidays || []).slice(0, 2).forEach(h =>
+        chips.push(`${h.country === 'Singapore' ? 'SG' : 'MY'} ${h.names.join(', ') || 'public holiday'} on ${shortDate(h.date)}`));
+    return chips;
+}
+
+function renderAdvice(data) {
+    const card = $('advice-card');
+    const facts = data.facts || {};
+    const a = data.advice;
+    const dirText = { SG_TO_MY: a?.to_johor, MY_TO_SG: a?.to_singapore };
+    const cols = DIRECTIONS.map(d => {
+        const f = facts.directions?.[d.apiKey];
+        if (!f) return '';
+        const vs = f.vs_typical_avg_min;
+        const vsText = vs == null ? '' : Math.abs(vs) < 1 ? 'about typical' : `${Math.abs(vs).toFixed(0)} min ${vs > 0 ? 'worse' : 'better'} than typical`;
+        return `<div class="fc-card advice-dir">
+            <div class="fc-card-head"><span class="lc-dot ${d.key}"></span>${d.label}</div>
+            <div class="advice-best"><span class="advice-label">Best time to leave</span>
+                <strong>${esc(f.best.window.replace('-', '–'))}</strong>
+                <span class="fc-note">about ${Math.round(f.best.crossing_min)} min · worst ${esc(f.worst.leave_at)} (${Math.round(f.worst.crossing_min)} min)</span></div>
+            ${vsText ? `<div class="fc-note">Next 5 h: ${vsText}</div>` : ''}
+            ${dirText[d.apiKey] ? `<p class="advice-text">${esc(dirText[d.apiKey])}</p>` : ''}
+        </div>`;
+    }).join('');
+    const chips = adviceChips(facts.calendar).map(c => `<span class="advice-chip">${esc(c)}</span>`).join('');
+    const tips = (a?.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
+    $('advice-body').innerHTML = `
+        ${a ? `<p class="advice-headline">${esc(a.headline)}</p>` : ''}
+        ${chips ? `<div class="advice-chips">${chips}</div>` : ''}
+        <div class="fc-grid">${cols}</div>
+        ${tips ? `<ul class="advice-tips">${tips}</ul>` : ''}`;
+    $('advice-status').textContent = a ? '' : 'The AI advice is unavailable right now; the times above come straight from the forecast.';
+    $('advice-status').hidden = !!a;
+    $('advice-note').textContent = a
+        ? `AI-generated (${data.llm_model}) from the forecast above and a SG/MY holiday calendar. The forecast is an estimate; check live conditions before you travel.`
+        : 'From the forecast above and a SG/MY holiday calendar.';
+    card.hidden = false;
+}
+
+async function fetchAdvice() {
+    const seq = ++adviceSeq;
+    const card = $('advice-card');
+    if (!card) return;
+    if (card.hidden) {
+        $('advice-status').textContent = 'Asking your commute buddy…';
+        $('advice-status').hidden = false;
+    }
+    try {
+        const data = await fetchJson(ADVISOR_API, ADVISOR_TIMEOUT_MS);
+        if (seq !== adviceSeq) return;
+        if (!Object.keys(data.facts?.directions || {}).length) throw new Error('no advice');
+        renderAdvice(data);
+    } catch (err) {
+        if (seq !== adviceSeq) return;
+        console.error('Commute advice error:', err);
+        card.hidden = true; // optional: the forecast above is unaffected
+    }
 }
 
 // ── LTA cameras (forecast view) ─────────────────────────────────────────────

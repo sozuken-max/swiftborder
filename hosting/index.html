@@ -130,6 +130,19 @@
                     </div>
                 </div>
 
+                <!-- Commute buddy (commute-advisor): LLM advice on the forecast above; hidden until it answers -->
+                <div class="card chart-card advice-card" data-only="woodlands" id="advice-card" hidden>
+                    <div class="lc-header">
+                        <div class="lc-title-group">
+                            <h3>🧭 Commute Buddy</h3>
+                            <span class="lc-badge">AI advice</span>
+                        </div>
+                    </div>
+                    <p class="fc-note" id="advice-status">Asking your commute buddy&hellip;</p>
+                    <div id="advice-body"></div>
+                    <p class="fc-note advice-note" id="advice-note"></p>
+                </div>
+
                 <p class="notice" data-only="tuas">
                     No travel-time feed or forecast for Tuas Second Link. The LTA cameras below are live.
                 </p>
