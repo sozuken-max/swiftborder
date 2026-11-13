@@ -649,8 +649,11 @@ async function fetchForecast() {
 // forecast-api reads the same cached 5 h curve, works out the best time to leave in code, and
 // asks an LLM for a one-line insight and tips. Times and minutes on the card come from `facts`; only the sentences
 // come from the LLM. If the service is missing or fails, the card stays hidden and nothing else changes.
-const ADVISOR_TIMEOUT_MS = 90000;
-const ADVICE_COUNTDOWN_MS = 30000;      // the forecast is already warm; the wait is the OpenAI call
+// const ADVISOR_TIMEOUT_MS = 90000;
+// const ADVICE_COUNTDOWN_MS = 30000; 
+const ADVISOR_TIMEOUT_MS = CURVE_TIMEOUT_MS;    // the loading time mostly comes from waiting for the model retraining, not the OpenAI call so use same wait. 
+const ADVICE_COUNTDOWN_MS = RETRAIN_COUNTDOWN_MS;
+
 let adviceSeq = 0;
 
 function esc(text) {
@@ -861,14 +864,17 @@ function startAdvicePending() {
     const tick = () => {
         const left = ADVICE_COUNTDOWN_MS - (Date.now() - started);
         el.innerHTML = left > 0
-            ? '<span class="fc-spinner" aria-hidden="true"></span><div><strong>Your Commute Buddy is reading the forecast and writing your advice. Processing, please wait…</strong>'
-              + `<br>This may take up to 30 seconds. If it does not load, hit Retry.</div><span class="fc-countdown" aria-label="time left">${mmss(left)}</span>`
+            ? '<span class="fc-spinner" aria-hidden="true"></span><div><strong>Model is retraining on the latest data. Your Commute Buddy requires this as input and will preparing your advice afterward.</strong>'
+          + `<br>This may take up to 2 minutes. If it does not load, hit Retry.</div><span class="fc-countdown" aria-label="time left">${mmss(left)}</span>`
             : '<span class="fc-spinner" aria-hidden="true"></span><div><strong>Still processing, taking longer than usual…</strong>'
               + '<br>If it does not load soon, refresh the page.</div>';
+        
         el.hidden = false;
     };
+    advicePendingTimer = setTimeout(() => {
     tick();
     advicePendingTimer = setInterval(tick, 1000);
+    }, PENDING_NOTICE_DELAY_MS);
 }
 
 function stopAdvicePending() {
