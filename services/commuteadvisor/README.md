@@ -55,21 +55,13 @@ Store the OpenAI key without it landing in shell history:
 read -rs OPENAI_KEY && printf '%s' "$OPENAI_KEY" | gcloud secrets create openai-api-key --data-file=- --replication-policy=automatic --project=swiftborder; unset OPENAI_KEY
 ```
 
-Runtime service account, allowed to read only that secret:
+It runs as the `forecast-api` service account, which Cloud Build can already deploy as. Let that account read the secret (this adds access to this one secret and changes nothing in `forecast-api`):
 
 ```bash
-gcloud iam service-accounts create commute-advisor --display-name="commute-advisor runtime" --project=swiftborder
+gcloud secrets add-iam-policy-binding openai-api-key --member=serviceAccount:forecast-api@swiftborder.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor --project=swiftborder
 ```
 
-```bash
-gcloud secrets add-iam-policy-binding openai-api-key --member=serviceAccount:commute-advisor@swiftborder.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor --project=swiftborder
-```
-
-Let the Cloud Build service account deploy as it (the same account the other triggers build as):
-
-```bash
-gcloud iam service-accounts add-iam-policy-binding commute-advisor@swiftborder.iam.gserviceaccount.com --member=serviceAccount:1095552466513-compute@developer.gserviceaccount.com --role=roles/iam.serviceAccountUser --project=swiftborder
-```
+Trade-off, chosen on 2026-11-13: both services share one identity, so either could read the OpenAI key and the BigQuery data `forecast-api` reads. A dedicated `commute-advisor` account would narrow that if it matters later.
 
 Trigger on push to `main` under this folder (same GitHub connection as the `forecast-api` trigger):
 
