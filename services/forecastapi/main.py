@@ -44,6 +44,7 @@ import time
 import functions_framework
 import pandas as pd
 
+import commute_advisor
 import local_models as lm
 import mix_bridge
 
@@ -1279,6 +1280,25 @@ def _assemble(model_id, version_id, horizon, directions, result):
     return out
 
 
+def cached_curve(directions, hours):
+    """The forecast curve for ``?curve=forecast`` (with timing), from the cache or a fresh fit.
+
+    Raises what ``forecast_curve`` raises, and ``NoRecentForecast`` when a fresh curve has no
+    servable timing. Only a servable curve is cached.
+    """
+    key = ("forecast-curve", tuple(directions), int(hours), SELECTION_ID, EXPLORATORY_SELECTION_ID, profile_version(_serving_now()))
+    cached = _cache_get(key)
+    payload = _curve_with_timing(cached, _now()) if cached is not None else None
+    if payload is None:
+        _cache.pop(key, None)
+        fresh = forecast_curve(directions, int(hours))
+        payload = _curve_with_timing(fresh, _now())
+        if payload is None:
+            raise NoRecentForecast(tuple(directions))
+        _cache_put(key, fresh)
+    return payload
+
+
 @functions_framework.http
 def forecast(request):
     _pinned.now = _now()  # one serving day for the whole request
@@ -1343,6 +1363,24 @@ def _handle(request):
             _cache_put(key, payload)
         return _ok(payload, headers)
 
+    advice_raw = _param(body, args, "advice")
+    if advice_raw is not None and str(advice_raw).strip() != "":
+        if str(advice_raw).strip() != "commute":
+            return _error("advice must be commute", 400)
+        try:  # the same cached curve the page's ?curve=forecast&hours=5 request uses
+            curve = cached_curve(_parse_directions(None), commute_advisor.FORECAST_HOURS)
+        except (NoRecentForecast, lm.NoProfileHistory):
+            return _error("No recent forecast for the requested direction", 503)
+        except Exception:
+            logger.exception("forecast curve for advice failed")
+            return _error("Forecast query failed", 502)
+        try:
+            payload = commute_advisor.advise(curve)
+        except Exception:
+            logger.exception("commute advice failed")
+            return _error("Advice failed on the server", 502)
+        return _ok(payload, _json_headers(60 if payload.get("advice") else 0))
+
     curve_raw = _param(body, args, "curve")
     if curve_raw is not None and str(curve_raw).strip() != "":
         if str(curve_raw).strip() != "forecast":
@@ -1354,24 +1392,15 @@ def _handle(request):
         directions = _parse_directions(_param(body, args, "direction"))
         if directions is None:
             return _error("direction must be SG_TO_MY, MY_TO_SG, or both", 400)
-        key = ("forecast-curve", tuple(directions), int(text), SELECTION_ID, EXPLORATORY_SELECTION_ID, profile_version(_serving_now()))
-        cached = _cache_get(key)
-        payload = _curve_with_timing(cached, _now()) if cached is not None else None
-        if payload is None:
-            _cache.pop(key, None)
-            try:
-                fresh = forecast_curve(directions, int(text))
-            except NoRecentForecast:
-                return _error("No recent forecast for the requested direction", 503)
-            except lm.NoProfileHistory:
-                return _error(NO_PROFILE_ERROR, 503)
-            except Exception:
-                logger.exception("forecast curve failed")
-                return _error("Forecast query failed", 502)
-            payload = _curve_with_timing(fresh, _now())
-            if payload is None:
-                return _error("No recent forecast for the requested direction", 503)
-            _cache_put(key, fresh)
+        try:
+            payload = cached_curve(directions, int(text))
+        except NoRecentForecast:
+            return _error("No recent forecast for the requested direction", 503)
+        except lm.NoProfileHistory:
+            return _error(NO_PROFILE_ERROR, 503)
+        except Exception:
+            logger.exception("forecast curve failed")
+            return _error("Forecast query failed", 502)
         return _ok(payload, _json_headers(_browser_max_age(payload, _now())))
 
     model_raw = _param(body, args, "model")

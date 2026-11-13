@@ -8,14 +8,14 @@
 // Data sources (all public, read from the browser):
 //   traffic-24h.json  Google Maps Distance Matrix travel times, written every 5 min
 //   forecast-api      forecast curve and typical-day profile (docs/runbooks/forecast-api.md)
-//   commute-advisor   LLM commute advice on top of that curve (services/commuteadvisor/README.md)
+//                     and ?advice=commute: the Commute Buddy card (services/forecastapi/README.md)
 //   data.gov.sg       LTA traffic camera images
 //   swiftbackend      annotated camera frame + per-direction vehicle counts
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
 const TRAFFIC_API = 'https://storage.googleapis.com/swiftborder-public/traffic-24h.json';
 const FORECAST_API = 'https://forecast-api-1095552466513.asia-southeast1.run.app/';
-const ADVISOR_API = 'https://commute-advisor-1095552466513.asia-southeast1.run.app/';
+const ADVISOR_API = `${FORECAST_API}?advice=commute`; // same forecast-api service, separate request
 const LTA_API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
 const BACKEND_URL = 'https://swiftbackend-1095552466513.europe-west1.run.app/';
 
@@ -645,9 +645,9 @@ async function fetchForecast() {
     setForecastStatus(`Forecast unavailable: ${msg} Hit Refresh Forecast to try again.`);
 }
 
-// ── Commute buddy (commute-advisor, forecast view) ─────────────────────────
-// Separate service: it reads the same 5 h curve, works out the best time to leave in code, and
-// asks an LLM to phrase it. Times and minutes on the card come from `facts`; only the sentences
+// ── Commute buddy (forecast-api ?advice=commute, forecast view) ───────────
+// forecast-api reads the same cached 5 h curve, works out the best time to leave in code, and
+// asks an LLM for a one-line insight and tips. Times and minutes on the card come from `facts`; only the sentences
 // come from the LLM. If the service is missing or fails, the card stays hidden and nothing else changes.
 const ADVISOR_TIMEOUT_MS = 90000;
 let adviceSeq = 0;

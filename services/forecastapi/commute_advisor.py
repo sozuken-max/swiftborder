@@ -1,18 +1,20 @@
-"""commute-advisor: an LLM "commute buddy" on top of the forecast-api 5-hour curve.
+"""Commute Buddy advice for the Hosting forecast page (``?advice=commute`` in main.py).
 
-A separate Cloud Run service. It never changes forecast-api: it reads the same public URLs the
-Hosting page reads (``forecast-api ?curve=forecast&hours=5`` and ``traffic-24h.json``), works out
-the facts in code, and asks OpenAI only to phrase them as advice.
+Runs inside forecast-api. ``main`` hands it the cached 5-hour curve (the same one the page's
+``?curve=forecast&hours=5`` request returns); this module adds the latest Maps reading from the
+public ``traffic-24h.json``, works out the facts in code, and asks OpenAI only to phrase them.
 
 Facts come from code, not from the LLM:
-- per direction, the best and worst time to leave in the next 5 hours, and the crossing time then;
-- how the next 5 hours compare with the typical day (the calendar profile, ``baseline_min``);
+- per direction, the best window to leave from now to 5 hours ahead (leaving now counts), the worst
+  time, the comparison with the typical day (``baseline_min``) and the slot furthest from it;
 - Singapore and Malaysia public holidays, eves, long weekends and school holidays from
-  ``data/holidays_sg_my.csv``. School holidays are only stated for years the file covers.
+  ``holidays_sg_my.csv``. School holidays are only stated for years the file covers.
 
-The page sends no input. Every visitor in the same forecast origin gets the same cached answer, so
-the OpenAI cost is about one call per forecast origin (10 minutes) per instance. If OpenAI fails,
-the response still carries the facts and ``advice`` is null.
+The LLM writes one ``insight`` line (why traffic differs from usual, hedged) and at most two tips.
+The page sends no input, and one answer per forecast origin is cached, so the OpenAI cost is about
+one call per 10-minute origin per instance. The key is read from Secret Manager at run time, never
+mounted at deploy, so a missing key or permission cannot fail a forecast-api deploy: the response
+then carries the facts with ``advice: null``.
 """
 
 import csv
@@ -25,23 +27,24 @@ import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import functions_framework
 import requests
 
 logger = logging.getLogger(__name__)
 
 SGT = ZoneInfo("Asia/Singapore")
-FORECAST_API = os.environ.get("FORECAST_API", "https://forecast-api-1095552466513.asia-southeast1.run.app/")
 TRAFFIC_API = os.environ.get("TRAFFIC_API", "https://storage.googleapis.com/swiftborder-public/traffic-24h.json")
 OPENAI_URL = os.environ.get("OPENAI_URL", "https://api.openai.com/v1/chat/completions")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")  # GET only, no input, cached: previews may call it
 FORECAST_HOURS = 5
-FORECAST_TIMEOUT_S = float(os.environ.get("FORECAST_TIMEOUT_SECONDS", "150"))  # forecast-api may be cold
 OPENAI_TIMEOUT_S = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "40"))
 CACHE_TTL_S = int(os.environ.get("CACHE_TTL_SECONDS", "600"))
-RECHECK_S = 60  # how long an answer is reused without asking forecast-api for a newer origin
-CALENDAR_PATH = Path(os.environ.get("CALENDAR_PATH", Path(__file__).parent / "data" / "holidays_sg_my.csv"))
+FAILED_RETRY_S = 60  # a failed OpenAI call is retried after this long, not on every visit
+CALENDAR_PATH = Path(os.environ.get("CALENDAR_PATH", Path(__file__).parent / "holidays_sg_my.csv"))
+SECRET_PROJECT = os.environ.get("BQ_PROJECT", "swiftborder")
+SECRET_NAME = os.environ.get("OPENAI_SECRET", "openai-api-key")
+KEY_TTL_S = 3600  # re-read the secret hourly, so a new version is picked up without a deploy
+KEY_RETRY_S = 300  # after a failed read, wait this long before asking Secret Manager again
+METADATA_TOKEN_URL = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
 LOOKAHEAD_DAYS = 21
 GOOD_WINDOW_MIN = 2.0  # a slot within this many minutes of the best counts as "about as good"
 NOW_STALE_MIN = 20  # an older Maps reading is not offered as "leave now"
@@ -55,26 +58,15 @@ DIRECTIONS = (
 _cache = {}
 _lock = threading.Lock()
 _calendar = None
-
-
-class UpstreamError(Exception):
-    """forecast-api or the travel-time file could not be read."""
+_key = {"value": None, "at": -1e9, "error": None}
 
 
 # --- inputs --------------------------------------------------------------------------------
 
 
-def fetch_curve():
-    res = requests.get(FORECAST_API, params={"curve": "forecast", "hours": FORECAST_HOURS}, timeout=FORECAST_TIMEOUT_S)
-    if res.status_code != 200:
-        raise UpstreamError(f"forecast-api returned {res.status_code}")
-    return res.json()
-
-
 def fetch_traffic():
     res = requests.get(TRAFFIC_API, timeout=20)
-    if res.status_code != 200:
-        raise UpstreamError(f"traffic-24h.json returned {res.status_code}")
+    res.raise_for_status()
     return res.json()
 
 
@@ -273,10 +265,42 @@ Reply with JSON only:
 ADVICE_KEYS = ("insight", "tips")
 
 
+def _read_secret():
+    """The latest version of the OpenAI secret, read with the service account's metadata token."""
+    import base64
+
+    tok = requests.get(METADATA_TOKEN_URL, headers={"Metadata-Flavor": "Google"}, timeout=5)
+    tok.raise_for_status()
+    url = (f"https://secretmanager.googleapis.com/v1/projects/{SECRET_PROJECT}/secrets/"
+           f"{SECRET_NAME}/versions/latest:access")
+    res = requests.get(url, headers={"Authorization": f"Bearer {tok.json()['access_token']}"}, timeout=10)
+    if res.status_code != 200:
+        raise RuntimeError(f"Secret Manager returned {res.status_code} for {SECRET_NAME}")
+    return base64.b64decode(res.json()["payload"]["data"]).decode("utf-8").strip()
+
+
+def openai_key():
+    """OPENAI_API_KEY from the environment (local runs), else Secret Manager, cached in memory."""
+    env = os.environ.get("OPENAI_API_KEY", "").strip()
+    if env:
+        return env
+    age = time.monotonic() - _key["at"]
+    if _key["value"] and age < KEY_TTL_S:
+        return _key["value"]
+    if _key["error"] and age < KEY_RETRY_S:
+        raise RuntimeError(_key["error"])
+    try:
+        _key.update(value=_read_secret(), at=time.monotonic(), error=None)
+    except Exception as exc:
+        _key.update(at=time.monotonic(), error=f"OpenAI key unavailable: {exc}")
+        if not _key["value"]:
+            raise RuntimeError(_key["error"]) from exc
+        logger.warning("keeping the cached OpenAI key: %s", exc)
+    return _key["value"]
+
+
 def ask_llm(facts):
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
+    key = openai_key()
     res = requests.post(
         OPENAI_URL,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -308,76 +332,37 @@ def parse_advice(text):
     return advice
 
 
-# --- HTTP ----------------------------------------------------------------------------------
+# --- entry point ----------------------------------------------------------------------------
 
 
-def _headers(max_age=0):
-    return {
-        "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Max-Age": "3600",
-        "Content-Type": "application/json",
-        "Cache-Control": f"public, max-age={max_age}" if max_age > 0 else "no-store",
-    }
-
-
-def _error(message, status):
-    return (json.dumps({"error": message}), status, _headers())
-
-
-def advise(now=None):
-    """The advice payload for the current forecast origin, from the cache when it is fresh."""
+def advise(curve, now=None):
+    """The advice payload for this curve (``main.cached_curve`` output), cached per forecast origin."""
     now = now or datetime.datetime.now(datetime.timezone.utc)
-    with _lock:
-        recent = _cache.get("recent")
-        if recent and time.monotonic() - recent[0] < RECHECK_S:
-            return recent[1]  # a visitor in the last minute: skip the forecast-api round trip
-    curve = fetch_curve()
-    try:
-        traffic = fetch_traffic()
-    except Exception:  # "now" is optional; the forecast is not
-        logger.exception("traffic-24h.json read failed")
-        traffic = None
     origins = tuple(sorted(((k, (v or {}).get("origin_ts")) for k, v in (curve.get("directions") or {}).items()),
                            key=lambda kv: kv[0]))
     key = (origins, now.astimezone(SGT).date().isoformat())
     with _lock:  # one OpenAI call per key, even when several visitors arrive together
         hit = _cache.get(key)
-        if hit and time.monotonic() - hit[0] < CACHE_TTL_S:
-            _cache["recent"] = (time.monotonic(), hit[1])
-            return hit[1]
-        facts = build_facts(curve, traffic, now)
-        if not facts["directions"]:
-            raise UpstreamError("forecast-api returned no forecast points")
-        payload = {"kind": "commute advice", "facts": facts, "advice": None, "llm_model": OPENAI_MODEL,
-                   "note": "AI-generated from the SwiftBorder forecast and a holiday calendar. The forecast is a model "
-                           "estimate; check live conditions before you travel."}
+        if hit:
+            ttl = CACHE_TTL_S if hit[1]["advice"] is not None else FAILED_RETRY_S
+            if time.monotonic() - hit[0] < ttl:
+                return hit[1]
         try:
-            payload["advice"] = ask_llm(facts)
-        except Exception as exc:
-            logger.exception("LLM advice failed")
-            payload["advice_error"] = "Advice is unavailable right now." if "OPENAI_API_KEY" not in str(exc) else str(exc)
-        _cache.clear()  # only the newest origin is ever asked for again
-        _cache["recent"] = (time.monotonic(), payload)  # a failed LLM call is retried after a minute, not per visitor
-        if payload["advice"] is not None:
-            _cache[key] = _cache["recent"]
+            traffic = fetch_traffic()
+        except Exception:  # "now" is optional; the forecast is not
+            logger.exception("traffic-24h.json read failed")
+            traffic = None
+        facts = build_facts(curve, traffic, now)
+        payload = {"kind": "commute advice", "facts": facts, "advice": None, "llm_model": OPENAI_MODEL,
+                   "note": "Times and colours come from the SwiftBorder forecast. The insight and tips are "
+                           "AI-written; causes are educated guesses. Estimates only."}
+        if facts["directions"]:
+            try:
+                payload["advice"] = ask_llm(facts)
+            except Exception as exc:
+                logger.exception("LLM advice failed")
+                payload["advice_error"] = ("The OpenAI key is not available." if "key unavailable" in str(exc)
+                                           else "Advice is unavailable right now.")
+        _cache.clear()  # only the newest origin is asked for again
+        _cache[key] = (time.monotonic(), payload)  # a failure is retried after FAILED_RETRY_S, not per visitor
         return payload
-
-
-@functions_framework.http
-def commute_advice(request):
-    if request.method == "OPTIONS":
-        return ("", 204, _headers())
-    if request.method != "GET":
-        return _error("method not allowed", 405)
-    try:
-        payload = advise()
-    except UpstreamError as exc:
-        return _error(str(exc), 503)
-    except requests.RequestException:
-        logger.exception("upstream request failed")
-        return _error("forecast-api did not answer", 503)
-    except Exception:
-        logger.exception("advice failed")
-        return _error("Advice failed on the server", 502)
-    return (json.dumps(payload, ensure_ascii=False, allow_nan=False), 200, _headers(60 if payload["advice"] else 0))

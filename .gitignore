@@ -17,8 +17,8 @@ htmlcov/
 !docs/images/horizon-study/*.csv
 # Per-frame model=local counts from services/camdetect/backfill_local_counts.py (committed output).
 !services/camdetect/backfill/*.csv
-# SG/MY holiday calendar read by commute-advisor at runtime (reference data, not an extract).
-!services/commuteadvisor/data/holidays_sg_my.csv
+# SG/MY holiday calendar read by forecast-api ?advice=commute at runtime (reference data, not an extract).
+!services/forecastapi/holidays_sg_my.csv
 # Layer A training logs and detector-comparison tables (committed run outputs, small).
 !eval/test-reports/runs/**/*.csv
 **/*.log

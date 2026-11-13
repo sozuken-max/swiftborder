@@ -593,7 +593,7 @@ h4 {
     color: var(--text-muted);
 }
 
-/* Commute buddy card (commute-advisor): clock per direction */
+/* Commute buddy card (forecast-api ?advice=commute): clock per direction */
 .advice-card[hidden],
 .cb-headline[hidden],
 .cb-tips[hidden] {

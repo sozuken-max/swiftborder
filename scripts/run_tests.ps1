@@ -7,7 +7,7 @@
   `py -3.11`. Create the venv once:
 
     py -3.11 -m venv .venv
-    .venv\Scripts\pip install -r services/camdetect/requirements-dev.txt -r data/weather/requirements-dev.txt -r eval/requirements-dev.txt -r services/forecastapi/requirements-dev.txt -r services/commuteadvisor/requirements-dev.txt -r scripts/requirements-dev.txt
+    .venv\Scripts\pip install -r services/camdetect/requirements-dev.txt -r data/weather/requirements-dev.txt -r eval/requirements-dev.txt -r services/forecastapi/requirements-dev.txt -r scripts/requirements-dev.txt
     # slow tests (TensorFlow):
     .venv\Scripts\pip install -r eval/requirements-notebook.txt
 
@@ -18,7 +18,7 @@
   Print a coverage report per suite.
 
 .PARAMETER Suite
-  Limit to one or more of: camdetect, weather, eval, forecastapi, commuteadvisor, repo.
+  Limit to one or more of: camdetect, weather, eval, forecastapi, repo.
 
 .EXAMPLE
   scripts\run_tests.ps1
@@ -28,7 +28,7 @@
 param(
     [switch]$Slow,
     [switch]$Coverage,
-    [string[]]$Suite = @('camdetect', 'weather', 'eval', 'forecastapi', 'commuteadvisor', 'repo')
+    [string[]]$Suite = @('camdetect', 'weather', 'eval', 'forecastapi', 'repo')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,7 +42,6 @@ $Suite = @($Suite | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $suiteDirs = @{
     'camdetect'   = 'services\camdetect'
     'forecastapi' = 'services\forecastapi'
-    'commuteadvisor' = 'services\commuteadvisor'
     'weather'     = 'data\weather'
     'eval'        = 'eval'
     'repo'        = 'scripts'

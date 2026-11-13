@@ -3,7 +3,8 @@ import json
 
 import pytest
 
-import main
+import commute_advisor as main  # the module under test (named main in the old service tests)
+import main as api
 
 UTC = datetime.timezone.utc
 NOW = datetime.datetime(2026, 11, 13, 5, 0, tzinfo=UTC)  # 13:00 SGT, Friday
@@ -34,6 +35,7 @@ LLM_REPLY = {"insight": "To Johor runs 8 min slower than usual,\nlikely the Frid
 @pytest.fixture(autouse=True)
 def _reset(monkeypatch):
     main._cache.clear()
+    main._key.update(value=None, at=-1e9, error=None)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(main, "fetch_traffic", lambda: TRAFFIC)
     yield
@@ -135,54 +137,77 @@ def test_parse_advice_trims_tips_and_rejects_missing_fields():
 def test_advice_is_cached_per_origin(monkeypatch):
     calls = []
     curve = _curve([40, 35, 30], [30, 30, 30])
-    monkeypatch.setattr(main, "fetch_curve", lambda: curve)
     monkeypatch.setattr(main.requests, "post", _openai_ok(calls))
-    first = main.advise(NOW)
-    main._cache.pop("recent")  # force the origin check
-    second = main.advise(NOW)
+    first = main.advise(curve, NOW)
+    second = main.advise(curve, NOW)
     assert first is second and len(calls) == 1
     assert first["advice"]["insight"].startswith("To Johor runs 8 min slower")
     sent = json.loads(calls[0]["messages"][1]["content"])
     assert sent["directions"]["SG_TO_MY"]["best"]["leave_at"] == "14:10"
     assert sent["calendar"]["sg_school_holidays"].startswith("start 2026-11-21")
     assert calls[0]["response_format"] == {"type": "json_object"}
+    newer = _curve([40, 35, 30], [30, 30, 30])
+    newer["directions"]["SG_TO_MY"]["origin_ts"] = "2026-11-13T04:50:00+00:00"
+    main.advise(newer, NOW)
+    assert len(calls) == 2  # a new forecast origin asks again
 
 
-def test_llm_failure_still_returns_facts(monkeypatch):
-    monkeypatch.setattr(main, "fetch_curve", lambda: _curve([30], [30]))
-    monkeypatch.setattr(main.requests, "post", lambda *a, **k: _Res(500, {"error": "boom"}))
-    payload = main.advise(NOW)
+def test_llm_failure_still_returns_facts_and_is_not_retried_per_visit(monkeypatch):
+    calls = []
+    monkeypatch.setattr(main.requests, "post", lambda *a, **k: calls.append(1) or _Res(500, {"error": "boom"}))
+    curve = _curve([30], [30])
+    payload = main.advise(curve, NOW)
     assert payload["advice"] is None and payload["advice_error"] == "Advice is unavailable right now."
     assert payload["facts"]["directions"]["MY_TO_SG"]["best"]["crossing_min"] == 30.0
+    main.advise(curve, NOW)
+    assert len(calls) == 1
 
 
-def test_missing_key_is_reported(monkeypatch):
+def test_key_comes_from_secret_manager_when_not_in_env(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY")
-    monkeypatch.setattr(main, "fetch_curve", lambda: _curve([30], [30]))
-    assert "OPENAI_API_KEY" in main.advise(NOW)["advice_error"]
+    reads = []
+    monkeypatch.setattr(main, "_read_secret", lambda: reads.append(1) or "sm-key")
+    assert main.openai_key() == "sm-key" and main.openai_key() == "sm-key" and len(reads) == 1
 
 
-class _Req:
-    def __init__(self, method="GET"):
-        self.method = method
+def test_missing_secret_is_reported_and_not_retried_per_visit(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY")
+    reads = []
 
-
-def test_http_ok_and_cors(monkeypatch):
-    monkeypatch.setattr(main, "fetch_curve", lambda: _curve([30, 31], [30, 31]))
-    monkeypatch.setattr(main.requests, "post", _openai_ok([]))
-    body, status, headers = main.commute_advice(_Req())
-    assert status == 200 and headers["Access-Control-Allow-Origin"] == "*"
-    assert "likely" in json.loads(body)["advice"]["insight"]
-
-
-def test_http_upstream_failure_is_503(monkeypatch):
     def boom():
-        raise main.UpstreamError("forecast-api returned 503")
-    monkeypatch.setattr(main, "fetch_curve", boom)
-    body, status, _ = main.commute_advice(_Req())
-    assert status == 503 and "forecast-api" in json.loads(body)["error"]
+        reads.append(1)
+        raise RuntimeError("Secret Manager returned 403 for openai-api-key")
+    monkeypatch.setattr(main, "_read_secret", boom)
+    payload = main.advise(_curve([30], [30]), NOW)
+    assert payload["advice"] is None and payload["advice_error"] == "The OpenAI key is not available."
+    with pytest.raises(RuntimeError):
+        main.openai_key()
+    assert len(reads) == 1  # the failed read is remembered for KEY_RETRY_S
 
 
-def test_http_rejects_post_and_answers_preflight():
-    assert main.commute_advice(_Req("POST"))[1] == 405
-    assert main.commute_advice(_Req("OPTIONS"))[1] == 204
+# --- forecast-api endpoint (?advice=commute) -------------------------------------------------
+
+
+def _get(query):
+    from werkzeug.test import EnvironBuilder
+    from werkzeug.wrappers import Request
+    body, status, headers = api.forecast(Request(EnvironBuilder(method="GET", query_string=query).get_environ()))
+    return json.loads(body), status, headers
+
+
+def test_endpoint_uses_the_cached_5_hour_curve(monkeypatch):
+    seen = []
+    monkeypatch.setattr(api, "cached_curve", lambda d, h: seen.append((tuple(d), h)) or _curve([30, 31], [30, 31]))
+    monkeypatch.setattr(main.requests, "post", _openai_ok([]))
+    payload, status, headers = _get({"advice": "commute"})
+    assert status == 200 and seen == [(("SG_TO_MY", "MY_TO_SG"), 5)]
+    assert "likely" in payload["advice"]["insight"] and headers["Access-Control-Allow-Origin"]
+
+
+def test_endpoint_errors(monkeypatch):
+    assert _get({"advice": "other"})[1] == 400
+
+    def none(d, h):
+        raise api.NoRecentForecast(d)
+    monkeypatch.setattr(api, "cached_curve", none)
+    assert _get({"advice": "commute"})[1] == 503
