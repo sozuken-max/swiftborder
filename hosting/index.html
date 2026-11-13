@@ -139,19 +139,24 @@
                         </div>
                     </div>
                     <p class="cb-headline" id="cb-headline" hidden><span class="cb-insight-icon" aria-hidden="true">💡</span><span id="cb-insight-text"></span></p>
-                    <p class="fc-note" id="advice-status">Asking your commute buddy&hellip;</p>
-                    <div class="cb-tabs" id="cb-tabs" role="tablist" aria-label="Direction">
-                        <button type="button" role="tab" aria-selected="true" data-dir="SG_TO_MY"><span class="lc-dot sg"></span>To Johor</button>
-                        <button type="button" role="tab" aria-selected="false" data-dir="MY_TO_SG"><span class="lc-dot jb"></span>To Singapore</button>
+                    <div class="cb-status" id="cb-status-row">
+                        <p class="fc-note" id="advice-status">Asking your Commute Buddy&hellip;</p>
+                        <button type="button" class="refresh-btn" id="cb-retry" hidden><svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>Retry</button>
                     </div>
-                    <div class="cb-grid" id="cb-tiles"></div>
-                    <div class="cb-foot-row">
-                        <span class="cb-key">Trip time <span>25</span><span class="cb-key-grad"></span><span>50+ min</span></span>
-                        <span class="cb-key"><span class="cb-key-arc"></span>best time to leave</span>
-                        <span class="cb-cal-row" id="cb-cal"></span>
+                    <div id="cb-content" hidden>
+                        <div class="cb-tabs" id="cb-tabs" role="tablist" aria-label="Direction">
+                            <button type="button" role="tab" aria-selected="true" data-dir="SG_TO_MY"><span class="lc-dot sg"></span>To Johor</button>
+                            <button type="button" role="tab" aria-selected="false" data-dir="MY_TO_SG"><span class="lc-dot jb"></span>To Singapore</button>
+                        </div>
+                        <div class="cb-grid" id="cb-tiles"></div>
+                        <div class="cb-foot-row">
+                            <span class="cb-key">Trip time <span>25</span><span class="cb-key-grad"></span><span>50+ min</span></span>
+                            <span class="cb-key"><span class="cb-key-arc"></span>best time to leave</span>
+                            <span class="cb-cal-row" id="cb-cal"></span>
+                        </div>
+                        <ul class="cb-tips" id="cb-tips" hidden></ul>
+                        <p class="fc-note advice-note" id="advice-note"></p>
                     </div>
-                    <ul class="cb-tips" id="cb-tips" hidden></ul>
-                    <p class="fc-note advice-note" id="advice-note"></p>
                 </div>
 
                 <p class="notice" data-only="tuas">

@@ -2,6 +2,11 @@
 
 Repo and deploy changes that are not worth repeating in long-lived READMEs. For what is live in GCP, query project `swiftborder` and refresh [docs/inventory.md](docs/inventory.md).
 
+## 2026-11-13 (commute buddy fixes)
+
+- `hosting/`: Commute Buddy states. While it waits the card shows "Asking your Commute Buddy…". If `?advice=commute` fails or answers without advice (for example the old `forecast-api` during a deploy), it shows "Couldn't reach your Commute Buddy right now. Retry, or refresh the page later." with a Retry button. The tabs, clocks, key and tips appear only with advice. The hide rule is `!important`: the general card styling overrode it on the live page, so the empty card and colour key showed.
+- `firebase.json`: HTML, CSS and JS are served with `Cache-Control: no-cache`, so browsers revalidate (a cheap 304 when unchanged) instead of reusing them for an hour. After the Commute Buddy deploy a browser paired the new `index.html` with a cached old `style.css` until a hard refresh.
+
 ## 2026-11-13 (commute buddy)
 
 - `forecast-api`: new `?advice=commute` endpoint (`commute_advisor.py`) for the Commute Buddy card. It reuses the cached 5-hour curve (the `?curve=forecast` cache logic moved into `cached_curve`; behaviour unchanged). In code it works out the best and worst time to leave per direction and the gap from the typical day, and adds SG/MY holidays from `holidays_sg_my.csv` (2025 to 2027; school holidays 2026 only). OpenAI (`gpt-4o-mini` by default) writes one hedged `insight` line on why traffic differs from usual, plus at most 2 tips. The key is read from Secret Manager `openai-api-key` at run time, not mounted at deploy, so a missing key cannot fail a deploy; the endpoint then returns the facts without AI text. One answer per forecast origin is cached. `cloudbuild.yaml` unchanged. One-time setup in `services/forecastapi/README.md`. No events or incident APIs are read.
