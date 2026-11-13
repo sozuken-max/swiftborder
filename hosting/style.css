@@ -595,9 +595,23 @@ h4 {
 
 /* Commute buddy card (forecast-api ?advice=commute): clock per direction */
 .advice-card[hidden],
-.cb-headline[hidden],
-.cb-tips[hidden] {
-    display: none;
+.advice-card [hidden] {
+    display: none !important;
+}
+
+.cb-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.cb-status .fc-note {
+    margin: 0;
+}
+
+.cb-status.error .fc-note {
+    color: var(--text-main);
 }
 
 .cb-headline {

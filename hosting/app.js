@@ -828,7 +828,7 @@ function renderAdvice(data) {
     $('cb-cal').innerHTML = chips;
     $('cb-tips').innerHTML = (a?.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
     $('cb-tips').hidden = !a?.tips?.length;
-    $('advice-status').hidden = true;
+    $('cb-content').hidden = false;
     $('advice-note').textContent = a
         ? 'Times and colours come from the SwiftBorder forecast. The insight and tips are AI-written; causes are educated guesses. Estimates only.'
         : 'From the SwiftBorder forecast. Estimates only.';
@@ -836,23 +836,36 @@ function renderAdvice(data) {
     if (!clockTimer) clockTimer = setInterval(tickClocks, 1000);
 }
 
+function setAdviceStatus(text, isError) {
+    $('advice-status').textContent = text;
+    $('cb-status-row').hidden = !text;
+    $('cb-status-row').classList.toggle('error', !!isError);
+    $('cb-retry').hidden = !isError;
+}
+
+// The card shows once the forecast has loaded: "asking" while it waits, the clocks when the
+// advice arrives, or a short "couldn't reach" message with Retry. The forecast above never depends on it.
 async function fetchAdvice() {
     const seq = ++adviceSeq;
     const card = $('advice-card');
     if (!card) return;
-    if (card.hidden) {
-        $('advice-status').textContent = 'Asking your commute buddy…';
-        $('advice-status').hidden = false;
-    }
+    card.hidden = false;
+    if (!adviceData) setAdviceStatus('Asking your Commute Buddy…', false);
+    $('cb-retry').disabled = true;
     try {
         const data = await fetchJson(ADVISOR_API, ADVISOR_TIMEOUT_MS);
         if (seq !== adviceSeq) return;
-        if (!Object.keys(data.facts?.directions || {}).length) throw new Error('no advice');
+        if (!Object.keys(data.facts?.directions || {}).length) throw new Error('no advice in the response');
+        setAdviceStatus('', false);
         renderAdvice(data);
     } catch (err) {
         if (seq !== adviceSeq) return;
         console.error('Commute advice error:', err);
-        card.hidden = true; // optional: the forecast above is unaffected
+        setAdviceStatus(adviceData
+            ? 'Couldn\u2019t refresh your Commute Buddy; showing the last advice. Retry, or refresh the page later.'
+            : 'Couldn\u2019t reach your Commute Buddy right now. Retry, or refresh the page later.', true);
+    } finally {
+        if (seq === adviceSeq) $('cb-retry').disabled = false;
     }
 }
 
@@ -1359,6 +1372,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     bindRefresh('refresh-forecast', fetchForecast);
     document.querySelectorAll('#cb-tabs button').forEach(b => b.addEventListener('click', () => setAdviceTab(b.dataset.dir)));
+    $('cb-retry').addEventListener('click', fetchAdvice);
     bindRefresh('refresh-cameras', fetchLiveCameras);
     bindRefresh('refresh-ai-detection', fetchDetections);
 });
