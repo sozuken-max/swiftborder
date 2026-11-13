@@ -601,11 +601,23 @@ h4 {
 }
 
 .cb-headline {
-    font-family: var(--font-heading);
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: var(--text-main);
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
     margin-bottom: 1rem;
+    padding: 0.7rem 0.95rem;
+    border-radius: 12px;
+    border: 1px solid rgba(245, 198, 106, 0.28);
+    background: rgba(245, 198, 106, 0.06);
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-main);
+}
+
+.cb-insight-icon {
+    flex: none;
 }
 
 .cb-grid {

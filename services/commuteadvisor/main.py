@@ -151,6 +151,8 @@ def direction_facts(curve_dir, now_point):
     while hi < len(slots) - 1 and slots[hi + 1]["min"] <= best + GOOD_WINDOW_MIN:
         hi += 1
     diffs = [p["min"] - p["typical"] for p in pts if p["typical"] is not None]
+    gaps = [p for p in pts if p["typical"] is not None]
+    gap = max(gaps, key=lambda p: abs(p["min"] - p["typical"])) if gaps else None
     facts = {
         "forecast": [{"leave_at": _clock(p["at"]), "at_iso": p["at"].isoformat(), "crossing_min": round(p["min"], 1),
                       "typical_min": None if p["typical"] is None else round(p["typical"], 1)} for p in pts],
@@ -160,6 +162,10 @@ def direction_facts(curve_dir, now_point):
                  "leave_now": bool(slots[lo]["now"])},
         "worst": {"leave_at": _clock(slots[worst_i]["at"]), "crossing_min": round(slots[worst_i]["min"], 1)},
         "vs_typical_avg_min": round(sum(diffs) / len(diffs), 1) if diffs else None,
+        # the slot furthest from usual, so the insight can say when the difference is largest
+        "biggest_gap_vs_typical": None if gap is None else {
+            "leave_at": _clock(gap["at"]), "crossing_min": round(gap["min"], 1),
+            "typical_min": round(gap["typical"], 1), "diff_min": round(gap["min"] - gap["typical"], 1)},
         "now": now_point,
     }
     if now_point:
@@ -240,20 +246,31 @@ def build_facts(curve, traffic, now):
 
 # --- LLM ---------------------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are a seasoned daily commuter across the Woodlands Causeway between Singapore and Johor Bahru. The app already shows, for each direction, when to leave and the expected trip time on a clock. You add a short human touch.
+SYSTEM_PROMPT = """You are a seasoned daily commuter across the Woodlands Causeway between Singapore and Johor Bahru. The app already shows, for each direction, when to leave and the expected trip time on a clock. Your job is the "why": explain in ONE line why traffic is different from usual today.
 
-Rules:
-- Use ONLY the facts in the user's JSON. Never invent times, minutes, holidays, events, weather, accidents or checkpoint conditions.
-- Every time and number you mention must appear in the facts. Times are SGT; write them like 3:40 PM.
-- "crossing_min" is the forecast Google Maps driving time if you leave at "leave_at"; "typical_min" is the usual time then. "vs_typical_avg_min" > 0 means busier than usual over the next 5 hours.
-- If school holidays are "unknown", say nothing about school holidays. Mention holidays, eves or long weekends only when they are in the facts.
-- Plain, simple words. No hedging, no greetings, no emojis.
+Facts (user JSON):
+- "crossing_min": forecast Google Maps driving time if you leave at "leave_at". "typical_min": the usual time for that weekday and hour.
+- "vs_typical_avg_min": average over the next 5 hours; > 0 means slower than usual. "biggest_gap_vs_typical": the slot furthest from usual.
+- "calendar": weekday, Singapore and Malaysia public holidays, eves, Singapore long weekends, school holidays, upcoming public holidays.
+
+General Causeway patterns you may use as likely causes (they are well known, not facts about today):
+- Friday evenings, eves of public holidays and the start of school holidays or long weekends: heavy towards Johor.
+- Sunday evenings and the last day of a holiday or long weekend: heavy towards Singapore.
+- Weekday mornings: Malaysian commuters heavy towards Singapore; weekday evenings: heavy back towards Johor.
+- A Malaysian public holiday that is not a Singapore one often means lighter Singapore-bound commuter traffic.
+
+How to write the insight:
+- Pick the direction that differs most from usual (use vs_typical_avg_min and biggest_gap_vs_typical). If both are within about 2 minutes of usual, say traffic is about normal for this time.
+- Say how much and when (numbers and times from the facts only), then the most likely cause from the calendar and the patterns above.
+- Causes are guesses: use "likely" or "probably". Never invent events, accidents, weather, roadworks or checkpoint conditions. If nothing in the facts explains it, say the cause is unclear.
+- If school holidays are "unknown", say nothing about school holidays.
+- Times are SGT, written like 3:40 PM. Plain words, no greetings, no emojis.
 
 Reply with JSON only:
-{"headline": "at most 10 words: the one thing to know right now",
+{"insight": "ONE sentence, at most 22 words: which direction, how much vs usual, and the likely why",
  "tips": ["at most 2 tips, each at most 12 words"]}"""
 
-ADVICE_KEYS = ("headline", "tips")
+ADVICE_KEYS = ("insight", "tips")
 
 
 def ask_llm(facts):
@@ -283,9 +300,9 @@ def ask_llm(facts):
 def parse_advice(text):
     data = json.loads(text)
     advice = {k: data.get(k) for k in ADVICE_KEYS}
-    if not isinstance(advice["headline"], str) or not advice["headline"].strip():
-        raise ValueError("advice headline missing")
-    advice["headline"] = advice["headline"].strip()[:120]
+    if not isinstance(advice["insight"], str) or not advice["insight"].strip():
+        raise ValueError("advice insight missing")
+    advice["insight"] = " ".join(advice["insight"].split())[:200]  # one line
     tips = advice["tips"] if isinstance(advice["tips"], list) else []
     advice["tips"] = [str(t).strip()[:140] for t in tips if str(t).strip()][:2]
     return advice

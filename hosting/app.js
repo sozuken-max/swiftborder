@@ -821,8 +821,8 @@ function setAdviceTab(dir) {
 function renderAdvice(data) {
     adviceData = data;
     const a = data.advice;
-    $('cb-headline').textContent = a?.headline || '';
-    $('cb-headline').hidden = !a?.headline;
+    $('cb-insight-text').textContent = a?.insight || ''; // one line: which direction differs from usual, and the likely why
+    $('cb-headline').hidden = !a?.insight;
     renderClocks();
     const chips = adviceChips(data.facts?.calendar).map(c => `<span class="cb-cal">${esc(c)}</span>`).join('');
     $('cb-cal').innerHTML = chips;
@@ -830,7 +830,7 @@ function renderAdvice(data) {
     $('cb-tips').hidden = !a?.tips?.length;
     $('advice-status').hidden = true;
     $('advice-note').textContent = a
-        ? 'Times and colours come from the SwiftBorder forecast; the headline and tips are AI-written. Estimates only.'
+        ? 'Times and colours come from the SwiftBorder forecast. The insight and tips are AI-written; causes are educated guesses. Estimates only.'
         : 'From the SwiftBorder forecast. Estimates only.';
     $('advice-card').hidden = false;
     if (!clockTimer) clockTimer = setInterval(tickClocks, 1000);

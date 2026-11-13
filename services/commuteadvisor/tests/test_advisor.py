@@ -28,7 +28,7 @@ TRAFFIC = {"series": {
     "jb_to_woodlands": {"points": [["2026-11-13T12:55:00", 1800, 40]]},
 }}
 
-LLM_REPLY = {"headline": "Busier than usual towards Johor.", "tips": ["a", "b", "c"]}
+LLM_REPLY = {"insight": "To Johor runs 8 min slower than usual,\nlikely the Friday evening rush.", "tips": ["a", "b", "c"]}
 
 
 @pytest.fixture(autouse=True)
@@ -97,6 +97,7 @@ def test_best_window_worst_and_typical():
     assert best["window_start_iso"].startswith("2026-11-13T06:10")
     assert facts["worst"] == {"leave_at": "16:10", "crossing_min": 50.0}
     assert facts["vs_typical_avg_min"] == pytest.approx(8.6)
+    assert facts["biggest_gap_vs_typical"] == {"leave_at": "16:10", "crossing_min": 50.0, "typical_min": 30.0, "diff_min": 20.0}
     assert facts["saving_vs_now_min"] == 5.0
 
 
@@ -124,7 +125,9 @@ def test_latest_now_reads_the_newest_point():
 
 
 def test_parse_advice_trims_tips_and_rejects_missing_fields():
-    assert main.parse_advice(json.dumps(LLM_REPLY))["tips"] == ["a", "b"]
+    advice = main.parse_advice(json.dumps(LLM_REPLY))
+    assert advice["tips"] == ["a", "b"]
+    assert advice["insight"] == "To Johor runs 8 min slower than usual, likely the Friday evening rush."  # one line
     with pytest.raises(ValueError):
         main.parse_advice(json.dumps({"tips": ["x"]}))
 
@@ -138,7 +141,7 @@ def test_advice_is_cached_per_origin(monkeypatch):
     main._cache.pop("recent")  # force the origin check
     second = main.advise(NOW)
     assert first is second and len(calls) == 1
-    assert first["advice"]["headline"] == LLM_REPLY["headline"]
+    assert first["advice"]["insight"].startswith("To Johor runs 8 min slower")
     sent = json.loads(calls[0]["messages"][1]["content"])
     assert sent["directions"]["SG_TO_MY"]["best"]["leave_at"] == "14:10"
     assert sent["calendar"]["sg_school_holidays"].startswith("start 2026-11-21")
@@ -169,7 +172,7 @@ def test_http_ok_and_cors(monkeypatch):
     monkeypatch.setattr(main.requests, "post", _openai_ok([]))
     body, status, headers = main.commute_advice(_Req())
     assert status == 200 and headers["Access-Control-Allow-Origin"] == "*"
-    assert json.loads(body)["advice"]["headline"] == LLM_REPLY["headline"]
+    assert "likely" in json.loads(body)["advice"]["insight"]
 
 
 def test_http_upstream_failure_is_503(monkeypatch):
