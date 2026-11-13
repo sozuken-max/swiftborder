@@ -786,15 +786,6 @@ function leaveText(f, nowMs) {
     return we - ws < 60000 ? `Leave at ${fmt12(ws)}` : `Leave ${fmtRange(ws, we)}`;
 }
 
-function leaveReason(f) {
-    const d = f.decision;
-    if (!d) return '';
-    const [lo, hi] = d.range_min.map(Math.round);
-    const trip = lo === hi ? `About ${lo} min` : `${lo}–${hi} min`;
-    return d.basis === 'fastest_quarter' ? `${trip} · among the fastest times in the next 5 h`
-        : `${trip} · the quickest hour in the next 5 h`;
-}
-
 function vsChip(vs) {
     if (vs == null) return '';
     if (Math.abs(vs) < 2) return '<span class="cb-vs ok">● About usual</span>'; // same 2-min band as the insight
@@ -815,8 +806,8 @@ function renderClocks() {
             <div class="cb-body">
                 <div class="cb-clock-wrap">${clockSvg(f, d.key, nowMs)}<div class="cb-clock-cap">Now <b>${nowText}</b></div></div>
                 <div class="cb-side">
+                    <div class="cb-label">AI recommended time</div>
                     <div class="cb-verb">${esc(leaveText(f, nowMs))}</div>
-                    ${leaveReason(f) ? `<div class="cb-reason">${esc(leaveReason(f))}</div>` : ''}
                     <div class="cb-chips"><span class="cb-trip"><b>${Math.round((f.decision || f.best).crossing_min)}</b> min expected</span>${vsChip(f.vs_typical_avg_min)}</div>
                 </div>
             </div>

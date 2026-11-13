@@ -43,7 +43,7 @@ Feeds the Commute Buddy card on the Hosting forecast page. Code: [`commute_advis
   | 2. Good slots | Trip time at or below the 25th percentile (`GOOD_QUANTILE`, linear) of the candidates. |
   | 3. Recommend | The **earliest** run of consecutive good slots spanning at least 1 hour (`WINDOW_MIN`; each slot stands for its 30 minutes, so two or more in a row). `basis: "fastest_quarter"`. |
   | 4. Fallback | No good run is an hour long: the 1-hour stretch with the lowest mean trip time. `basis: "quickest_hour"`. |
-  | Card | "Leave 3:10–4:40 PM" (or "Leave now, by …" if the span has started), "35–39 min · among the fastest times in the next 5 h", "N min expected" = the span's mean, one cyan arc on the span. |
+  | Card | Labelled "AI recommended time": "Leave 3:10–4:40 PM" (or "Leave now, by …" if the span has started), "N min expected" = the span's mean, and one cyan arc on the span. The rule itself is not explained on the card. |
 
 - **LLM:** OpenAI Chat Completions (`OPENAI_MODEL`, default `gpt-4o-mini`) returns JSON with one `insight` line (at most 22 words) and at most 2 `tips`. The insight names the direction furthest from usual, by how much and when, and the likely cause from the calendar and a few well-known Causeway patterns in the prompt (Friday evenings and holiday eves heavy towards Johor, Sunday evenings and holiday ends heavy towards Singapore, weekday commuter peaks). It must hedge ("likely") and may not invent events, accidents, weather or checkpoint conditions. No events or incident APIs are read.
 - **Cost:** one cached answer per forecast origin (10 min) per instance. A failed OpenAI call is retried after 60 s, not per visit.

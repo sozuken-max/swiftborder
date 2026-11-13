@@ -739,9 +739,12 @@ h4 {
     color: var(--primary);
 }
 
-.cb-reason {
-    margin-top: -0.4rem;
-    font-size: 0.82rem;
+.cb-label {
+    margin-bottom: -0.45rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--text-muted);
 }
 
